@@ -12,6 +12,8 @@ const Select = window.Select;
 const Button = window.Button;
 const Toggle = window.Toggle;
 const DonutChart = window.DonutChart;
+const BalanceCurveChart = window.BalanceCurveChart;
+const PIStackedBarChart = window.PIStackedBarChart;
 const COLORS = window.COLORS;
 const font = window.font;
 
@@ -238,25 +240,28 @@ function AmortizationSchedule() {
       {/* ── TWO-COLUMN INPUT GRID ── */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
 
-        {/* LEFT — Loan Summary (read-only reminder) */}
-        <div style={{ background: bgAlt, border: `1.5px solid ${border}`, borderRadius: 12, padding: "14px 16px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: gray, fontFamily: font, letterSpacing: "0.06em", marginBottom: 10 }}>LOAN SUMMARY</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {[
-              { label: "Loan Amount", value: fmt(Math.round(parseFloat(loanAmount) || 0)) },
-              { label: "Interest Rate", value: `${rate}%` },
-              { label: "Loan Term", value: `${term} Years` },
-            ].map(({ label, value }) => (
-              <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: c.bg || "#fff", borderRadius: 8, border: `1px solid ${border}` }}>
-                <span style={{ fontSize: 11, color: gray, fontFamily: font, fontWeight: 600 }}>{label}</span>
-                <span style={{ fontSize: 15, color: navy, fontFamily: font, fontWeight: 800 }}>{value}</span>
-              </div>
-            ))}
-          </div>
-          <div style={{ fontSize: 10, color: gray, fontFamily: font, marginTop: 10, textAlign: "center", fontStyle: "italic" }}>
-            Editable in Payment Calculator
-          </div>
-        </div>
+        {/* LEFT — Loan Details (editable, synced with Payment Calculator) */}
+        <SectionCard title="LOAN DETAILS" accent={blue}>
+          <LabeledInput
+            label="Loan Amount"
+            prefix="$"
+            value={loanAmount}
+            onChange={setLoanAmount}
+            useCommas
+          />
+          <LabeledInput
+            label="Interest Rate"
+            suffix="%"
+            value={rate}
+            onChange={setRate}
+          />
+          <Select
+            label="Loan Term"
+            value={term}
+            onChange={setTerm}
+            options={PRESET_TERMS.map(t => ({ value: t, label: t + " Years" }))}
+          />
+        </SectionCard>
 
         {/* RIGHT — Extra Payments */}
         <SectionCard title="EXTRA PAYMENTS" accent={green}>
@@ -407,6 +412,53 @@ function AmortizationSchedule() {
           </div>
         </SectionCard>
       )}
+
+      {/* ── LOAN VISUALIZATIONS ── */}
+      <SectionCard title="LOAN VISUALIZATIONS" accent={navy}>
+        {/* Balance Curve + PI Stacked Bar in 2-col grid */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: gray, fontFamily: font, letterSpacing: "0.06em", marginBottom: 8, textAlign: "center" }}>BALANCE OVER TIME</div>
+            <BalanceCurveChart years={enhanced.years} />
+          </div>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: gray, fontFamily: font, letterSpacing: "0.06em", marginBottom: 8, textAlign: "center" }}>PRINCIPAL vs INTEREST BY YEAR</div>
+            <PIStackedBarChart years={enhanced.years} />
+          </div>
+        </div>
+
+        {/* Donut Chart — centered */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, paddingTop: 4 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: gray, fontFamily: font, letterSpacing: "0.06em" }}>TOTAL COST BREAKDOWN</div>
+          <DonutChart
+            data={[
+              { value: Math.round(enhanced.totalPrincipal), color: green },
+              { value: Math.round(enhanced.totalInterest), color: red },
+              ...(savings.hasExtras ? [{ value: Math.round(savings.savedInterest), color: gold }] : []),
+            ]}
+            size={160}
+            thickness={32}
+            centerLabel="Total Cost"
+            centerValue={fmt(Math.round(enhanced.totalPrincipal + enhanced.totalInterest))}
+          />
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap", justifyContent: "center", fontSize: 11, fontFamily: font }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <div style={{ width: 10, height: 10, borderRadius: "50%", background: green }} />
+              <span style={{ color: gray }}>Principal <strong style={{ color: text }}>{fmt(Math.round(enhanced.totalPrincipal))}</strong></span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <div style={{ width: 10, height: 10, borderRadius: "50%", background: red }} />
+              <span style={{ color: gray }}>Interest <strong style={{ color: text }}>{fmt(Math.round(enhanced.totalInterest))}</strong></span>
+            </div>
+            {savings.hasExtras && (
+              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <div style={{ width: 10, height: 10, borderRadius: "50%", background: gold }} />
+                <span style={{ color: gray }}>Saved <strong style={{ color: gold }}>{fmt(Math.round(savings.savedInterest))}</strong></span>
+              </div>
+            )}
+          </div>
+        </div>
+      </SectionCard>
 
       {/* ── VIEW TOGGLE (above table) ── */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, marginTop: 4 }}>
