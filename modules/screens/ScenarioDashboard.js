@@ -1422,7 +1422,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onUse
           display: "flex", gap: "4px", marginBottom: "20px",
           borderBottom: "2px solid " + c.border,
         }}>
-          {LEAD_GROUPS.map(function(tab) {
+          {(user.isInternal ? LEAD_GROUPS : ["active", "archived"]).map(function(tab) {
             const isActive = groupFilter === tab;
             return (
               <button
@@ -1722,7 +1722,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onUse
         {/* ── Scenario Count ───────────────────────────────────────── */}
         <p style={{ fontSize: "14px", color: c.textSecondary || "#888", marginBottom: "16px" }}>
           {filtered.length}{" "}
-          {closingFilter ? "closing this month" : LEAD_GROUP_LABELS[groupFilter].toLowerCase() + " lead"}{filtered.length !== 1 && !closingFilter ? "s" : ""}
+          {closingFilter ? "closing this month" : LEAD_GROUP_LABELS[groupFilter].toLowerCase() + (user.isInternal ? " lead" : " scenario")}{filtered.length !== 1 && !closingFilter ? "s" : ""}
           {searchTerm ? (" matching \"" + searchTerm + "\"") : ""}
           {isCloudUser && !cloudLoading && " · ☁️ Cloud"}
         </p>
@@ -1738,14 +1738,14 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onUse
             <h3 style={{ margin: "0 0 8px", fontSize: "20px" }}>
               {searchTerm
                 ? "No matching scenarios"
-                : "No " + LEAD_GROUP_LABELS[groupFilter].toLowerCase() + " leads"}
+                : "No " + LEAD_GROUP_LABELS[groupFilter].toLowerCase() + (user.isInternal ? " leads" : " scenarios")}
             </h3>
             <p style={{ color: c.textSecondary || "#888", margin: "0 0 20px" }}>
               {searchTerm
                 ? "Try a different search term"
                 : groupFilter === "active"
                   ? "Create your first scenario to get started"
-                  : (LEAD_GROUP_LABELS[groupFilter] + " leads will appear here")}
+                  : (LEAD_GROUP_LABELS[groupFilter] + (user.isInternal ? " leads" : " scenarios") + " will appear here")}
             </p>
             {!searchTerm && groupFilter === "active" && (
               <button
