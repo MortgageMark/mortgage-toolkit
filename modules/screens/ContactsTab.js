@@ -65,6 +65,7 @@ function ReferralPickerCT(props) {
   var excludeId = props.excludeId;
 
   var _s = useState(""); var search = _s[0]; var setSearch = _s[1];
+  var _f = useState(false); var focused = _f[0]; var setFocused = _f[1];
 
   var stl = {
     width: "100%", padding: "8px 12px", borderRadius: "8px",
@@ -93,24 +94,25 @@ function ReferralPickerCT(props) {
     );
   }
 
-  var candidates = allCtacts
-    .filter(function(c) { return !excludeId || c.id !== excludeId; })
-    .filter(function(c) {
-      if (!search.trim()) return false;
-      var q = search.trim().toLowerCase();
-      return (((c.first_name || "") + " " + (c.last_name || "")).toLowerCase().includes(q) ||
-        (c.email || "").toLowerCase().includes(q));
-    })
-    .slice(0, 8);
+  var filtered = allCtacts.filter(function(c) { return !excludeId || c.id !== excludeId; });
+  var candidates = (search.trim()
+    ? filtered.filter(function(c) {
+        var q = search.trim().toLowerCase();
+        return (((c.first_name || "") + " " + (c.last_name || "")).toLowerCase().includes(q) ||
+          (c.email || "").toLowerCase().includes(q));
+      })
+    : filtered
+  ).slice(0, 8);
 
   return React.createElement("div", { style: { position: "relative" } },
     React.createElement("input", {
-      type: "text", placeholder: "Search by name or email…",
+      type: "text", placeholder: "Click to browse or type to search…",
       style: stl, value: search,
       onChange: function(e) { setSearch(e.target.value); },
-      onBlur:   function()  { setTimeout(function() { setSearch(""); }, 160); },
+      onFocus:  function()  { setFocused(true); },
+      onBlur:   function()  { setTimeout(function() { setFocused(false); setSearch(""); }, 160); },
     }),
-    candidates.length > 0 && React.createElement("div", {
+    focused && candidates.length > 0 && React.createElement("div", {
       style: {
         position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 200,
         background: "#1e3a5f", border: "1px solid rgba(255,255,255,0.18)",

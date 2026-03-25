@@ -54,6 +54,7 @@ const CD_CLIENT_CATEGORIES = [
 // White-themed picker for the ContactDetail edit form (JSX, light background)
 function ReferralPickerCD({ value, onChange, contacts, excludeId }) {
   const [search, setSearch] = useState("");
+  const [focused, setFocused] = useState(false);
 
   const pickerFieldStyle = {
     width: "100%", padding: "8px 12px", borderRadius: "8px",
@@ -86,30 +87,31 @@ function ReferralPickerCD({ value, onChange, contacts, excludeId }) {
     );
   }
 
-  const candidates = (contacts || [])
-    .filter(function(c) { return !excludeId || c.id !== excludeId; })
-    .filter(function(c) {
-      if (!search.trim()) return false;
-      const q = search.trim().toLowerCase();
-      return (
-        `${c.first_name || ""} ${c.last_name || ""}`.toLowerCase().includes(q) ||
-        (c.email || "").toLowerCase().includes(q) ||
-        (c.email_personal || "").toLowerCase().includes(q)
-      );
-    })
-    .slice(0, 8);
+  const filtered = (contacts || []).filter(function(c) { return !excludeId || c.id !== excludeId; });
+  const candidates = (search.trim()
+    ? filtered.filter(function(c) {
+        const q = search.trim().toLowerCase();
+        return (
+          `${c.first_name || ""} ${c.last_name || ""}`.toLowerCase().includes(q) ||
+          (c.email || "").toLowerCase().includes(q) ||
+          (c.email_personal || "").toLowerCase().includes(q)
+        );
+      })
+    : filtered
+  ).slice(0, 8);
 
   return (
     <div style={{ position: "relative" }}>
       <input
         type="text"
-        placeholder="Search by name or email..."
+        placeholder="Click to browse or type to search..."
         style={pickerFieldStyle}
         value={search}
         onChange={function(e) { setSearch(e.target.value); }}
-        onBlur={function() { setTimeout(function() { setSearch(""); }, 160); }}
+        onFocus={function() { setFocused(true); }}
+        onBlur={function() { setTimeout(function() { setFocused(false); setSearch(""); }, 160); }}
       />
-      {candidates.length > 0 && (
+      {focused && candidates.length > 0 && (
         <div style={{
           position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 200,
           background: "#fff", border: "1px solid #e2e8f0", borderRadius: "8px",
