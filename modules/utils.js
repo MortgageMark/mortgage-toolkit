@@ -115,6 +115,23 @@ const PMI_ESSENT = {
   effective: "Dec 18, 2017",
 };
 
+// Single Premium MI rate table (% of original loan balance paid upfront)
+// Approximate MGIC-style rates; actual rates vary by MI company
+const PMI_SINGLE = {
+  over20: [
+    { ltvMin: 95.01, ltvMax: 97, rates: [0.0150,0.0175,0.0200,0.0225,0.0250,0.0300,0.0350,0.0400] },
+    { ltvMin: 90.01, ltvMax: 95, rates: [0.0120,0.0140,0.0160,0.0180,0.0210,0.0250,0.0280,0.0325] },
+    { ltvMin: 85.01, ltvMax: 90, rates: [0.0085,0.0100,0.0115,0.0130,0.0155,0.0185,0.0210,0.0240] },
+    { ltvMin: 80.01, ltvMax: 85, rates: [0.0055,0.0065,0.0075,0.0090,0.0105,0.0125,0.0140,0.0160] },
+  ],
+  under20: [
+    { ltvMin: 95.01, ltvMax: 97, rates: [0.0095,0.0110,0.0130,0.0145,0.0165,0.0200,0.0225,0.0255] },
+    { ltvMin: 90.01, ltvMax: 95, rates: [0.0075,0.0090,0.0105,0.0115,0.0135,0.0165,0.0185,0.0210] },
+    { ltvMin: 85.01, ltvMax: 90, rates: [0.0055,0.0065,0.0075,0.0085,0.0100,0.0125,0.0140,0.0160] },
+    { ltvMin: 80.01, ltvMax: 85, rates: [0.0035,0.0040,0.0050,0.0060,0.0070,0.0085,0.0095,0.0110] },
+  ],
+};
+
 // ─── FUNCTIONS ────────────────────────────────────────────────────────────────
 
 // line 187
@@ -191,19 +208,48 @@ function lookupPMI({ ltv, fico, termYears, occupancy, isFixed, isCashOut, isMult
 }
 
 // line 548
-function lookupPMICompany(company, { ltv, fico, termYears }) {
+function lookupPMICompany(company, { ltv, fico, termYears, isMultiBorrower = false, highDTI = false, isCashOut = false, occupancy = "primary" } = {}) {
   const data = company === "enact" ? PMI_ENACT : PMI_ESSENT;
   if (ltv <= 80 || fico < 620) return null;
   const fi = ficoIndex(fico);
   const table = termYears > 20 ? data.over20 : data.under20;
+  let baseRate = null;
   for (const row of table) {
     const parts = row.ltv.replace("%","").split("-");
     let lo, hi;
     if (parts.length === 2 && !row.ltv.includes("below")) { lo = parseFloat(parts[1]); hi = parseFloat(parts[0]); }
     else { lo = 80.01; hi = 85; }
-    if (ltv > lo && ltv <= hi) return row.rates[fi];
+    if (ltv > lo && ltv <= hi) { baseRate = row.rates[fi]; break; }
   }
-  return null;
+  if (baseRate === null) return null;
+  const adj = data.adjustments || {};
+  let totalAdj = 0;
+  if (occupancy === "vacation" && adj.secondHome) totalAdj += adj.secondHome[fi] || 0;
+  if (occupancy === "investment" && adj.investment) { const v = adj.investment[fi]; if (v === null) return null; totalAdj += v; }
+  if (isCashOut && adj.cashOut) totalAdj += adj.cashOut[fi] || 0;
+  if (highDTI && adj.highDTI) totalAdj += adj.highDTI[fi] || 0;
+  if (isMultiBorrower && adj.multiBorrow) totalAdj += adj.multiBorrow[fi] || 0;
+  return Math.max(baseRate + totalAdj, PMI_RATES.minRate);
+}
+
+// Single premium: returns rate as decimal (e.g. 0.0150 = 1.50% of loan amount paid upfront)
+function lookupSinglePremium({ ltv, fico, termYears }) {
+  if (ltv <= 80 || fico < 620) return 0;
+  const fi = ficoIndex(fico);
+  const table = termYears > 20 ? PMI_SINGLE.over20 : PMI_SINGLE.under20;
+  for (const row of table) {
+    if (ltv > row.ltvMin && ltv <= row.ltvMax) return row.rates[fi];
+  }
+  return 0;
+}
+
+// LPMI rate adjustment in percentage points (e.g. 0.375 = add 0.375% to note rate)
+function lookupLPMIAdj(ltv) {
+  if (ltv > 95) return 0.500;
+  if (ltv > 90) return 0.375;
+  if (ltv > 85) return 0.250;
+  if (ltv > 80) return 0.125;
+  return 0;
 }
 
 // line 628
@@ -972,6 +1018,9 @@ window.generateId          = generateId;
 window.ficoIndex           = ficoIndex;
 window.lookupPMI           = lookupPMI;
 window.lookupPMICompany    = lookupPMICompany;
+window.PMI_SINGLE          = PMI_SINGLE;
+window.lookupSinglePremium = lookupSinglePremium;
+window.lookupLPMIAdj       = lookupLPMIAdj;
 window.pmt                 = pmt;
 window.calcAPR             = calcAPR;
 window.buildAmortization   = buildAmortization;

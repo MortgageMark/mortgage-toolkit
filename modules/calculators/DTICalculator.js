@@ -170,6 +170,7 @@ function DTICalculator() {
   const [debtPick,    setDebtPick]    = useState("");
   // Payoff balance — written here, read by FeeSheetGenerator as "dti_payoff_bal"
   const [, setPayoffBalStr] = useLocalStorage("dti_payoff_bal", "0");
+  const [, setDtiBackRatio] = useLocalStorage("dti_back_ratio", "0");
 
   const income = useMemo(() => parseArr(incomeStr).map(r => ({ ...r, notes: r.notes || "" })), [incomeStr]);
 
@@ -216,6 +217,11 @@ function DTICalculator() {
   useEffect(() => {
     setPayoffBalStr(String(calc.payoffBalTotal));
   }, [calc.payoffBalTotal]);
+
+  // Sync back-end DTI so Payment Calculator can use it for MI surcharge detection
+  useEffect(() => {
+    setDtiBackRatio(String(calc.backDTI.toFixed(1)));
+  }, [calc.backDTI]);
 
   // ── Income CRUD ───────────────────────────────────────────────────────────
   const updateIncome = (id, field, val) =>

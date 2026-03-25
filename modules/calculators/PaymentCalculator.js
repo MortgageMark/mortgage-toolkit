@@ -216,6 +216,20 @@ function PaymentCalculator() {
   const [fhaMipAuto, setFhaMipAuto] = useLocalStorage("pc_fha_mipauto", "true");
   const [fhaMipOverride, setFhaMipOverride] = useLocalStorage("pc_fha_mip", "0.80");
 
+  // MI — borrower count, co-borrower FICO, premium type
+  const [borrowerCount, setBorrowerCount] = useLocalStorage("pc_borrowers", "1");
+  const [coBorroFico,  setCoBorroFico]    = useLocalStorage("pc_cofico",   "740");
+  const [miPremiumType, setMiPremiumType] = useLocalStorage("pc_mitype",   "monthly");
+  const [dtiBackRatio]                    = useLocalStorage("dti_back_ratio", "0");
+
+  // Derived MI factors — used in both the PMI useEffect and the calc useMemo
+  const qualifyingFico = borrowerCount === "2"
+    ? Math.min(parseInt(ficoScore) || 740, parseInt(coBorroFico) || 740)
+    : (parseInt(ficoScore) || 740);
+  const dtiBack      = parseFloat(dtiBackRatio) || 0;
+  const highDTI      = dtiBack > 45;
+  const isMultiBorr  = borrowerCount === "2";
+
   const syncDown = (hp, dp) => {
     const h = parseFloat(hp) || 0;
     const d = parseFloat(dp) || 0;
@@ -228,16 +242,15 @@ function PaymentCalculator() {
     const la = parseFloat(loanAmount) || 0;
     const ltv = hp > 0 ? (la / hp) * 100 : 0;
     if (ltv <= 80) { setPmiInfo(null); setPmiRate(""); return; }
-    const fico = parseInt(ficoScore) || 740;
     const termYrs = parseInt(term) || 30;
     const isFixed = loanType === "fixed";
     const isCashOut = purpose === "cashOutRefi";
-    const result = lookupPMI({ ltv, fico, termYears: termYrs, occupancy, isFixed, isCashOut, isMultiBorrower: false, highDTI: false });
+    const result = lookupPMI({ ltv, fico: qualifyingFico, termYears: termYrs, occupancy, isFixed, isCashOut, isMultiBorrower: isMultiBorr, highDTI });
     if (result.rate !== null) {
       setPmiRate(String((result.rate * 100).toFixed(2)));
       setPmiInfo(result);
     } else { setPmiInfo(null); }
-  }, [pmiAuto, homePrice, loanAmount, ficoScore, term, loanType, loanProgram, purpose, occupancy]);
+  }, [pmiAuto, homePrice, loanAmount, ficoScore, coBorroFico, borrowerCount, term, loanType, loanProgram, purpose, occupancy, dtiBackRatio]);
 
   // FHA and USDA require owner-occupied — enforce automatically
   useEffect(() => {
@@ -312,6 +325,24 @@ function PaymentCalculator() {
     const monthlyHOA = parseFloat(hoaDues) || 0;
     const ltv = hp > 0 ? (baseLA / hp * 100) : 0;
 
+    // ── MI Premium Type & qualifying factors ──────────────────────────────
+    const qualFico = borrowerCount === "2"
+      ? Math.min(parseInt(ficoScore) || 740, parseInt(coBorroFico) || 740)
+      : (parseInt(ficoScore) || 740);
+    const isConvPMI_base = (loanProgram === "conventional" || loanProgram === "") && ltv > 80;
+    // LPMI: no monthly MI, rate bumped up
+    const lpmiAdjPct = (miPremiumType === "lpmi" && isConvPMI_base)
+      ? (ltv > 95 ? 0.500 : ltv > 90 ? 0.375 : ltv > 85 ? 0.250 : 0.125)
+      : 0;
+    const rForPI = r + (lpmiAdjPct / 100 / 12);
+    // Single / Split: upfront premium (financed)
+    const singlePremRate = (miPremiumType === "single" && isConvPMI_base && window.lookupSinglePremium)
+      ? (window.lookupSinglePremium({ ltv, fico: qualFico, termYears: termYrs }) || 0)
+      : 0;
+    const convSingleAmt   = Math.round(baseLA * singlePremRate);
+    const splitUpfrontAmt = (miPremiumType === "split" && isConvPMI_base) ? Math.round(baseLA * 0.005) : 0;
+    const convUpfrontPremium = convSingleAmt + splitUpfrontAmt;
+
     // ── Upfront fees rolled into funded loan amount ──
     const vaExemptBool = vaExempt === "true";
     const vaFirstBool  = vaFirstUse === "true";
@@ -325,7 +356,7 @@ function PaymentCalculator() {
     const vaFundingFee  = Math.round(baseLA * vaFeeRate);
     const fhaUfmip      = loanProgram === "fha"  ? Math.round(baseLA * 0.0175) : 0;
     const usdaUpfront   = loanProgram === "usda" ? Math.round(baseLA * 0.01)   : 0;
-    const upfrontFee    = vaFundingFee + fhaUfmip + usdaUpfront;
+    const upfrontFee    = vaFundingFee + fhaUfmip + usdaUpfront + convUpfrontPremium;
     const la            = baseLA + upfrontFee; // funded loan amount used for P&I
 
     // ── Monthly mortgage insurance ──
@@ -338,8 +369,11 @@ function PaymentCalculator() {
     })();
     const monthlyFhaMip  = loanProgram === "fha"  ? (baseLA * fhaMipRatePct / 100) / 12 : 0;
     const monthlyUsdaFee = loanProgram === "usda" ? (baseLA * 0.35 / 100) / 12          : 0;
-    const isConvPMI      = (loanProgram === "conventional" || loanProgram === "") && ltv > 80;
-    const monthlyPMI     = isConvPMI ? (la * (parseFloat(pmiRate) || 0) / 100) / 12 : 0;
+    const isConvPMI      = isConvPMI_base && miPremiumType !== "lpmi" && miPremiumType !== "single";
+    const monthlyPMI     = !isConvPMI ? 0
+                         : miPremiumType === "split"
+                           ? (la * (parseFloat(pmiRate) || 0) / 100) / 12 * 0.60
+                           : (la * (parseFloat(pmiRate) || 0) / 100) / 12;
     const monthlyMI      = loanProgram === "fha" ? monthlyFhaMip
                          : loanProgram === "usda" ? monthlyUsdaFee
                          : monthlyPMI;
@@ -374,7 +408,8 @@ function PaymentCalculator() {
       totalInterest = (drawPayment * drawMo) + (repayPI * repayMo) - la;
       extraInfo = { drawPayment, repayPI, drawMo, repayMo };
     } else {
-      monthlyPI     = pmt(r, n, la);
+      const rEff    = (miPremiumType === "lpmi" && isConvPMI_base) ? rForPI : r;
+      monthlyPI     = pmt(rEff, n, la);
       totalInterest = (monthlyPI * n) - la;
     }
 
@@ -402,9 +437,11 @@ function PaymentCalculator() {
       upfrontFee, vaFundingFee, vaFeeRate, fhaUfmip, usdaUpfront,
       fhaMipRatePct, monthlyFhaMip, monthlyUsdaFee, monthlyMI, isConvPMI,
       apr, aprFees,
+      qualFico, lpmiAdjPct, singlePremRate, convSingleAmt, splitUpfrontAmt, convUpfrontPremium,
       ...extraInfo,
     };
   }, [loanAmount, homePrice, rate, term, propertyTax, homeInsurance, propertyTaxRate, homeInsuranceRate, taxMode, insMode, downPaymentPct, pmiRate, hoaDues, loanType, armFixedYears, armCap, armLifeCap, armMargin, ioPeriod, helocDrawYears, helocRepayYears, pcState, occupancy, loanProgram, purpose, vaFirstUse, vaExempt, fhaMipAuto, fhaMipOverride,
+    borrowerCount, coBorroFico, miPremiumType, dtiBackRatio, ficoScore,
     fsOrigPct, fsDpPts, fsOvUw, fsDefUw, fsOvProc, fsDefProc, fsOvFlood, fsDefFlood, fsOvTaxsvc, fsDefTaxsvc, fsOvDocprep, fsDefDocprep, fsState]);
 
   // Equity projection: overlays appreciation-driven value on the balance paydown
@@ -936,6 +973,7 @@ function PaymentCalculator() {
                   const isInt = userObj?.isInternal === true;
                   return (
                     <div>
+                      {/* Header + Auto/Manual toggle */}
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                         <span style={{ fontSize: 12, fontWeight: 700, color: c.text || c.navy, fontFamily: font }}>Private Mortgage Insurance</span>
                         {isConv && (
@@ -946,11 +984,99 @@ function PaymentCalculator() {
                           </div>
                         )}
                       </div>
-                      {isConv && pmiAuto && (
-                        <LabeledInput label="FICO Score" value={ficoScore} onChange={setFicoScore} small hint={pmiInfo ? `Bucket: ${parseInt(ficoScore) >= 760 ? "760+" : parseInt(ficoScore) >= 740 ? "740-759" : parseInt(ficoScore) >= 720 ? "720-739" : parseInt(ficoScore) >= 700 ? "700-719" : parseInt(ficoScore) >= 680 ? "680-699" : parseInt(ficoScore) >= 660 ? "660-679" : parseInt(ficoScore) >= 640 ? "640-659" : "620-639"} · Coverage: ${pmiInfo.coverage}%` : "Enter borrower FICO"} />
+
+                      {/* ── Premium Type ── */}
+                      {isConv && (
+                        <div style={{ display: "flex", gap: 4, marginBottom: 10, flexWrap: "wrap" }}>
+                          {[
+                            { v: "monthly", l: "Monthly"       },
+                            { v: "single",  l: "Single Prem."  },
+                            { v: "split",   l: "Split Prem."   },
+                            { v: "lpmi",    l: "Lender Paid"   },
+                          ].map(o => (
+                            <button key={o.v} onClick={() => setMiPremiumType(o.v)} style={{
+                              padding: "3px 10px", fontSize: 10, fontWeight: 700, fontFamily: font,
+                              border: `1px solid ${miPremiumType === o.v ? c.blue : c.border}`,
+                              borderRadius: 4, cursor: "pointer",
+                              background: miPremiumType === o.v ? c.blue : "transparent",
+                              color: miPremiumType === o.v ? "#fff" : c.gray,
+                              transition: "all 0.15s",
+                            }}>{o.l}</button>
+                          ))}
+                        </div>
                       )}
+
+                      {/* ── Borrower count + FICO inputs (auto mode only) ── */}
+                      {isConv && pmiAuto && (
+                        <div>
+                          {/* Borrower count toggle */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                            <span style={{ fontSize: 11, color: c.gray, fontFamily: font, flex: 1 }}>Borrowers on Loan</span>
+                            <div style={{ display: "flex", gap: 0, borderRadius: 4, overflow: "hidden", border: `1px solid ${c.border}` }}>
+                              {["1","2"].map(n => (
+                                <button key={n} onClick={() => setBorrowerCount(n)} style={{
+                                  padding: "2px 14px", fontSize: 11, fontWeight: 700, fontFamily: font,
+                                  border: "none", cursor: "pointer",
+                                  background: borrowerCount === n ? c.navy : "transparent",
+                                  color: borrowerCount === n ? "#fff" : c.gray,
+                                }}>{n}</button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Borrower 1 FICO */}
+                          <LabeledInput
+                            label={borrowerCount === "2" ? "Borrower 1 FICO" : "FICO Score"}
+                            value={ficoScore} onChange={setFicoScore} small
+                            hint={`Bucket: ${qualifyingFico >= 760 ? "760+" : qualifyingFico >= 740 ? "740-759" : qualifyingFico >= 720 ? "720-739" : qualifyingFico >= 700 ? "700-719" : qualifyingFico >= 680 ? "680-699" : qualifyingFico >= 660 ? "660-679" : qualifyingFico >= 640 ? "640-659" : "620-639"}${pmiInfo ? " · Coverage: " + pmiInfo.coverage + "%" : ""}`}
+                          />
+
+                          {/* Borrower 2 FICO */}
+                          {borrowerCount === "2" && (
+                            <LabeledInput
+                              label="Borrower 2 FICO"
+                              value={coBorroFico} onChange={setCoBorroFico} small
+                              hint="MI uses the lower qualifying score"
+                            />
+                          )}
+
+                          {/* Qualifying score callout */}
+                          {borrowerCount === "2" && (
+                            <div style={{ fontSize: 10, padding: "4px 8px", background: c.bgAlt || "#f0f4fa", borderRadius: 4, marginTop: 2, marginBottom: 4, fontFamily: font, display: "flex", justifyContent: "space-between" }}>
+                              <span style={{ color: c.gray }}>Qualifying Score Used:</span>
+                              <strong style={{ color: qualifyingFico < (parseInt(ficoScore) || 740) ? c.gold : c.green }}>
+                                {qualifyingFico} {qualifyingFico < (parseInt(ficoScore) || 740) ? "(B2 is lower)" : qualifyingFico < (parseInt(coBorroFico) || 740) ? "(B1 is lower)" : "(equal)"}
+                              </strong>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* ── Rate / cost display ── */}
                       {(!isConv || !pmiAuto) ? (
                         <LabeledInput label="PMI Rate" value={pmiRate} onChange={setPmiRate} suffix="% annual" small hint={`${fmt2(calc.monthlyPMI)}/mo · Removed at 80% LTV`} />
+                      ) : miPremiumType === "lpmi" ? (
+                        <div style={{ fontSize: 12, fontFamily: font, color: c.textSecondary || c.gray, marginTop: 4, padding: "6px 8px", background: c.bgAlt || "#f0f4fa", borderRadius: 6 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 2 }}>
+                            <span style={{ fontWeight: 700, color: c.text || c.navy }}>Lender Paid MI — No Monthly Premium</span>
+                          </div>
+                          <div style={{ fontSize: 11 }}>Rate increase: <strong style={{ color: c.gold }}>+{calc.lpmiAdjPct.toFixed(3)}%</strong> added to note rate</div>
+                          <div style={{ fontSize: 10, marginTop: 2, opacity: 0.7 }}>Lender absorbs MI cost via higher rate. MI never cancels (rate stays elevated).</div>
+                        </div>
+                      ) : miPremiumType === "single" ? (
+                        <div style={{ fontSize: 12, fontFamily: font, color: c.textSecondary || c.gray, marginTop: 4, padding: "6px 8px", background: c.bgAlt || "#f0f4fa", borderRadius: 6 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 2 }}>
+                            <span style={{ fontWeight: 700, color: c.text || c.navy }}>Single Premium — No Monthly MI</span>
+                          </div>
+                          <div style={{ fontSize: 11 }}>Upfront: <strong style={{ color: c.navy }}>{calc.singlePremRate ? `${(calc.singlePremRate * 100).toFixed(2)}% = ` : ""}{fmt(calc.convSingleAmt)}</strong> financed into loan</div>
+                          <div style={{ fontSize: 10, marginTop: 2, opacity: 0.7 }}>One-time premium eliminates monthly MI. Ideal if staying long-term.</div>
+                        </div>
+                      ) : miPremiumType === "split" ? (
+                        <div style={{ fontSize: 12, fontFamily: font, color: c.textSecondary || c.gray, marginTop: 4, padding: "6px 8px", background: c.bgAlt || "#f0f4fa", borderRadius: 6 }}>
+                          <div style={{ fontWeight: 700, color: c.text || c.navy, marginBottom: 2 }}>Split Premium</div>
+                          <div style={{ fontSize: 11 }}>Upfront: <strong style={{ color: c.navy }}>{fmt(calc.splitUpfrontAmt)}</strong> (0.50% financed) + Monthly: <strong style={{ color: c.navy }}>{fmt2(calc.monthlyPMI)}/mo</strong></div>
+                          <div style={{ fontSize: 10, marginTop: 2, opacity: 0.7 }}>Reduces monthly MI by ~40%. Cancels at 80% LTV.</div>
+                        </div>
                       ) : (
                         <div style={{ fontSize: 12, fontFamily: font, color: c.textSecondary || c.gray, marginTop: 4 }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
@@ -961,32 +1087,65 @@ function PaymentCalculator() {
                           <div style={{ fontSize: 10, marginTop: 2, opacity: 0.6 }}>Auto-cancels at 78% LTV (HPA) · Request removal at 80%</div>
                         </div>
                       )}
-                      {isInt && isConv && pmiAuto && pmiInfo && (() => {
-                        const hp = parseFloat(homePrice) || 0;
-                        const la = parseFloat(loanAmount) || 0;
-                        const ltv = hp > 0 ? (la / hp) * 100 : 0;
-                        const fico = parseInt(ficoScore) || 740;
-                        const termYrs = parseInt(term) || 30;
-                        const enactR = lookupPMICompany("enact", { ltv, fico, termYears: termYrs });
-                        const essentR = lookupPMICompany("essent", { ltv, fico, termYears: termYrs });
+
+                      {/* ── Internal: MI Factor Detail + Company Comparison ── */}
+                      {isInt && isConv && pmiAuto && (() => {
+                        const hp2  = parseFloat(homePrice) || 0;
+                        const la2  = parseFloat(loanAmount) || 0;
+                        const ltv2 = hp2 > 0 ? (la2 / hp2) * 100 : 0;
+                        const termYrs2 = parseInt(term) || 30;
+                        const isCashOut2 = purpose === "cashOutRefi";
+                        const adjParams = { ltv: ltv2, fico: qualifyingFico, termYears: termYrs2, isMultiBorrower: isMultiBorr, highDTI, isCashOut: isCashOut2, occupancy };
+                        const enactR  = lookupPMICompany("enact",  adjParams);
+                        const essentR = lookupPMICompany("essent", adjParams);
+                        const cheapest = (enactR !== null && essentR !== null)
+                          ? (enactR <= essentR ? "Enact" : "Essent")
+                          : enactR !== null ? "Enact" : essentR !== null ? "Essent" : null;
                         return (
                           <div style={{ marginTop: 10, padding: 8, background: c.bg || "#fff", borderRadius: 8, border: `1px dashed ${c.border}` }}>
-                            <div style={{ fontSize: 10, fontWeight: 700, color: c.blue, fontFamily: font, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>🔒 Internal — PMI Company Comparison</div>
+                            {/* MI Factor Detail */}
+                            <div style={{ fontSize: 10, fontWeight: 700, color: c.blue, fontFamily: font, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>🔒 Internal — MI Factors</div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px 12px", fontSize: 10, fontFamily: font, marginBottom: 8 }}>
+                              {[
+                                { label: "Qualifying FICO", value: borrowerCount === "2" ? `${qualifyingFico} (min of ${ficoScore} / ${coBorroFico})` : `${qualifyingFico}` },
+                                { label: "LTV Bucket",      value: pmiInfo?.tier || `${ltv2.toFixed(1)}%` },
+                                { label: "Term Table",      value: termYrs2 > 20 ? ">20yr" : "≤20yr" },
+                                { label: "Occupancy Adj",  value: occupancy === "primary" ? "None" : occupancy === "vacation" ? "+Second Home" : "+Investment" },
+                                { label: "Cash-Out Adj",   value: isCashOut2 ? "+Applied" : "None" },
+                                { label: `Back-End DTI`,   value: dtiBack > 0 ? `${dtiBack.toFixed(1)}%${highDTI ? " ⚠️ >45%" : ""}` : "N/A (run DTI Calc)", high: highDTI },
+                                { label: "Multi-Borrower", value: isMultiBorr ? "−Discount applied" : "N/A" },
+                                { label: "Base Rate",      value: pmiInfo ? `${(pmiInfo.baseRate * 100).toFixed(2)}%` : "—" },
+                                { label: "Total Adj",      value: pmiInfo && pmiInfo.totalAdj !== 0 ? `${pmiInfo.totalAdj > 0 ? "+" : ""}${(pmiInfo.totalAdj * 100).toFixed(3)}%` : "None" },
+                                { label: "Final Rate",     value: `${pmiRate}%/yr` },
+                                { label: "Coverage",       value: pmiInfo ? `${pmiInfo.coverage}%` : "—" },
+                                { label: "Monthly MI",     value: fmt2(calc.monthlyPMI) },
+                              ].map(item => (
+                                <div key={item.label} style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", borderBottom: `1px solid ${c.border || "#eee"}` }}>
+                                  <span style={{ color: c.gray }}>{item.label}</span>
+                                  <strong style={{ color: item.high ? c.gold : c.text || c.navy }}>{item.value}</strong>
+                                </div>
+                              ))}
+                            </div>
+                            {dtiBack > 0 && (
+                              <div style={{ fontSize: 9, color: c.gray, fontFamily: font, fontStyle: "italic", marginBottom: 8 }}>
+                                DTI sourced from DTI Calculator · update there to recalculate MI surcharge
+                              </div>
+                            )}
+
+                            {/* Company Comparison */}
+                            <div style={{ fontSize: 10, fontWeight: 700, color: c.blue, fontFamily: font, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Company Rates (Adjusted)</div>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                              <div style={{ padding: 6, borderRadius: 6, background: c.bgAlt || "#f5f5f5", textAlign: "center" }}>
-                                <div style={{ fontSize: 10, fontWeight: 600, color: c.textSecondary || c.gray, fontFamily: font }}>Enact MI</div>
-                                <div style={{ fontSize: 16, fontWeight: 800, color: enactR !== null ? c.green : c.gray, fontFamily: font }}>{enactR !== null ? `${(enactR * 100).toFixed(2)}%` : "N/A"}</div>
-                                {enactR !== null && <div style={{ fontSize: 10, color: c.textSecondary || c.gray }}>{fmt2(la * enactR / 12)}/mo</div>}
-                              </div>
-                              <div style={{ padding: 6, borderRadius: 6, background: c.bgAlt || "#f5f5f5", textAlign: "center" }}>
-                                <div style={{ fontSize: 10, fontWeight: 600, color: c.textSecondary || c.gray, fontFamily: font }}>Essent MI</div>
-                                <div style={{ fontSize: 16, fontWeight: 800, color: essentR !== null ? c.green : c.gray, fontFamily: font }}>{essentR !== null ? `${(essentR * 100).toFixed(2)}%` : "N/A"}</div>
-                                {essentR !== null && <div style={{ fontSize: 10, color: c.textSecondary || c.gray }}>{fmt2(la * essentR / 12)}/mo</div>}
-                              </div>
+                              {[{ label: "Enact MI", rate: enactR }, { label: "Essent MI", rate: essentR }].map(co => (
+                                <div key={co.label} style={{ padding: 6, borderRadius: 6, background: c.bgAlt || "#f5f5f5", textAlign: "center", border: cheapest === co.label.split(" ")[0] ? `1.5px solid ${c.green}` : "none" }}>
+                                  <div style={{ fontSize: 10, fontWeight: 600, color: c.textSecondary || c.gray, fontFamily: font }}>{co.label}{cheapest === co.label.split(" ")[0] ? " ✓" : ""}</div>
+                                  <div style={{ fontSize: 16, fontWeight: 800, color: co.rate !== null ? c.green : c.gray, fontFamily: font }}>{co.rate !== null ? `${(co.rate * 100).toFixed(2)}%` : "N/A"}</div>
+                                  {co.rate !== null && <div style={{ fontSize: 10, color: c.textSecondary || c.gray }}>{fmt2(la2 * co.rate / 12)}/mo</div>}
+                                </div>
+                              ))}
                             </div>
                             {enactR !== null && essentR !== null && (
                               <div style={{ fontSize: 10, textAlign: "center", marginTop: 4, color: c.textSecondary || c.gray, fontFamily: font }}>
-                                Savings: {fmt2(Math.abs((enactR - essentR) * la / 12))}/mo with {enactR < essentR ? "Enact" : essentR < enactR ? "Essent" : "either"}
+                                Cheapest: <strong style={{ color: c.green }}>{cheapest}</strong> · saves {fmt2(Math.abs((enactR - essentR) * la2 / 12))}/mo
                               </div>
                             )}
                           </div>
