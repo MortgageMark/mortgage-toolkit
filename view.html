@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mortgage Mark — Opening your scenario…</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', Arial, sans-serif;
+      background: #f4f7f8;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 14px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+      padding: 48px 40px 36px;
+      max-width: 480px;
+      width: 100%;
+      text-align: center;
+    }
+
+    .brand {
+      color: #0C4160;
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 6px;
+    }
+
+    .brand-sub {
+      color: #48A0CE;
+      font-size: 13px;
+      margin-bottom: 36px;
+    }
+
+    /* Spinner */
+    .spinner {
+      width: 44px;
+      height: 44px;
+      border: 4px solid #E0E8E8;
+      border-top-color: #48A0CE;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 20px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .status-text {
+      font-size: 15px;
+      color: #374151;
+      line-height: 1.6;
+    }
+
+    /* Error state */
+    .error-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+
+    h2 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #0C4160;
+      margin-bottom: 12px;
+    }
+
+    p {
+      font-size: 14px;
+      color: #6B7280;
+      line-height: 1.65;
+      margin-bottom: 16px;
+    }
+
+    .cta-btn {
+      display: inline-block;
+      background: #48A0CE;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      padding: 12px 28px;
+      border-radius: 8px;
+      text-decoration: none;
+      margin-top: 8px;
+    }
+
+    .footer {
+      margin-top: 32px;
+      font-size: 11px;
+      color: #9CA3AF;
+      line-height: 1.7;
+      border-top: 1px solid #E5E7EB;
+      padding-top: 20px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="card" id="card">
+  <div class="brand">Mortgage Mark</div>
+  <div class="brand-sub">Powered by CMG Home Loans</div>
+
+  <!-- Loading state (default) -->
+  <div id="state-loading">
+    <div class="spinner"></div>
+    <div class="status-text">Verifying your secure link…</div>
+  </div>
+
+  <!-- Error: not found / deactivated -->
+  <div id="state-invalid" style="display:none">
+    <div class="error-icon">🔒</div>
+    <h2>This link is no longer valid</h2>
+    <p>
+      This link may have expired or been deactivated.
+      Please contact your loan officer for a new link.
+    </p>
+    <a class="cta-btn" href="https://mortgagemark.com/contact">Contact Your Loan Officer</a>
+  </div>
+
+  <!-- Error: expired -->
+  <div id="state-expired" style="display:none">
+    <div class="error-icon">⏰</div>
+    <h2>This link has expired</h2>
+    <p>
+      Scenario links are valid for 30 days. Please contact your
+      loan officer to send you a fresh link.
+    </p>
+    <a class="cta-btn" href="https://mortgagemark.com/contact">Contact Your Loan Officer</a>
+  </div>
+
+  <!-- Footer (always visible) -->
+  <div class="footer">
+    Mark Pfeiffer | NMLS #729612 | CMG Home Loans | NMLS #1820<br />
+    Equal Housing Lender
+  </div>
+</div>
+
+<script>
+(async function() {
+  // ── Config ────────────────────────────────────────────────────────────────
+  // Edge Function URL — constructed from Supabase project URL
+  var SUPABASE_URL     = "https://sevilzviytfvviyqwska.supabase.co";
+  var RESOLVE_FN_URL   = SUPABASE_URL + "/functions/v1/resolve-token";
+  var TOOLKIT_URL      = window.location.origin + "/mortgage-toolkit.html";
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function show(stateId) {
+    ["state-loading", "state-invalid", "state-expired"].forEach(function(id) {
+      document.getElementById(id).style.display = id === stateId ? "" : "none";
+    });
+  }
+
+  // ── Read token from URL ───────────────────────────────────────────────────
+  var params = new URLSearchParams(window.location.search);
+  var token  = params.get("token");
+
+  if (!token) {
+    show("state-invalid");
+    return;
+  }
+
+  // ── Call resolve-token Edge Function ──────────────────────────────────────
+  var result;
+  try {
+    var resp = await fetch(RESOLVE_FN_URL + "?token=" + encodeURIComponent(token), {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+    });
+
+    result = await resp.json();
+
+    if (!resp.ok) {
+      // Distinguish expired from deactivated/not-found
+      if (result.error === "expired") {
+        show("state-expired");
+      } else {
+        show("state-invalid");
+      }
+      return;
+    }
+  } catch (err) {
+    console.error("resolve-token fetch error:", err);
+    show("state-invalid");
+    return;
+  }
+
+  // ── Token is valid — store data in sessionStorage then redirect ───────────
+  // sessionStorage is tab-scoped and never persists to disk. Safe for this use.
+  var tokenData = {
+    token:       token,
+    clientName:  result.clientName  || "",
+    clientEmail: result.clientEmail || "",  // may be empty if Edge Fn doesn't return it
+    loName:      result.loName      || "Your Loan Officer",
+    destination: result.destination || "full_scenario",
+    scenarioId:  result.scenarioId  || "",
+    expiresAt:   result.expiresAt   || "",
+    scenario:    result.scenario    || null,
+  };
+
+  try {
+    sessionStorage.setItem("mtk_view_token_data", JSON.stringify(tokenData));
+  } catch (e) {
+    // sessionStorage full or blocked — proceed anyway, toolkit will handle gracefully
+    console.warn("sessionStorage write failed:", e);
+  }
+
+  // ── Build redirect URL ────────────────────────────────────────────────────
+  var redirectUrl = TOOLKIT_URL
+    + "?view_token=" + encodeURIComponent(token)
+    + "&dest=" + encodeURIComponent(tokenData.destination);
+
+  // Small delay so the user sees "Verifying…" rather than instant flash
+  setTimeout(function() {
+    window.location.replace(redirectUrl);
+  }, 600);
+
+})();
+</script>
+
+</body>
+</html>

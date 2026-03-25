@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mortgage Toolkit — Mortgage Mark · CMG Home Loans</title>
+  <meta name="description" content="Comprehensive mortgage toolkit by Mortgage Mark, CMG Home Loans. Payment calculator, refinance analyzer, fee sheets, and more.">
+  <meta name="theme-color" content="#0C4160">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'DM Sans', sans-serif; background: #F5F8FA; -webkit-font-smoothing: antialiased; }
+    /* ─── Responsive ─────────────────────── */
+    @media (max-width: 768px) {
+      .mtk-grid-2 { grid-template-columns: 1fr !important; }
+      .mtk-grid-3 { grid-template-columns: 1fr 1fr !important; }
+      .mtk-grid-12 { grid-template-columns: 1fr !important; }
+      .mtk-metrics { flex-direction: column !important; }
+      .mtk-scenarios { grid-template-columns: 1fr !important; }
+      .mtk-tab-bar { flex-wrap: wrap !important; }
+      .mtk-header-flex { flex-direction: column !important; gap: 10px !important; align-items: flex-start !important; }
+      .mtk-lock-row { flex-direction: column !important; align-items: flex-start !important; }
+      .mtk-lock-btns { margin-top: 8px !important; }
+    }
+    @media (max-width: 480px) {
+      .mtk-grid-3 { grid-template-columns: 1fr !important; }
+    }
+    /* ─── Print ───────────────────────────── */
+    @media print {
+      body { background: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; color: #222 !important; }
+      body > div > div:first-child { display: none !important; }
+      body > div > div:last-child { display: none !important; }
+      body > div > div:nth-child(2) { padding: 10px !important; }
+      .mtk-no-print { display: none !important; }
+      .mtk-print-only { display: block !important; }
+      .mtk-print-header { display: flex !important; align-items: center; gap: 12px; padding: 16px 0; border-bottom: 2px solid #0C4160; margin-bottom: 16px; }
+      .mtk-print-header img { max-height: 40px; }
+      .mtk-prequal-letter { border: none !important; box-shadow: none !important; padding: 30px 50px !important; max-width: 100% !important; font-size: 12px !important; }
+      .mtk-prequal-letter h2 { font-size: 16px !important; }
+      .mtk-prequal-letter table { font-size: 11px !important; }
+      .mtk-prequal-letter .pq-footer { position: fixed; bottom: 30px; left: 50px; right: 50px; }
+      .mtk-fee-table { page-break-inside: avoid; }
+      .mtk-fee-table td, .mtk-fee-table th { padding: 4px 8px !important; font-size: 11px !important; }
+      div[style*="box-shadow"] { box-shadow: none !important; border: 1px solid #ddd !important; }
+      div[style*="background: linear-gradient"] { background: #fff !important; }
+      button, select { display: none !important; }
+      .mtk-print-show-btn { display: none !important; }
+      svg { max-width: 100% !important; }
+      table { page-break-inside: avoid; }
+      tr { page-break-inside: avoid; }
+      h2, h3 { page-break-after: avoid; }
+      .mtk-section-card { break-inside: avoid; page-break-inside: avoid; margin-bottom: 12px !important; }
+    }
+    .mtk-print-only { display: none; }
+    /* ─── Settings Panel ─────────────────── */
+    .mtk-settings-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9998; }
+    .mtk-settings-panel { position: fixed; top: 0; right: 0; bottom: 0; width: 380px; max-width: 90vw; background: #fff; z-index: 9999; box-shadow: -4px 0 24px rgba(0,0,0,0.15); overflow-y: auto; transition: transform 0.3s; }
+    .mtk-settings-panel.dark { background: #1A2530; color: #E0E8EF; }
+  </style>
+  <script crossorigin src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+  <!-- ─── Supabase Client ─────────────────────────────────────────────── -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script>
+    var SUPABASE_URL  = "https://sevilzviytfvviyqwska.supabase.co";
+    var SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNldmlsenZpeXRmdnZpeXF3c2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0NTY5MzMsImV4cCI6MjA4ODAzMjkzM30.EOMbAzt_S7qnuVukm3a6jJpcbY7g8rQPeJ1-KUwzwZ8";
+    try {
+      window._supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+    } catch(e) {
+      console.error("Supabase client init failed:", e);
+      window._supabaseClient = null;
+    }
+  </script>
+  <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiTW9ydGdhZ2UgVG9vbGtpdCIsInNob3J0X25hbWUiOiJNb3J0Z2FnZSIsInN0YXJ0X3VybCI6Ii4iLCJkaXNwbGF5Ijoic3RhbmRhbG9uZSIsImJhY2tncm91bmRfY29sb3IiOiIjMTMzMTU1IiwidGhlbWVfY29sb3IiOiIjMTMzMTU1IiwiaWNvbnMiOlt7InNyYyI6ImRhdGE6aW1hZ2Uvc3ZnK3htbCw8c3ZnIHhtbG5zPSdodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2Zycgdmlld0JveD0nMCAwIDEwMCAxMDAnPjxyZWN0IHdpZHRoPScxMDAnIGhlaWdodD0nMTAwJyByeD0nMjAnIGZpbGw9JyMxMzMxNTUnLz48dGV4dCB4PSc1MCcgeT0nNjUnIGZvbnQtc2l6ZT0nNTAnIHRleHQtYW5jaG9yPSdtaWRkbGUnIGZpbGw9J3doaXRlJz7wn4+gPC90ZXh0Pjwvc3ZnPiIsInNpemVzIjoiNTEyeDUxMiIsInR5cGUiOiJpbWFnZS9zdmcreG1sIn1dfQ==" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Mortgage Toolkit" />
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        const swCode = `
+          const CACHE_NAME = 'mtk-v2';
+          const ASSETS = [self.location.href.replace(/\\/sw\\.js$/, '/')];
+          self.addEventListener('install', e => e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())));
+          self.addEventListener('activate', e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))).then(() => self.clients.claim())));
+          self.addEventListener('fetch', e => {
+            if (e.request.method !== 'GET') return;
+            e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).then(resp => {
+              if (resp.status === 200) { const c = resp.clone(); caches.open(CACHE_NAME).then(cache => cache.put(e.request, c)); }
+              return resp;
+            }).catch(() => caches.match('/'))));
+          });
+        `;
+        const blob = new Blob([swCode], { type: 'application/javascript' });
+        const swUrl = URL.createObjectURL(blob);
+        navigator.serviceWorker.register(swUrl, { scope: '.' }).catch(() => {});
+      });
+    }
+  </script>
+</head>
+<body>
+  <div id="root">
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:'DM Sans',sans-serif;gap:16px;">
+      <div style="width:40px;height:40px;border:4px solid #e0e8ef;border-top-color:#0C4160;border-radius:50%;animation:mtk-spin 0.8s linear infinite;"></div>
+      <div style="color:#0C4160;font-size:15px;font-weight:600;letter-spacing:0.02em;">Loading Mortgage Toolkit…</div>
+    </div>
+    <style>@keyframes mtk-spin{to{transform:rotate(360deg)}}</style>
+  </div>
+
+  <!-- ─── Title Endorsement Engine (ES modules → window globals) ────────── -->
+  <!-- Loads stateConfig.js and its dependencies (altaEndorsements, texasTitleEndorsements,  -->
+  <!-- stateOverrides) as real ES modules, then exposes the public API on window.             -->
+  <script type="module">
+    (async () => {
+      try {
+        const sc = await import('./stateConfig.js');
+        const so = await import('./stateOverrides.js');
+        window.getEndorsementsForState     = sc.getEndorsementsForState;
+        window.getStateConfig              = sc.getStateConfig;
+        window.getStateDropdownOptions     = sc.getStateDropdownOptions;
+        window.getRateSystemLabel          = sc.getRateSystemLabel;
+        window.validateExclusions          = sc.validateExclusions;
+        window.validatePairings            = sc.validatePairings;
+        window.applyStateOverrides         = so.applyStateOverrides;
+        window.hasOverrides                = so.hasOverrides;
+        window.getStateOverrideNotes       = so.getStateOverrideNotes;
+        window.getEnhancedCoverageBundledCodes = so.getEnhancedCoverageBundledCodes;
+        window._titleEngineLoaded = true;
+        if (window._titleEngineReadyCallback) window._titleEngineReadyCallback();
+      } catch(e) {
+        console.error('[TitleEngine] Failed to load:', e);
+        window._titleEngineError = e.message || String(e);
+        window._titleEngineLoaded = false;
+      }
+    })();
+  </script>
+
+  <!-- ─── Module scripts (dependency order) ──────────────────────────── -->
+  <!-- Core -->
+  <script type="text/babel" src="modules/constants.js"></script>
+  <script type="text/babel" src="modules/utils.js"></script>
+  <script type="text/babel" src="modules/hooks.js"></script>
+  <script type="text/babel" src="modules/storage.js"></script>
+  <script type="text/babel" src="modules/tokens.js"></script>
+  <script type="text/babel" src="modules/propagation.js"></script>
+
+  <!-- UI primitives & charts -->
+  <script type="text/babel" src="modules/ui/primitives.js"></script>
+  <script type="text/babel" src="modules/ui/charts.js"></script>
+  <script type="text/babel" src="modules/ui/NotifyClientButton.js"></script>
+
+  <!-- Calculators -->
+  <script type="text/babel" src="modules/calculators/PaymentCalculator.js"></script>
+  <script type="text/babel" src="modules/calculators/RefinanceAnalyzer.js"></script>
+  <script type="text/babel" src="modules/calculators/FeeSheetGenerator.js"></script>
+  <script type="text/babel" src="modules/calculators/MortgageComparison.js"></script>
+  <script type="text/babel" src="modules/calculators/BreakEvenCalculator.js"></script>
+  <script type="text/babel" src="modules/calculators/PreQualLetter.js"></script>
+  <script type="text/babel" src="modules/calculators/ForwardCommitment.js"></script>
+  <script type="text/babel" src="modules/calculators/AffordabilityCalculator.js"></script>
+  <script type="text/babel" src="modules/calculators/AmortizationSchedule.js"></script>
+  <script type="text/babel" src="modules/calculators/DTICalculator.js"></script>
+  <script type="text/babel" src="modules/calculators/RentVsBuyCalculator.js"></script>
+  <script type="text/babel" src="modules/calculators/SellerNetSheet.js"></script>
+  <script type="text/babel" src="modules/calculators/BiWeeklyCalculator.js"></script>
+  <script type="text/babel" src="modules/calculators/ClosingCostEstimator.js"></script>
+  <script type="text/babel" src="modules/calculators/HELOCCalculator.js"></script>
+  <script type="text/babel" src="modules/calculators/LoanProgramComparison.js"></script>
+  <script type="text/babel" src="modules/calculators/BudgetPlanner.js"></script>
+  <script type="text/babel" src="modules/calculators/OpenHouseLeadCapture.js"></script>
+  <script type="text/babel" src="modules/calculators/RateWatchDashboard.js"></script>
+  <script type="text/babel" src="modules/calculators/FlyerGenerator.js"></script>
+  <script type="text/babel" src="modules/calculators/WealthBuilder.js"></script>
+  <script type="text/babel" src="modules/calculators/TitleEndorsements.js"></script>
+
+  <!-- Screens -->
+  <script type="text/babel" src="modules/screens/SettingsPanel.js"></script>
+  <script type="text/babel" src="modules/screens/LOSelector.js"></script>
+  <script type="text/babel" src="modules/screens/AdminPanel.js"></script>
+  <script type="text/babel" src="modules/screens/LoginScreen.js"></script>
+  <script type="text/babel" src="modules/screens/ScenarioDashboard.js"></script>
+  <script type="text/babel" src="modules/screens/ContactDetail.js"></script>
+  <script type="text/babel" src="modules/screens/ContactsTab.js"></script>
+  <script type="text/babel" src="modules/screens/UsersPanel.js"></script>
+  <script type="text/babel" src="modules/screens/MortgageToolkit.js"></script>
+  <script type="text/babel" src="modules/screens/App.js"></script>
+
+  <!-- ─── Final render (must be last) ────────────────────────────────── -->
+  <script type="text/babel">
+    ReactDOM.createRoot(document.getElementById('root')).render(
+      React.createElement(window.App)
+    );
+  </script>
+</body>
+</html>
