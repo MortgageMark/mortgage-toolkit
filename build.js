@@ -112,6 +112,8 @@ function build() {
   console.log('\n✓  Compiled ' + fileCount + ' files');
 
   // ── 4. Compile inline <script type="text/babel"> (ReactDOM render call) ───
+  // Output as type="module" so it shares the same deferred scope as the
+  // module files below and executes after all of them have run.
   html = html.replace(
     /<script(\s+)type="text\/babel"(\s*)>([\s\S]*?)<\/script>/g,
     function (whole, sp1, sp2, content) {
@@ -120,14 +122,17 @@ function build() {
         ...BABEL_OPTS,
         filename: 'inline.jsx',
       }).code;
-      return '<script' + sp1 + 'type="text/javascript"' + sp2 + '>\n' + compiled + '\n</script>';
+      return '<script' + sp1 + 'type="module"' + sp2 + '>\n' + compiled + '\n</script>';
     }
   );
   console.log('✓  Compiled inline Babel block');
 
-  // ── 5. Convert all remaining type="text/babel" → type="text/javascript" ──
-  html = html.replace(/\btype="text\/babel"/g, 'type="text/javascript"');
-  console.log('✓  Converted script type attributes');
+  // ── 5. Convert all remaining type="text/babel" → type="module" ───────────
+  // type="module" gives each script its own lexical scope, so const/let
+  // declarations in one file never collide with those in another file.
+  // window.X exports still work fine across modules.
+  html = html.replace(/\btype="text\/babel"/g, 'type="module"');
+  console.log('✓  Converted script tags to type="module"');
 
   // ── 6. Write modified HTML ────────────────────────────────────────────────
   fs.writeFileSync(path.join(DIST, 'mortgage-toolkit.html'), html, 'utf8');
