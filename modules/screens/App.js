@@ -1438,7 +1438,7 @@ function App() {
 
   // Sidebar is visible for internal users + partners on all non-scenario screens
   const showSidebar = !!((isInternal || isPartner) && loggedInUser && !activeScenario && !authLoading &&
-    !showChangePassword && !showProfileSetup && !showMyInfo && !showUsers);
+    !showChangePassword && !showProfileSetup && !showMyInfo);
   const sidebarWidth = showSidebar && !isMobile ? (sidebarPinned ? 220 : 42) : 0;
 
   // Determine which nav item is "active" (mutually exclusive highlights)
@@ -1666,12 +1666,31 @@ function App() {
                     setShowTasksScenarios(true);
                     setShowContacts(false);
                     setShowTasksContacts(false);
+                    setShowUsers(false);
                     if (isMobile) setMobileSidebarOpen(false);
                   })}
                   {sidebarNavBtn("Contacts", inTasksCo, function() {
                     setShowTasksContacts(true);
                     setShowContacts(false);
                     setShowTasksScenarios(false);
+                    setShowUsers(false);
+                    if (isMobile) setMobileSidebarOpen(false);
+                  })}
+                </React.Fragment>
+              )}
+
+              {/* ── TEAM section (admin only) ── */}
+              {loggedInUser && loggedInUser.role === "admin" && (
+                <React.Fragment>
+                  <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "8px 16px 0" }} />
+                  <div style={{ padding: "8px 16px 4px", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.38)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                    Team
+                  </div>
+                  {sidebarNavBtn("Teams & Users", showUsers, function() {
+                    setShowUsers(true);
+                    setShowContacts(false);
+                    setShowTasksScenarios(false);
+                    setShowTasksContacts(false);
                     if (isMobile) setMobileSidebarOpen(false);
                   })}
                 </React.Fragment>

@@ -799,10 +799,6 @@ function UsersPanel({ user, onBack, onLogout }) {
           <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.01em" }}>Team &amp; Users</div>
           <div style={{ fontSize: 12, opacity: 0.75 }}>Manage roles, permissions, and team profiles</div>
         </div>
-        <button onClick={onBack} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.35)", color: "#fff", borderRadius: 8, padding: "7px 16px", fontSize: 13, cursor: "pointer", fontFamily: UP_FONT, fontWeight: 600 }}>← Back</button>
-        {onLogout && (
-          <button onClick={onLogout} style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.25)", color: "rgba(255,255,255,0.85)", borderRadius: 8, padding: "7px 14px", fontSize: 12, cursor: "pointer", fontFamily: UP_FONT, marginLeft: 8 }}>Logout</button>
-        )}
       </div>
 
       {/* Tab bar */}
