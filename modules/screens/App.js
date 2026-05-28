@@ -1563,14 +1563,6 @@ function App() {
                 setShowTasksScenarios(false);
               })}
 
-              {/* Contact view tabs — shown when in any contacts context */}
-              {inAnyContacts && (
-                <React.Fragment>
-                  <div style={{ height: 1, background: "rgba(255,255,255,0.1)", margin: "8px 0" }} />
-                  {sidebarNavBtn("Contact Info",    contactView === "contact",  function() { setContactView("contact");  })}
-                  {sidebarNavBtn("Internal Notes",  contactView === "internal", function() { setContactView("internal"); })}
-                </React.Fragment>
-              )}
 
             </div>
           )}

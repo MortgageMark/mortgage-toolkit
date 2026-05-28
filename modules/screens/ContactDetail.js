@@ -703,28 +703,41 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
           </div>
         )}
 
-        {/* Status & Type Badges + Create Login + Edit button on same row */}
+        {/* Tab bar + Create Login + Edit button on same row */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", marginBottom: "12px" }}>
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            <span style={{
-              padding: "4px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: "600",
-              background: editMode ? editTypeColors.bg : typeColors.bg,
-              color:      editMode ? editTypeColors.text : typeColors.text,
-              textTransform: "capitalize",
-            }}>
-              {editMode
-                ? (editForm.contact_category || editForm.contact_type)
-                : (contact.contact_category || contact.contact_type || "client")}
-            </span>
-            <span style={{
-              padding: "4px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: "600",
-              background: contact.status === "active" ? "#dcfce7" : "#f1f5f9",
-              color:      contact.status === "active" ? "#166534" : "#64748b",
-              textTransform: "capitalize",
-            }}>
-              {contact.status || "active"}
-            </span>
-          </div>
+          {/* Left: Contact Info / Internal Notes tabs (internal users only) */}
+          {isInternal ? (
+            <div style={{ display: "flex", gap: "2px", background: "#e2e8f0", borderRadius: "10px", padding: "3px" }}>
+              <button
+                onClick={function () { if (onSetView) onSetView("contact"); }}
+                style={{
+                  padding: "5px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600,
+                  border: "none", cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif",
+                  background: activeView === "contact" ? "#ffffff" : "transparent",
+                  color:      activeView === "contact" ? "#1e3a5f"  : "#64748b",
+                  boxShadow:  activeView === "contact" ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
+                  transition: "background 0.15s, color 0.15s",
+                }}
+              >
+                Contact Info
+              </button>
+              <button
+                onClick={function () { if (onSetView) onSetView("internal"); }}
+                style={{
+                  padding: "5px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600,
+                  border: "none", cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif",
+                  background: activeView === "internal" ? "#ffffff" : "transparent",
+                  color:      activeView === "internal" ? "#1e3a5f"  : "#64748b",
+                  boxShadow:  activeView === "internal" ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
+                  transition: "background 0.15s, color 0.15s",
+                }}
+              >
+                Internal Notes
+              </button>
+            </div>
+          ) : (
+            <div />
+          )}
           {!editMode && (
             <div style={{ display: "flex", gap: "8px", alignItems: "center", flexShrink: 0 }}>
               {canManage && (portalCreated || contact.auth_user_id ||
