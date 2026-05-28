@@ -100,37 +100,48 @@ async function build() {
   }
   console.log('\nCompiling ' + moduleFiles.length + ' module files…');
 
-  // ── 4. Compile every module file + concatenate into bundle ────────────────
-  const parts = [];
+  // ── 4. Compile + minify each module individually, then concatenate ───────
+  // Minifying per-module (not the whole bundle) prevents terser from renaming
+  // variables across IIFE boundaries, which caused TDZ ReferenceErrors.
+  let terserMinify = null;
+  try { terserMinify = require('terser').minify; } catch(e) {}
+
+  const parts   = [];
+  let totalRaw  = 0;
+  let totalMin  = 0;
+
   for (const srcFile of moduleFiles) {
     const srcPath = path.join(ROOT, srcFile);
     if (!fs.existsSync(srcPath)) {
       process.stdout.write('  ⚠  missing: ' + srcFile + '\n');
       continue;
     }
-    // Wrap each module in an IIFE so const/let declarations don't collide
-    // across files when concatenated. window.X exports still work fine.
-    parts.push('(function(){\n' + compileFile(srcPath) + '\n})();');
+    // Wrap in IIFE so each module has its own const/let scope
+    let code = '(function(){\n' + compileFile(srcPath) + '\n})();';
+    totalRaw += code.length;
+
+    if (terserMinify) {
+      try {
+        const result = await terserMinify(code, {
+          compress : { passes: 1 },
+          mangle   : true,
+          format   : { comments: false },
+        });
+        code = result.code;
+      } catch(e) {
+        // Keep unminified for this one file if terser chokes on it
+        process.stdout.write('    ⚠ minify skipped for ' + srcFile + '\n');
+      }
+    }
+    totalMin += code.length;
+    parts.push(code);
     process.stdout.write('  ✓  ' + srcFile + '\n');
   }
-  let bundle     = parts.join('\n');
-  const rawKB    = (bundle.length / 1024).toFixed(0);
 
-  // ── 5. Minify with terser ─────────────────────────────────────────────────
-  try {
-    const { minify } = require('terser');
-    const result = await minify(bundle, {
-      compress : { passes: 2 },
-      mangle   : true,
-      format   : { comments: false },
-    });
-    const minKB = (result.code.length / 1024).toFixed(0);
-    bundle = result.code;
-    console.log('\n✓  Minified bundle: ' + rawKB + ' KB → ' + minKB + ' KB');
-  } catch (err) {
-    console.warn('\n⚠   Minification failed (' + err.message + ') — using unminified bundle');
-    console.warn('    Bundle size: ' + rawKB + ' KB');
-  }
+  let bundle = parts.join('\n');
+  const rawKB = (totalRaw / 1024).toFixed(0);
+  const minKB = (totalMin / 1024).toFixed(0);
+  console.log('\n✓  Bundle: ' + rawKB + ' KB → ' + minKB + ' KB (minified per-module)');
 
   // Write bundle to dist/
   fs.writeFileSync(path.join(DIST, 'modules-bundle.js'), bundle, 'utf8');
