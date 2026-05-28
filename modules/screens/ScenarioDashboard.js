@@ -84,11 +84,15 @@ function LeadStatusSelect({ value, onChange, style }) {
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────
-function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpenContact, onUsers, onMyInfo, pageTitle }) {
+function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpenContact, onUsers, onMyInfo, pageTitle,
+  groupFilter: groupFilterProp, setGroupFilter: setGroupFilterProp }) {
   const c = useThemeColors();
   const [darkMode, setDarkMode] = useLocalStorage("app_dark", false);
   const [scenarios, setScenarios] = useLocalStorage("scenarios", []);
-  const [groupFilter, setGroupFilter] = useState("active");
+  const [groupFilterInternal, setGroupFilterInternal] = useState("active");
+  // Use controlled value from App.js sidebar if provided, otherwise internal state
+  const groupFilter    = groupFilterProp    !== undefined ? groupFilterProp    : groupFilterInternal;
+  const setGroupFilter = setGroupFilterProp !== undefined ? setGroupFilterProp : setGroupFilterInternal;
   const [searchTerm, setSearchTerm] = useState("");
   const [showNewForm, setShowNewForm] = useState(false);
 
@@ -1462,90 +1466,10 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: c.bg, color: c.text, display: "flex", alignItems: "flex-start" }}>
-
-      {/* ── Left Sidebar ─────────────────────────────────────────── */}
-      <div style={{
-        width: 180, flexShrink: 0, height: "100vh",
-        background: "linear-gradient(135deg, #1e3a5f 0%, #2d5a8e 100%)",
-        display: "flex", flexDirection: "column",
-        position: "sticky", top: 0,
-      }}>
-        {/* App name strip */}
-        <div style={{ padding: "16px 14px 10px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", color: "rgba(255,255,255,0.5)", textTransform: "uppercase" }}>
-            {pageTitle || (user.isInternal ? "Scenario Dashboard" : "My Scenarios")}
-          </div>
-        </div>
-
-        {/* ── "To Do" section label ── */}
-        <div style={{ padding: "14px 14px 4px", fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)" }}>
-          To Do
-        </div>
-
-        {/* ── Lead Group tabs ── */}
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          {(user.isInternal ? LEAD_GROUPS : ["active", "archived"]).map(function(tab) {
-            const isActive = groupFilter === tab;
-            return (
-              <button
-                key={tab}
-                onClick={function() { setClosingFilter(false); setGroupFilter(tab); }}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  width: "100%", padding: "9px 14px 9px 11px", boxSizing: "border-box",
-                  background: isActive ? "rgba(255,255,255,0.18)" : "transparent",
-                  color: isActive ? "#fff" : "rgba(255,255,255,0.6)",
-                  border: "none",
-                  borderLeft: isActive ? "3px solid rgba(255,255,255,0.85)" : "3px solid transparent",
-                  cursor: "pointer", fontSize: 13, fontWeight: isActive ? 700 : 400,
-                  textAlign: "left", transition: "all 0.15s",
-                }}
-              >
-                <span>{LEAD_GROUP_LABELS[tab]}</span>
-                <span style={{
-                  background: isActive ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.1)",
-                  color: isActive ? "#fff" : "rgba(255,255,255,0.5)",
-                  borderRadius: 10, padding: "1px 6px",
-                  fontSize: 11, fontWeight: 700, minWidth: 18, textAlign: "center",
-                }}>
-                  {groupCounts[tab] || 0}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Spacer pushes profile to bottom */}
-        <div style={{ flex: 1 }} />
-
-        {/* ── Profile icon — pinned to bottom ── */}
-        {AppHeader && (
-          <div style={{
-            flexShrink: 0,
-            borderTop: "1px solid rgba(255,255,255,0.12)",
-            padding: "8px 14px",
-            display: "flex", alignItems: "center",
-          }}>
-            <AppHeader
-              user={user}
-              darkMode={darkMode}
-              setDarkMode={setDarkMode}
-              onContacts={onContacts || null}
-              onScenarios={null}
-              onMyProfile={onMyInfo || null}
-              onTeam={onUsers || null}
-              onTemplates={isCloudUser && user.isInternal ? function() { setShowManageTemplates(true); } : null}
-              onLogout={onLogout}
-              isInternal={!!(user && user.isInternal)}
-              isAdmin={!!(user && user.role === "admin")}
-            />
-          </div>
-        )}
-      </div>
+    <div style={{ minHeight: "100vh", background: c.bg, color: c.text }}>
 
       {/* ── Main Content ──────────────────────────────────────────── */}
-      <div style={{ flex: 1, minWidth: 0, maxWidth: "1400px", padding: "24px" }}>
+      <div style={{ maxWidth: "1400px", margin: "0 auto", padding: "24px" }}>
 
         {/* Action Bar */}
         <div style={{

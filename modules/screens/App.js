@@ -840,6 +840,8 @@ function App() {
   const [darkMode,             setDarkMode]             = useLocalStorage("app_dark", false);
   const [userRole,             setUserRole]             = useLocalStorage("app_role", "admin");
   const [activeContactInfo,    setActiveContactInfo]    = React.useState(null);
+  const [groupFilter,          setGroupFilter]          = React.useState("active");  // lifted from ScenarioDashboard
+  const [typeFilter,           setTypeFilter]           = React.useState("all");     // lifted from ContactsTab
 
   // ── Mobile resize listener ────────────────────────────────────────────────
   React.useEffect(function() {
@@ -938,7 +940,7 @@ function App() {
             const displayName = profile.display_name || user.email;
             const isInternal = ["super_admin", "admin", "branch_admin", "internal"].includes(role);
 
-            setLoggedInUser({
+            const restoredUser = {
               id: user.id,
               name: displayName,
               role: role,
@@ -946,7 +948,11 @@ function App() {
               isInternal: isInternal,
               supabaseUser: true,
               borrowerPermissions: profile.borrower_permissions || [],
-            });
+            };
+            setLoggedInUser(restoredUser);
+
+            // Log session activity (daily dedup, fire-and-forget)
+            if (window.logUserSession) window.logUserSession(restoredUser);
 
             // Resume force-change if they closed before finishing
             if (profile.must_change_password && !cancelled) {
@@ -1051,6 +1057,9 @@ function App() {
 
   const handleLogin = (userData) => {
     setLoggedInUser(userData);
+
+    // Log session activity (daily dedup, fire-and-forget)
+    if (window.logUserSession && userData) window.logUserSession(userData);
 
     // Always land on the Scenario Dashboard after a fresh login.
     // Magic-link and live-session paths below immediately overwrite this.
@@ -1336,6 +1345,8 @@ function App() {
     pageContent = (
       <ScenarioDashboard
         user={loggedInUser}
+        groupFilter={groupFilter}
+        setGroupFilter={setGroupFilter}
         onSelectScenario={function(s) { setShowTasksScenarios(false); handleSelectScenario(s); }}
         onLogout={handleLogout}
         onContacts={isInternal ? function() { setShowTasksScenarios(false); setShowContacts(true); } : null}
@@ -1350,6 +1361,8 @@ function App() {
       <ContactsTab
         key={"tasks-contacts-" + contactsKey}
         user={loggedInUser}
+        typeFilter={typeFilter}
+        setTypeFilter={setTypeFilter}
         initialContactId={pendingContactId}
         onBack={function() { setShowTasksContacts(false); setPendingContactId(null); }}
         onLogout={handleLogout}
@@ -1367,6 +1380,8 @@ function App() {
       <ContactsTab
         key={"contacts-" + contactsKey}
         user={loggedInUser}
+        typeFilter={typeFilter}
+        setTypeFilter={setTypeFilter}
         initialContactId={pendingContactId}
         onBack={function() { setShowContacts(false); setPendingContactId(null); }}
         onLogout={handleLogout}
@@ -1386,6 +1401,8 @@ function App() {
     pageContent = (
       <ScenarioDashboard
         user={loggedInUser}
+        groupFilter={groupFilter}
+        setGroupFilter={setGroupFilter}
         onSelectScenario={handleSelectScenario}
         onLogout={handleLogout}
         onContacts={(isInternal || (loggedInUser && (loggedInUser.role === "realtor" || loggedInUser.role === "builder"))) ? function() { setShowContacts(true); } : null}
@@ -1405,6 +1422,7 @@ function App() {
         onBackToScenarios={showDashboard ? handleBackToScenarios : null}
         onOpenContact={(isInternal || (loggedInUser && (loggedInUser.role === "realtor" || loggedInUser.role === "builder"))) ? function(contactId) { setPendingContactId(contactId); setShowContacts(true); setActiveScenario(null); } : null}
         onOpenProfile={!isInternal ? function() { setShowMyInfo(true); } : null}
+        onTeam={loggedInUser && loggedInUser.role === "admin" ? function() { setShowUsers(true); } : null}
       />
     );
   }
@@ -1416,8 +1434,10 @@ function App() {
     !showProfileSetup && !showMyInfo && !showUsers && !showContacts &&
     activeScenario !== null;
 
-  // Sidebar is visible for internal users on all non-scenario screens
-  const showSidebar = !!(isInternal && loggedInUser && !activeScenario && !authLoading &&
+  const isPartner = !!(loggedInUser && (loggedInUser.role === "realtor" || loggedInUser.role === "builder"));
+
+  // Sidebar is visible for internal users + partners on all non-scenario screens
+  const showSidebar = !!((isInternal || isPartner) && loggedInUser && !activeScenario && !authLoading &&
     !showChangePassword && !showProfileSetup && !showMyInfo && !showUsers);
   const sidebarWidth = showSidebar && !isMobile ? (sidebarPinned ? 220 : 42) : 0;
 
@@ -1586,65 +1606,101 @@ function App() {
 
           {/* Nav items — shown when expanded (desktop) or always (mobile) */}
           {(sidebarPinned || isMobile) && (
-            <div style={{ flex: 1, overflowY: "auto", paddingTop: 8, paddingBottom: 16 }}>
+            <div style={{ flex: 1, overflowY: "auto", paddingTop: 8, paddingBottom: 8 }}>
 
-              {/* Dashboards section */}
+              {/* ── TO DO section ── */}
               <div style={{ padding: "8px 16px 4px", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.38)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                Dashboards
+                To Do
               </div>
-              {sidebarNavBtn("Contact Dashboard", inContacts, function() {
-                if (showContacts) {
-                  setContactsKey(function(k) { return k + 1; });
-                } else {
-                  setShowContacts(true);
+              {[
+                { key: "active",   label: "Active"   },
+                { key: "waiting",  label: "Waiting"  },
+                { key: "archived", label: "Archived" },
+              ].filter(function(t) { return isInternal || t.key !== "waiting"; })
+               .map(function(t) {
+                const active = !showContacts && !showTasksScenarios && !showTasksContacts && groupFilter === t.key;
+                return sidebarNavBtn(t.label, active, function() {
+                  setGroupFilter(t.key);
+                  setShowContacts(false);
                   setShowTasksScenarios(false);
                   setShowTasksContacts(false);
-                  setPendingContactId(null);
-                }
-              })}
-              {sidebarNavBtn("Scenario Dashboard", inScenarios, function() {
-                setShowContacts(false);
-                setShowTasksScenarios(false);
-                setShowTasksContacts(false);
-                setShowUsers(false);
+                  setShowUsers(false);
+                  if (isMobile) setMobileSidebarOpen(false);
+                });
               })}
 
-              {/* Tasks section */}
-              <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "6px 16px" }} />
-              {sidebarNavBtn("Tasks: Scenarios", inTasksSc, function() {
-                setShowTasksScenarios(true);
-                setShowContacts(false);
-                setShowTasksContacts(false);
-              })}
-              {sidebarNavBtn("Tasks: Contacts", inTasksCo, function() {
-                setShowTasksContacts(true);
-                setShowContacts(false);
-                setShowTasksScenarios(false);
-              })}
+              {/* ── CONTACTS section ── */}
+              {(isInternal || isPartner) && (
+                <React.Fragment>
+                  <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "8px 16px 0" }} />
+                  <div style={{ padding: "8px 16px 4px", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.38)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                    Contacts
+                  </div>
+                  {[
+                    { key: "all",      label: "All"      },
+                    { key: "business", label: "Business" },
+                    { key: "client",   label: "Client"   },
+                  ].map(function(t) {
+                    const active = (showContacts || showTasksContacts) && typeFilter === t.key;
+                    return sidebarNavBtn(t.label, active, function() {
+                      setTypeFilter(t.key);
+                      setShowContacts(true);
+                      setShowTasksScenarios(false);
+                      setShowTasksContacts(false);
+                      setShowUsers(false);
+                      setPendingContactId(null);
+                      if (isMobile) setMobileSidebarOpen(false);
+                    });
+                  })}
+                </React.Fragment>
+              )}
+
+              {/* ── TASKS section (internal only) ── */}
+              {isInternal && (
+                <React.Fragment>
+                  <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "8px 16px 0" }} />
+                  <div style={{ padding: "8px 16px 4px", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.38)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                    Tasks
+                  </div>
+                  {sidebarNavBtn("Scenarios", inTasksSc, function() {
+                    setShowTasksScenarios(true);
+                    setShowContacts(false);
+                    setShowTasksContacts(false);
+                    if (isMobile) setMobileSidebarOpen(false);
+                  })}
+                  {sidebarNavBtn("Contacts", inTasksCo, function() {
+                    setShowTasksContacts(true);
+                    setShowContacts(false);
+                    setShowTasksScenarios(false);
+                    if (isMobile) setMobileSidebarOpen(false);
+                  })}
+                </React.Fragment>
+              )}
 
             </div>
           )}
-        </div>
-      )}
 
-      {/* ── Global fixed profile icon (top-right) ── */}
-      {showSidebar && (
-        <div style={{
-          position: "fixed", top: 0, right: 0,
-          padding: "8px 14px", zIndex: 190,
-          display: "flex", alignItems: "center",
-        }}>
-          {window.AppHeader && React.createElement(window.AppHeader, {
-            user: loggedInUser,
-            darkMode: darkMode,
-            setDarkMode: setDarkMode,
-            userRole: userRole,
-            setUserRole: isInternal ? setUserRole : null,
-            onTeam: (loggedInUser && loggedInUser.role === "admin") ? function() { setShowUsers(true); } : null,
-            onLogout: handleLogout,
-            isInternal: isInternal,
-            isAdmin: !!(loggedInUser && loggedInUser.role === "admin"),
-          })}
+          {/* ── Profile pinned to bottom of sidebar ── */}
+          {(sidebarPinned || isMobile) && window.AppHeader && (
+            <div style={{
+              flexShrink: 0,
+              borderTop: "1px solid rgba(255,255,255,0.12)",
+              padding: "8px 14px",
+              display: "flex", alignItems: "center",
+            }}>
+              {React.createElement(window.AppHeader, {
+                user: loggedInUser,
+                darkMode: darkMode,
+                setDarkMode: setDarkMode,
+                userRole: userRole,
+                setUserRole: isInternal ? setUserRole : null,
+                onTeam: (loggedInUser && loggedInUser.role === "admin") ? function() { setShowUsers(true); } : null,
+                onLogout: handleLogout,
+                isInternal: isInternal,
+                isAdmin: !!(loggedInUser && loggedInUser.role === "admin"),
+              })}
+            </div>
+          )}
         </div>
       )}
 
