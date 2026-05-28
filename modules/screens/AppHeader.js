@@ -22,7 +22,9 @@ function AppHeader({
   isAdmin,
 }) {
   const [showProfile, setShowProfile] = _ahUseState(false);
+  const [dropPos, setDropPos] = _ahUseState(null);
   const rootRef = _ahUseRef(null);
+  const btnRef  = _ahUseRef(null);
   const f = window.font || "'DM Sans', sans-serif";
 
   function getInitials(u) {
@@ -60,8 +62,23 @@ function AppHeader({
     flexShrink: 0,
   });
 
+  // Dropdown uses position:fixed so it escapes overflow:hidden sidebar containers.
+  // Position is calculated from the button's bounding rect on open.
+  function openAtBtn() {
+    if (btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setDropPos({
+        // Open upward when button is in lower half of screen, downward otherwise
+        openUp: r.bottom > window.innerHeight * 0.55,
+        top: r.bottom + 8,
+        bottom: window.innerHeight - r.top + 8,
+        left: r.left,
+      });
+    }
+  }
+
   const dropdown = {
-    position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 2000,
+    position: "fixed", zIndex: 2000,
     background: "#fff", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
     minWidth: 190, overflow: "hidden", border: "1px solid #E5EAF0",
   };
@@ -97,13 +114,19 @@ function AppHeader({
       {/* ── Profile circle dropdown (includes all settings) ── */}
       <div style={{ position: "relative" }}>
         <button
-          onClick={() => setShowProfile(p => !p)}
+          ref={btnRef}
+          onClick={function() { if (!showProfile) { openAtBtn(); } setShowProfile(function(p) { return !p; }); }}
           style={circleBtn(showProfile)}
           title={user?.name || user?.email || "Profile"}
         >{initials}</button>
 
-        {showProfile && (
-          <div style={dropdown}>
+        {showProfile && dropPos && (
+          <div style={{
+            ...dropdown,
+            top:    dropPos.openUp ? "auto"       : dropPos.top,
+            bottom: dropPos.openUp ? dropPos.bottom : "auto",
+            left:   dropPos.left,
+          }}>
             {(user?.name || user?.email) && (
               <>
                 <div style={{
