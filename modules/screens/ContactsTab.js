@@ -550,7 +550,7 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
       onScenarios:       onBack,
       onTasksScenarios:  onTasksScenarios || null,
       onTasksContacts:   onTasksContacts  || null,
-      activeView:        activeView       || "internal",
+      activeView:        activeView       || "contact",
       onSetView:         onSetView        || null,
     });
   }

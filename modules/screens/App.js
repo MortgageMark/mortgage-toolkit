@@ -835,7 +835,7 @@ function App() {
   const [sidebarPinned,        setSidebarPinned]        = React.useState(true);
   const [mobileSidebarOpen,    setMobileSidebarOpen]    = React.useState(false);
   const [isMobile,             setIsMobile]             = React.useState(window.innerWidth < 768);
-  const [contactView,          setContactView]          = React.useState("internal");
+  const [contactView,          setContactView]          = React.useState("contact");
   const [contactsKey,          setContactsKey]          = React.useState(0);
   const [darkMode,             setDarkMode]             = useLocalStorage("app_dark", false);
   const [userRole,             setUserRole]             = useLocalStorage("app_role", "admin");
