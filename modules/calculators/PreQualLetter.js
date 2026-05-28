@@ -494,7 +494,7 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
   // ── Input form ──
   const paramsReady = purchasePrice && loanAmount;
 
-  const inputForm = () => React.createElement(React.Fragment, null,
+  const inputForm = () => React.createElement("div", { style: { maxWidth: 640 } },
     // Warning for non-internal users without params
     !isInternal && !paramsReady
       ? React.createElement("div", {
@@ -537,18 +537,37 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
           }, "Enter the co-borrower’s name above and check “on the loan” — their name will appear on the letter automatically.")
         )
       ),
-      // Card 2: PQ Parameters (internal only)
-      !isInternal ? null : React.createElement(SectionCard, { title: "PQ Parameters (Internal)" },
-        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" } },
-          React.createElement(LabeledInput, { label: "Max Purchase Price", value: purchasePrice, onChange: setPurchasePrice, prefix: "$", useCommas: true }),
-          React.createElement(LabeledInput, { label: "Max Loan Amount", value: loanAmount, onChange: setLoanAmount, prefix: "$", useCommas: true }),
-          React.createElement(Select, { label: "Loan Type", value: loanType, onChange: setLoanType, options: ["Conventional", "FHA", "VA", "USDA"].map(v => ({ value: v, label: v })) }),
-          React.createElement(Select, { label: "Loan Term", value: loanTerm, onChange: setLoanTerm, options: ["30 Year", "20 Year", "15 Year", "10 Year"].map(v => ({ value: v, label: v })) })
-        )
-      ),
+      // Card 2: PQ Parameters — editable for internal, read-only display for clients when params are set
+      (isInternal || paramsReady) ? React.createElement(SectionCard, { title: "PQ Parameters (Read Only)" },
+        isInternal
+          ? React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" } },
+              React.createElement(LabeledInput, { label: "Max Purchase Price", value: purchasePrice, onChange: setPurchasePrice, prefix: "$", useCommas: true }),
+              React.createElement(LabeledInput, { label: "Max Loan Amount", value: loanAmount, onChange: setLoanAmount, prefix: "$", useCommas: true }),
+              React.createElement(Select, { label: "Loan Type", value: loanType, onChange: setLoanType, options: ["Conventional", "FHA", "VA", "USDA"].map(v => ({ value: v, label: v })) }),
+              React.createElement(Select, { label: "Loan Term", value: loanTerm, onChange: setLoanTerm, options: ["30 Year", "20 Year", "15 Year", "10 Year"].map(v => ({ value: v, label: v })) })
+            )
+          : React.createElement("div", null,
+              React.createElement("div", { style: { fontSize: 11, color: c.textSecondary || "#64748b", marginBottom: 12, fontStyle: "italic" } },
+                "These parameters were set by your Loan Officer."
+              ),
+              React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 24px" } },
+                [
+                  { label: "Max Purchase Price", val: purchasePrice ? "$" + Number(String(purchasePrice).replace(/,/g, "")).toLocaleString("en-US") : "—" },
+                  { label: "Max Loan Amount",    val: loanAmount    ? "$" + Number(String(loanAmount).replace(/,/g, "")).toLocaleString("en-US")    : "—" },
+                  { label: "Loan Type",          val: loanType  || "—" },
+                  { label: "Loan Term",          val: loanTerm  || "—" },
+                ].map(function(item) {
+                  return React.createElement("div", { key: item.label },
+                    React.createElement("div", { style: { fontSize: 10, fontWeight: 700, color: c.textSecondary || "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 3 } }, item.label),
+                    React.createElement("div", { style: { fontSize: 14, fontWeight: 700, color: c.text || "#1B2A3B" } }, item.val)
+                  );
+                })
+              )
+            )
+      ) : null,
     ),
     // Cards 3–5: full width, internal only
-    !isInternal ? null : React.createElement(SectionCard, { title: "Documentation Reviewed (Internal)" },
+    !isInternal ? null : React.createElement(SectionCard, { title: "Documents (Internal)" },
       React.createElement(Toggle, { label: "Income", checked: pIncome, onChange: setPIncome }),
       React.createElement(Toggle, { label: "Available Cash to Close", checked: pCashToClose, onChange: setPCashToClose }),
       React.createElement(Toggle, { label: "Debts", checked: pDebts, onChange: setPDebts }),
