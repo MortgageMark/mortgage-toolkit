@@ -1019,7 +1019,7 @@ function PaymentCalculator() {
           <WarningBanner warnings={[...activeWarnings, ...extraWarnings]} />
 
           {/* ── PAYMENT SUMMARY ── */}
-          <SectionCard title="PAYMENT SUMMARY" accent={c.navy}>
+          <SectionCard title="" accent={c.navy}>
             <div style={{ background: `linear-gradient(135deg, ${c.navy}, ${c.navyLight})`, borderRadius: 12, padding: 24, color: "#fff", marginBottom: 16, textAlign: "center" }}>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", opacity: 0.5, marginBottom: 4 }}>{purposeLabel.toUpperCase()} · {programLabel} · {loanTypeLabel.toUpperCase()} · {occLabel.toUpperCase()}</div>
               <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.1em", opacity: 0.7, marginBottom: 8 }}>
@@ -1873,7 +1873,7 @@ function PaymentCalculator() {
                   ? (enactR <= essentR ? "Enact" : "Essent")
                   : enactR !== null ? "Enact" : essentR !== null ? "Essent" : null;
                 return (
-                  <SectionCard title="PMI — INTERNAL" accent={c.blue}>
+                  <SectionCard title="MORTGAGE INSURANCE (INTERNAL)" accent={c.blue}>
                     <div>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                         <span style={{ fontSize: 12, fontWeight: 700, color: c.text || c.navy, fontFamily: font }}>PMI Rate</span>
@@ -2039,7 +2039,7 @@ function PaymentCalculator() {
                 }
 
                 return (
-                  <SectionCard title="PMI BY DOWN PAYMENT — INTERNAL" accent={c.blue}>
+                  <SectionCard title="PMI BY DOWN PAYMENT (INTERNAL)" accent={c.blue}>
                     <div style={{ fontSize: 11, color: c.gray, fontFamily: font, marginBottom: 10, lineHeight: 1.5 }}>
                       Shows how monthly PMI changes as the down payment increases — use this to illustrate the savings of putting more down.
                     </div>
@@ -2232,7 +2232,7 @@ function PaymentCalculator() {
       </SectionCard>
 
       {/* ═══ PAYMENT SUMMARY (RESULTS) — full-width ═══ */}
-      <SectionCard title="PAYMENT SUMMARY" accent={c.navy} style={{ marginTop: 16, maxWidth: 640 }}>
+      <SectionCard title="" accent={c.navy} style={{ marginTop: 16, maxWidth: 640 }}>
         <div style={{ background: `linear-gradient(135deg, ${c.navy}, ${c.navyLight})`, borderRadius: 12, padding: 24, color: "#fff", marginBottom: 16, textAlign: "center" }}>
           <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", opacity: 0.5, marginBottom: 4 }}>{purposeLabel.toUpperCase()} · {programLabel} · {loanTypeLabel.toUpperCase()} · {occLabel.toUpperCase()}</div>
           <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.1em", opacity: 0.7, marginBottom: 8 }}>
@@ -2834,12 +2834,12 @@ function PaymentCalculator() {
       {amortYears.length > 1 && (
         <>
           {equityTimeline.length > 1 && (
-            <SectionCard title="PROJECTED EQUITY CURVE" accent={c.blue}>
+            <SectionCard title="PROJECTED EQUITY CURVE" accent={c.blue} style={{ maxWidth: 640 }}>
               <LabeledInput label="Appreciation Rate" value={pcAppr} onChange={setPcAppr} suffix="% / yr" hint={STATE_APPR_RATES[pcState] != null ? `${pcState} avg ≈ ${STATE_APPR_RATES[pcState]}% · Based on U.S. government home price data (5-yr avg) · Edit to override` : "Annual home value growth for equity projection"} />
               <EquityProjectionChart timeline={equityTimeline} milestones={equityMilestones} />
             </SectionCard>
           )}
-          <SectionCard title="BALANCE PAYDOWN" accent={c.blue}>
+          <SectionCard title="BALANCE PAYDOWN" accent={c.blue} style={{ maxWidth: 640 }}>
             <div style={{ display: "grid", gridTemplateColumns: s2AmortYears.length > 0 ? "1fr 1fr" : "1fr", gap: 20 }}>
               <div>
                 {s2AmortYears.length > 0 && (
@@ -2855,7 +2855,7 @@ function PaymentCalculator() {
               )}
             </div>
           </SectionCard>
-          <SectionCard title="PRINCIPAL vs INTEREST BY YEAR" accent={c.blue}>
+          <SectionCard title="PRINCIPAL vs INTEREST BY YEAR" accent={c.blue} style={{ maxWidth: 640 }}>
             <div style={{ display: "grid", gridTemplateColumns: s2AmortYears.length > 0 ? "1fr 1fr" : "1fr", gap: 20 }}>
               <div>
                 {s2AmortYears.length > 0 && (

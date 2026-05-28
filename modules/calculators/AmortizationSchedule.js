@@ -1050,7 +1050,7 @@ function AmortizationSchedule() {
       })()}
 
       {/* ── LOAN VISUALIZATIONS — side-by-side when 2nd lien active ── */}
-      <SectionCard title="BALANCE OVER TIME" accent={navy}>
+      <SectionCard title="BALANCE OVER TIME" accent={navy} style={{ maxWidth: 700 }}>
         <div style={{ display: "grid", gridTemplateColumns: s2On && s2Sched ? "1fr 1fr" : "1fr", gap: 20 }}>
           <div>
             {s2On && s2Sched && (
@@ -1067,7 +1067,7 @@ function AmortizationSchedule() {
         </div>
       </SectionCard>
 
-      <SectionCard title="PRINCIPAL vs INTEREST BY YEAR" accent={navy}>
+      <SectionCard title="PRINCIPAL vs INTEREST BY YEAR" accent={navy} style={{ maxWidth: 700 }}>
         <div style={{ display: "grid", gridTemplateColumns: s2On && s2Sched ? "1fr 1fr" : "1fr", gap: 20 }}>
           <div>
             {s2On && s2Sched && (
@@ -1084,7 +1084,7 @@ function AmortizationSchedule() {
         </div>
       </SectionCard>
 
-      <SectionCard title="TOTAL COST BREAKDOWN" accent={navy}>
+      <SectionCard title="TOTAL COST BREAKDOWN" accent={navy} style={{ maxWidth: 700 }}>
         <div style={{ display: "grid", gridTemplateColumns: s2On && s2Sched ? "1fr 1fr" : "1fr", gap: 20 }}>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
             {s2On && s2Sched && (

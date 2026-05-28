@@ -1304,6 +1304,11 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                   isInternal={isInternal}
                   isAdmin={isAdmin}
                 />
+                {!navCollapsed && (
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.75)", fontFamily: window.font, marginLeft: 4, userSelect: "none" }}>
+                    Profile
+                  </span>
+                )}
               </div>
             )}
           </div>
