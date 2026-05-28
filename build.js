@@ -103,12 +103,7 @@ async function build() {
   // ── 4. Compile + minify each module individually, then concatenate ───────
   // Minifying per-module (not the whole bundle) prevents terser from renaming
   // variables across IIFE boundaries, which caused TDZ ReferenceErrors.
-  let terserMinify = null;
-  try { terserMinify = require('terser').minify; } catch(e) {}
-
-  const parts   = [];
-  let totalRaw  = 0;
-  let totalMin  = 0;
+  const parts = [];
 
   for (const srcFile of moduleFiles) {
     const srcPath = path.join(ROOT, srcFile);
@@ -117,31 +112,12 @@ async function build() {
       continue;
     }
     // Wrap in IIFE so each module has its own const/let scope
-    let code = '(function(){\n' + compileFile(srcPath) + '\n})();';
-    totalRaw += code.length;
-
-    if (terserMinify) {
-      try {
-        const result = await terserMinify(code, {
-          compress : { passes: 1 },
-          mangle   : true,
-          format   : { comments: false },
-        });
-        code = result.code;
-      } catch(e) {
-        // Keep unminified for this one file if terser chokes on it
-        process.stdout.write('    ⚠ minify skipped for ' + srcFile + '\n');
-      }
-    }
-    totalMin += code.length;
-    parts.push(code);
+    parts.push('(function(){\n' + compileFile(srcPath) + '\n})();');
     process.stdout.write('  ✓  ' + srcFile + '\n');
   }
 
   let bundle = parts.join('\n');
-  const rawKB = (totalRaw / 1024).toFixed(0);
-  const minKB = (totalMin / 1024).toFixed(0);
-  console.log('\n✓  Bundle: ' + rawKB + ' KB → ' + minKB + ' KB (minified per-module)');
+  console.log('\n✓  Bundle: ' + (bundle.length / 1024).toFixed(0) + ' KB (unminified)');
 
   // Write bundle to dist/
   fs.writeFileSync(path.join(DIST, 'modules-bundle.js'), bundle, 'utf8');
