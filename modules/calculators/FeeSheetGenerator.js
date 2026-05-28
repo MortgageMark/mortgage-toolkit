@@ -279,6 +279,9 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
   const [otherFee2Amt,   setOtherFee2Amt]   = useLocalStorage("fs_other2_amt",   "");
   const [otherFee3Label, setOtherFee3Label] = useLocalStorage("fs_other3_label", "");
   const [otherFee3Amt,   setOtherFee3Amt]   = useLocalStorage("fs_other3_amt",   "");
+  // Realtor Commissions: Buyer Paid (Contract Details section)
+  const [rcBuyerVal,  setRcBuyerVal]  = useLocalStorage("fs_rc_buyer_val",  "");
+  const [rcBuyerMode, setRcBuyerMode] = useLocalStorage("fs_rc_buyer_mode", "pct");
 
   // Homestead — mirrors Payment Calculator logic (TX primary = 80% tax basis)
   const [pcOccupancy] = useLocalStorage("pc_occ", "primary");
@@ -862,7 +865,11 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
     const otherFee2     = parseFloat(otherFee2Amt) || 0;
     const otherFee3     = parseFloat(otherFee3Amt) || 0;
     const otherFeesTotal = otherFee1 + otherFee2 + otherFee3;
-    const additionalFeesTotal  = homeWarranty - sellerHWCredit + hoaTransfer + hoaDuesAmt + otherFeesTotal;
+    const rcBuyerNum = parseFloat(rcBuyerVal) || 0;
+    const rcBuyerAmt = rcBuyerMode === "pct"
+      ? (pp > 0 && rcBuyerNum > 0 ? Math.round(pp * rcBuyerNum / 100) : 0)
+      : (rcBuyerNum > 0 ? Math.round(rcBuyerNum) : 0);
+    const additionalFeesTotal  = homeWarranty - sellerHWCredit + hoaTransfer + hoaDuesAmt + otherFeesTotal + rcBuyerAmt;
     const displayClosingCosts  = lenderFees + thirdPartySubtotal + titleSubtotal + govUpfrontForCTC;
     const debtPayoffs          = parseFloat(dtiPayoffBal) || 0;
     const refiPayoffAmt        = !isPurchase ? (parseFloat(rs2AmountDue) || 0) : 0;
@@ -915,6 +922,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
       thirdPartySubtotal, titleSubtotal, additionalFeesTotal, sellerPaidOwnerTitle,
       otherFee1, otherFee2, otherFee3, otherFeesTotal,
       otherFee1Label, otherFee2Label, otherFee3Label,
+      rcBuyerAmt,
       fsDpaProgram, fsDpaType, fsDpaAmt, dpaGrantCredit, dpaDef,
       dpaProgFeesList, dpaProgFees, dpaOptFeesList, dpaOptFees,
       dpaProgOriginationPct, dpaProgOriginationAmt, dpaMhuFundingAmt,
@@ -962,6 +970,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
       loDefTaxService, loDefSurvey, loDefDocPrep, loDefEscrowFee, loDefTitleSearch,
       loDefHomeWarranty, computedEndorsementTotal, occupancy,
       otherFee1Amt, otherFee2Amt, otherFee3Amt, otherFee1Label, otherFee2Label, otherFee3Label,
+      rcBuyerVal, rcBuyerMode,
       tdhcaMccCombo, tdhcaMccStandalone,
       ncProratedType, sellerExistingSurvey, ownerExistingSurvey, ovT47, cashOutEnabled, cashOutAmount,
       appraisalPOC, origTitleDate, insRenewalDate, rs2AmountDue, collect90Ins,
@@ -1525,11 +1534,64 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
           </SectionCard>
 
 
-          {/* CONTRIBUTIONS */}
+          {/* CONTRACT DETAILS */}
           {fees.isPurchase && (
-          <SectionCard title="CONTRIBUTIONS" accent={COLORS.green}>
+          <SectionCard title="CONTRACT DETAILS" accent={COLORS.green}>
             {selectedState === "TX" && <LabeledInput label="Option Money"  prefix="$" value={optionMoney}  onChange={setOptionMoney}  useCommas />}
             <LabeledInput label="Earnest Money" prefix="$" value={earnestMoney} onChange={setEarnestMoney} useCommas />
+            {/* Realtor Commissions: Buyer Paid */}
+            <div style={{ marginBottom: 6 }}>
+              <label style={{ display:"block", fontSize:11, fontWeight:600, color:COLORS.grayLight, marginBottom:4, fontFamily:font, letterSpacing:"0.04em" }}>Realtor Commissions: Buyer Paid</label>
+              <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                {rcBuyerMode === "dollar" && <span style={{ fontSize:15, fontWeight:700, color:COLORS.navy }}>$</span>}
+                <input
+                  type="number"
+                  value={rcBuyerVal}
+                  onChange={e => {
+                    const v = e.target.value;
+                    if (rcBuyerMode === "pct") {
+                      const n = parseFloat(v);
+                      if (!isNaN(n) && n > 8) return;
+                    }
+                    setRcBuyerVal(v);
+                  }}
+                  placeholder=""
+                  style={{ flex:1, padding:"6px 10px", border:`1px solid ${COLORS.border}`, borderRadius:6, fontSize:13, fontFamily:font, color:COLORS.navy, outline:"none", minWidth:0 }}
+                />
+                {rcBuyerMode === "pct" && <span style={{ fontSize:15, fontWeight:700, color:COLORS.navy }}>%</span>}
+                <div style={{ display:"flex", gap:0, borderRadius:6, overflow:"hidden", border:`1px solid ${COLORS.border}`, flexShrink:0 }}>
+                  {[{v:"pct",label:"%"},{v:"dollar",label:"$"}].map(({v,label}) => (
+                    <button key={v} tabIndex={-1} onClick={() => {
+                      if (v === rcBuyerMode) return;
+                      const num = parseFloat(rcBuyerVal) || 0;
+                      const pp2 = parseFloat(purchasePrice) || 0;
+                      if (v === "dollar" && rcBuyerMode === "pct") {
+                        setRcBuyerVal(pp2 > 0 && num > 0 ? String(Math.round(num * pp2 / 100)) : "");
+                      } else if (v === "pct" && rcBuyerMode === "dollar") {
+                        setRcBuyerVal(pp2 > 0 && num > 0 ? String(parseFloat((num / pp2 * 100).toFixed(3))) : "");
+                      }
+                      setRcBuyerMode(v);
+                    }} style={{
+                      padding:"6px 12px", fontSize:12, fontWeight:700,
+                      cursor:"pointer", border:"none", fontFamily:font,
+                      background: rcBuyerMode === v ? COLORS.navy : "#fff",
+                      color: rcBuyerMode === v ? "#fff" : COLORS.navy,
+                      transition:"all 0.15s",
+                    }}>{label}</button>
+                  ))}
+                </div>
+              </div>
+              {(() => {
+                const num = parseFloat(rcBuyerVal) || 0;
+                const pp2 = parseFloat(purchasePrice) || 0;
+                if (num <= 0) return null;
+                if (rcBuyerMode === "pct" && pp2 > 0)
+                  return <div style={{ fontSize:10, color:COLORS.grayLight, marginTop:3, fontFamily:font, fontStyle:"italic" }}>{fmt(Math.round(pp2 * num / 100))} based on {fmt(pp2)} purchase price</div>;
+                if (rcBuyerMode === "dollar" && pp2 > 0)
+                  return <div style={{ fontSize:10, color:COLORS.grayLight, marginTop:3, fontFamily:font, fontStyle:"italic" }}>{(num / pp2 * 100).toFixed(3)}% of purchase price</div>;
+                return null;
+              })()}
+            </div>
           </SectionCard>
           )}
 
@@ -1843,7 +1905,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
             </div>
 
             {/* ADDITIONAL FEES */}
-            {(fees.homeWarranty>0 || fees.hoaTransfer>0 || fees.hoaDuesAmt>0 || fees.otherFee1!==0 || fees.otherFee2!==0 || fees.otherFee3!==0) && (
+            {(fees.homeWarranty>0 || fees.hoaTransfer>0 || fees.hoaDuesAmt>0 || fees.otherFee1!==0 || fees.otherFee2!==0 || fees.otherFee3!==0 || fees.rcBuyerAmt>0) && (
               <div style={{ marginBottom:14 }}>
                 <div style={{ fontSize:12, fontWeight:700, color:COLORS.blue, letterSpacing:"0.06em", marginBottom:6, fontFamily:font }}>ADDITIONAL FEES</div>
                 {fees.homeWarranty  > 0 && <FeeRow label="Home Warranty"             amount={fees.homeWarranty}      indent editKey="hw" editValue={ovHomeWarranty} onEdit={setOvHomeWarranty} defaultVal={fees._defaults.homeWarranty} isInternal={canEditFees} />}
@@ -1852,6 +1914,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                 {fees.otherFee1 !== 0 && <FeeRow label={fees.otherFee1Label || "Other Fee 1"} amount={fees.otherFee1} indent color={fees.otherFee1 < 0 ? COLORS.red : undefined} />}
                 {fees.otherFee2 !== 0 && <FeeRow label={fees.otherFee2Label || "Other Fee 2"} amount={fees.otherFee2} indent color={fees.otherFee2 < 0 ? COLORS.red : undefined} />}
                 {fees.otherFee3 !== 0 && <FeeRow label={fees.otherFee3Label || "Other Fee 3"} amount={fees.otherFee3} indent color={fees.otherFee3 < 0 ? COLORS.red : undefined} />}
+                {fees.rcBuyerAmt > 0 && <FeeRow label="Realtor Commissions: Buyer Paid" amount={fees.rcBuyerAmt} indent />}
                 {fees.hoaDuesAmt > 0 && (
                   <div>
                     <FeeRow label={`HOA Dues: ${fees.fundingDateFmt} through ${fees.nextHoaDateFmt}`} amount={fees.hoaDuesAmt} indent />
@@ -2505,7 +2568,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
             {fees.attorneyFee > 0       && <PdfRow label="Attorney / Closing Fee"     amt={fees.attorneyFee} indent />}
             <PdfRow label="Subtotal — Title" amt={fees.titleSubtotal} bold />
 
-            {(fees.homeWarranty > 0 || fees.hoaTransfer > 0 || fees.hoaDuesAmt > 0 || fees.otherFee1 !== 0 || fees.otherFee2 !== 0 || fees.otherFee3 !== 0) && (
+            {(fees.homeWarranty > 0 || fees.hoaTransfer > 0 || fees.hoaDuesAmt > 0 || fees.otherFee1 !== 0 || fees.otherFee2 !== 0 || fees.otherFee3 !== 0 || fees.rcBuyerAmt > 0) && (
               <React.Fragment>
                 <PdfSection title="ADDITIONAL FEES" />
                 {fees.homeWarranty   > 0 && <PdfRow label="Home Warranty"                                      amt={fees.homeWarranty}   indent />}
@@ -2515,6 +2578,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                 {fees.otherFee1 !== 0 && <PdfRow label={fees.otherFee1Label || "Other Fee 1"} amt={fees.otherFee1} indent isRed={fees.otherFee1 < 0} />}
                 {fees.otherFee2 !== 0 && <PdfRow label={fees.otherFee2Label || "Other Fee 2"} amt={fees.otherFee2} indent isRed={fees.otherFee2 < 0} />}
                 {fees.otherFee3 !== 0 && <PdfRow label={fees.otherFee3Label || "Other Fee 3"} amt={fees.otherFee3} indent isRed={fees.otherFee3 < 0} />}
+                {fees.rcBuyerAmt > 0 && <PdfRow label="Realtor Commissions: Buyer Paid" amt={fees.rcBuyerAmt} indent />}
                 <PdfRow label="Subtotal — Additional Fees" amt={fees.additionalFeesTotal} bold />
               </React.Fragment>
             )}
