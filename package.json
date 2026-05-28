@@ -7,7 +7,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.23.9",
-    "@babel/preset-react": "^7.23.3",
-    "terser": "^5.26.0"
+    "@babel/plugin-transform-block-scoping": "^7.23.4",
+    "@babel/preset-react": "^7.23.3"
   }
 }
