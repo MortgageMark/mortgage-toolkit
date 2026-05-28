@@ -50,6 +50,7 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
   const [loWebsite, setLoWebsite] = useLocalStorage("pq_loweb", "");
   const [loAddrCity, setLoAddrCity] = useLocalStorage("pq_loaddr2", "");
   const [showLetter, setShowLetter] = React.useState(false);
+  const [loSigCollapsed, setLoSigCollapsed] = React.useState(true);
   const [letterHistory, setLetterHistory] = React.useState([]);
   const [historyLoading, setHistoryLoading] = React.useState(false);
   const [displaySnap, setDisplaySnap] = React.useState(null);
@@ -503,22 +504,12 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
           React.createElement("div", { style: { color: "#78350f", fontSize: 13 } }, "Please contact your loan officer to set up your pre-qualification parameters before generating a letter.")
         )
       : null,
-    // Co-borrower tip
+    // Cards (single column)
     React.createElement("div", {
-      style: { background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8, padding: "12px 16px", marginBottom: 12, fontSize: 13, color: "#1e40af", display: "flex", gap: 10, alignItems: "flex-start" }
+      style: { display: "grid", gridTemplateColumns: "1fr", gap: "12px", alignItems: "start" }
     },
-      React.createElement("span", { style: { fontSize: 16 } }, "ℹ️"),
-      React.createElement("span", null,
-        React.createElement("strong", null, "Co-borrower: "),
-        "Enter the co-borrower's name below and check \"on the loan\" — their name will appear on the letter automatically."
-      )
-    ),
-    // 2-column grid: Cards 1–5 (card 1 always; cards 2–5 internal only)
-    !isInternal && !paramsReady ? null : React.createElement("div", {
-      style: { display: "grid", gridTemplateColumns: isInternal ? "1fr 1fr" : "1fr", gap: "12px", alignItems: "start" }
-    },
-      // Card 1: Optional PQ values + Co-Borrower
-      React.createElement(SectionCard, { title: "Optional: Enter values for the PQ letter" },
+      // Card 1: Customize PQ Letter (all users)
+      React.createElement(SectionCard, { title: "Customize PQ Letter (Optional)" },
         React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" } },
           React.createElement(LabeledInput, { label: "Purchase Price", value: bPurchasePrice, onChange: handleBPurchasePrice, prefix: "$", useCommas: true, hint: purchasePrice ? "Max: $" + Number(String(purchasePrice).replace(/,/g, "")).toLocaleString() : undefined }),
           React.createElement(LabeledInput, { label: "Loan Amount", value: bLoanAmount, onChange: handleBLoanAmount, prefix: "$", useCommas: true, hint: loanAmount ? "Max: $" + Number(String(loanAmount).replace(/,/g, "")).toLocaleString() : undefined }),
@@ -540,11 +531,14 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
               React.createElement("input", { type: "checkbox", checked: !!abtC2OnTitle, onChange: function(e) { setAbtC2OnTitle(e.target.checked); }, style: { width: 15, height: 15 } }),
               "Co-borrower is on title"
             )
-          )
+          ),
+          React.createElement("div", {
+            style: { marginTop: 10, fontSize: 12, color: "#64748b", background: "#f8fafc", padding: "8px 10px", borderRadius: 6, border: "1px solid #e2e8f0" }
+          }, "Enter the co-borrower’s name above and check “on the loan” — their name will appear on the letter automatically.")
         )
       ),
       // Card 2: PQ Parameters (internal only)
-      !isInternal ? null : React.createElement(SectionCard, { title: "Internal: PQ Parameters" },
+      !isInternal ? null : React.createElement(SectionCard, { title: "PQ Parameters (Internal)" },
         React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" } },
           React.createElement(LabeledInput, { label: "Max Purchase Price", value: purchasePrice, onChange: setPurchasePrice, prefix: "$", useCommas: true }),
           React.createElement(LabeledInput, { label: "Max Loan Amount", value: loanAmount, onChange: setLoanAmount, prefix: "$", useCommas: true }),
@@ -554,7 +548,7 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
       ),
     ),
     // Cards 3–5: full width, internal only
-    !isInternal ? null : React.createElement(SectionCard, { title: "Internal: Documentation Reviewed" },
+    !isInternal ? null : React.createElement(SectionCard, { title: "Documentation Reviewed (Internal)" },
       React.createElement(Toggle, { label: "Income", checked: pIncome, onChange: setPIncome }),
       React.createElement(Toggle, { label: "Available Cash to Close", checked: pCashToClose, onChange: setPCashToClose }),
       React.createElement(Toggle, { label: "Debts", checked: pDebts, onChange: setPDebts }),
@@ -562,13 +556,13 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
       React.createElement(Toggle, { label: "Other", checked: pOther, onChange: setPOther }),
       pOther ? React.createElement(LabeledInput, { label: "Other (specify)", value: pOtherText, onChange: setPOtherText, type: "text" }) : null
     ),
-    !isInternal ? null : React.createElement(SectionCard, { title: "Internal: Source of Funds for Down Payment" },
+    !isInternal ? null : React.createElement(SectionCard, { title: "Source of Funds for Down Payment (Internal)" },
       React.createElement(Toggle, { label: "Liquid Accounts (ex: checking, savings, etc.)", checked: fdpReady, onChange: setFdpReady }),
       React.createElement(Toggle, { label: "Semi-Liquid Accounts (ex: brokerage account, retirement account, etc.)", checked: fdpGift, onChange: setFdpGift }),
       React.createElement(Toggle, { label: "Proceeds from the sale of Real Estate Owned (REO)", checked: fdpREOSale, onChange: setFdpREOSale }),
       React.createElement(Toggle, { label: "Proceeds from the refinance of existing Real Estate Owned (REO)", checked: fdpCashRefi, onChange: setFdpCashRefi })
     ),
-    !isInternal ? null : React.createElement(SectionCard, { title: "Internal: Contingencies" },
+    !isInternal ? null : React.createElement(SectionCard, { title: "Contingencies (Internal)" },
       React.createElement(Toggle, { label: "REAL ESTATE OWNED (REO): existing home must sell/close/fund before this closing", checked: cREO, onChange: setCREO }),
       React.createElement(Toggle, { label: "REAL ESTATE OWNED (REO): existing home does NOT need to be sold before closing (i.e. this is not contingent)", checked: cREONonConting, onChange: setCREONonConting }),
       React.createElement(Toggle, { label: "CREDIT: credit report will need to be updated and acceptable for underwriting", checked: cCredit, onChange: setCCredit }),
@@ -579,7 +573,7 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
       cOther ? React.createElement(LabeledInput, { label: "Other contingency (specify)", value: cOtherText, onChange: setCOtherText, type: "text" }) : null
     ),
     // LO Heartburn — renders as "Notable Mentions" on the letter
-    !isInternal ? null : React.createElement(SectionCard, { title: "Internal: LO Heartburn" },
+    !isInternal ? null : React.createElement(SectionCard, { title: "LO Heartburn (Internal)" },
       React.createElement("div", { style: { fontSize: 12, color: "#6B7280", marginBottom: 12, lineHeight: 1.5 } },
         "Toggle items on to include them in the letter as \u201cNotable Mentions.\u201d Edit the text to fit the specific situation."
       ),
@@ -611,8 +605,8 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
     // LOSelector + LO Signature — full width, internal only
     !isInternal ? null : React.createElement(React.Fragment, null,
       React.createElement(LOSelector, null),
-      React.createElement(SectionCard, { title: "LO Signature Details" },
-        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" } },
+      React.createElement(SectionCard, { title: "LO Signature Details (Internal)", collapsed: loSigCollapsed, onToggle: function() { setLoSigCollapsed(function(v) { return !v; }); } },
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr", gap: "12px" } },
           React.createElement(LabeledInput, { label: "LO Name", value: loName, onChange: setLoName, type: "text", placeholder: "e.g. Mark Ningard" }),
           React.createElement(LabeledInput, { label: "Title / Role", value: loTitle, onChange: setLoTitle, type: "text", placeholder: "e.g. Senior Loan Officer" }),
           React.createElement(LabeledInput, { label: "LO NMLS #", value: loNMLS, onChange: setLoNMLS, type: "text", placeholder: "e.g. 729612" }),
@@ -629,7 +623,7 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
         )
       )
     ),
-    !isInternal && !paramsReady ? null : React.createElement("div", { style: { display: "flex", gap: "12px", justifyContent: "flex-end" } },
+    React.createElement("div", { style: { display: "flex", gap: "12px", justifyContent: "flex-end" } },
       React.createElement(Button, { onClick: () => {
         const missing = [];
         if (!purchasePrice) missing.push("Max Purchase Price (PQ Parameters)");
