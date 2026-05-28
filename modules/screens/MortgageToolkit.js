@@ -942,8 +942,8 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
         </div>
       </div>
 
-      {/* ── Header ── */}
-      <div className="mtk-no-print" style={{ background: headerBg, padding: "20px 24px 16px", color: "#fff", flexShrink: 0 }}>
+      {/* ── Header ── (hidden: profile moved to sidebar bottom) */}
+      <div className="mtk-no-print" style={{ display: "none" }}>
         <div className="mtk-header-flex" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
           {/* Left: hamburger + title */}
           <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 12, flex: 1, minWidth: 0 }}>
@@ -1082,6 +1082,22 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
           <div onClick={() => setSidebarOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 99 }} />
         )}
 
+        {/* Mobile hamburger — shown when sidebar is closed (replaces the removed header) */}
+        {isMobile && !sidebarOpen && (
+          <button
+            onClick={() => setSidebarOpen(true)}
+            title="Open menu"
+            style={{
+              position: "fixed", top: 12, left: 12, zIndex: 200,
+              background: headerBg, border: "none", borderRadius: 8,
+              padding: "8px 10px", cursor: "pointer", color: "#fff",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.28)",
+              fontSize: 20, lineHeight: 1,
+            }}
+          >&#9776;</button>
+        )}
+
         {/* ── Contact Lender panel (borrower only) ── */}
         {showLenderPanel && !isInternal && (
           <div
@@ -1160,14 +1176,13 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
           <div className="mtk-no-print" style={isMobile ? {
             /* Mobile: fixed overlay */
             position: "fixed", top: 0, left: 0, height: "100vh", width: 230, zIndex: 100,
-            background: headerBg, overflowY: "auto", padding: "0 0 24px",
+            background: headerBg, overflow: "hidden",
             display: "flex", flexDirection: "column",
             boxShadow: "4px 0 24px rgba(0,0,0,0.45)",
           } : {
-            /* Desktop: simple flex item — always full height because the page body is
-               overflow:hidden and only the content area scrolls. No sticky needed. */
+            /* Desktop: always full height, overflow hidden — nav scrolls inside, profile pinned bottom */
             width: navCollapsed ? 44 : 192, flexShrink: 0,
-            background: headerBg, overflowY: "auto", padding: "0 0 24px",
+            background: headerBg, overflow: "hidden",
             display: "flex", flexDirection: "column",
             transition: "width 0.2s",
           }}>
@@ -1197,7 +1212,8 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                 </button>
               </div>
             )}
-            {/* ── Sidebar nav content ── */}
+            {/* ── Sidebar nav content (scrollable) ── */}
+            <div style={{ flex: 1, overflowY: "auto", paddingBottom: 8 }}>
             {(() => {
               const sidebarMods  = filteredModules.filter(m => !ADMIN_ONLY_MODULE_IDS.includes(m.id));
               const regularMods  = sidebarMods.filter(m => !INTERNAL_SIDEBAR_IDS.includes(m.id) && !BUILDER_SIDEBAR_IDS.includes(m.id));
@@ -1259,6 +1275,37 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                 </React.Fragment>
               );
             })()}
+            </div>{/* end scrollable nav */}
+
+            {/* ── Profile — pinned to bottom of sidebar ── */}
+            {!isSharedView && AppHeader && (
+              <div style={{
+                flexShrink: 0,
+                borderTop: "1px solid rgba(255,255,255,0.12)",
+                padding: navCollapsed ? "10px 0" : "8px 14px",
+                display: "flex", alignItems: "center",
+                justifyContent: navCollapsed ? "center" : "flex-start",
+                background: headerBg,
+              }}>
+                <AppHeader
+                  user={user}
+                  darkMode={darkMode}
+                  setDarkMode={setDarkMode}
+                  userRole={userRole}
+                  setUserRole={isAdmin && isInternal ? setUserRole : null}
+                  onContacts={onOpenContact ? function() { onOpenContact(null); } : null}
+                  onScenarios={onBackToScenarios || null}
+                  onMyProfile={onOpenProfile || null}
+                  onTeam={isAdmin ? function() { setShowAdmin(true); } : null}
+                  onTemplates={function() { setSettingsInitialTab(null); setSettingsOpen(true); }}
+                  onWarnings={isInternal ? function() { setSettingsInitialTab("warnings"); setSettingsOpen(true); } : null}
+                  onModules={isInternal ? function() { setActiveModule("__modules__"); } : null}
+                  onLogout={onLogout}
+                  isInternal={isInternal}
+                  isAdmin={isAdmin}
+                />
+              </div>
+            )}
           </div>
         )}
 
