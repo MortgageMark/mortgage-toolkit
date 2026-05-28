@@ -1501,11 +1501,21 @@ function App() {
           {/* Pin / expand button */}
           <div style={{
             display: "flex",
-            justifyContent: sidebarPinned ? "flex-end" : "center",
+            alignItems: "center",
+            justifyContent: sidebarPinned ? "space-between" : "center",
             padding: "10px 10px 6px",
             borderBottom: "1px solid rgba(255,255,255,0.1)",
             flexShrink: 0,
           }}>
+            {sidebarPinned && (
+              <span style={{
+                fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.85)",
+                fontFamily: "'Inter', system-ui, sans-serif",
+                letterSpacing: "0.01em", paddingLeft: 4,
+              }}>
+                Home Loan Toolkit
+              </span>
+            )}
             <button
               onClick={function() { setSidebarPinned(function(p) { return !p; }); }}
               title={sidebarPinned ? "Collapse sidebar" : "Expand sidebar"}
