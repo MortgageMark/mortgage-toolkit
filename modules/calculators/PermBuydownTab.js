@@ -22,6 +22,8 @@ function PermBuydownTab({ isInternal }) {
   const [pcTerm] = useLocalStorage("pc_term", "30");
   const [pcHP]   = useLocalStorage("pc_hp",   "");
   const [pcDP]   = useLocalStorage("pc_dp",   "");
+  const [pcProg] = useLocalStorage("pc_prog", "conventional");
+  const [pcOcc]  = useLocalStorage("pc_occ",  "primary");
   const [dtiTax] = useLocalStorage("dti_tax", "0");
   const [dtiIns] = useLocalStorage("dti_ins", "0");
   const [dtiPMI] = useLocalStorage("dti_pmi", "0");
@@ -40,6 +42,25 @@ function PermBuydownTab({ isInternal }) {
                      + (parseFloat(dtiPMI) || 0);
   const hasPITI = monthlyOther > 0;
   const hasData = noteRate > 0 && la > 0;
+
+  // Max seller concessions by program / LTV / occupancy
+  var pbLtv = hp > 0 ? la / hp * 100 : 0;
+  var pbMaxSCPct = (function() {
+    var prog = pcProg || "conventional";
+    var occ  = pcOcc  || "primary";
+    if (prog === "fha")   return 6;
+    if (prog === "va")    return 4;
+    if (prog === "usda")  return 6;
+    if (prog === "jumbo") return 3;
+    if (prog === "nonqm") return null;
+    if (occ === "investment") return 2;
+    if (pbLtv > 90) return 3;
+    if (pbLtv > 75) return 6;
+    return 9;
+  })();
+  var pbMaxSCStr = pbMaxSCPct === null
+    ? "Varies by lender"
+    : (pbMaxSCPct + "%" + (hp > 0 ? " (up to $" + Math.round(hp * pbMaxSCPct / 100).toLocaleString("en-US") + ")" : ""));
 
   // Build rate-reduction rows
   const rows = useMemo(function() {
@@ -154,6 +175,7 @@ function PermBuydownTab({ isInternal }) {
           { label: "Rate",             value: noteRate.toFixed(3) + "%" },
           { label: "Payment (P&I)",    value: "$" + basePmt.toLocaleString("en-US") + "/mo", bold: true },
           hasPITI ? { label: "Payment (PITI)", value: "$" + (basePmt + Math.round(monthlyOther)).toLocaleString("en-US") + "/mo", bold: true } : null,
+          { label: "Max Seller Conc.", value: pbMaxSCStr },
         ].filter(Boolean);
         return (
           <div style={{ marginBottom: 20, padding: "12px 18px", background: isDark ? "#0D1820" : "#F5F8FA", borderRadius: 10, border: "1px solid " + border, display: "inline-block", minWidth: 260 }}>

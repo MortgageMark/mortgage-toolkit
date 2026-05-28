@@ -30,6 +30,7 @@ function TargetPaymentTab() {
   const [dtiIns] = useLocalStorage("dti_ins", "0");
   const [dtiPMI] = useLocalStorage("dti_pmi", "0");
   const [pcProg] = useLocalStorage("pc_prog", "conventional");
+  const [pcOcc]  = useLocalStorage("pc_occ",  "primary");
   const [pcFico] = useLocalStorage("pc_fico", "");
 
   // Target payment input — persisted so tab switches don't wipe the values
@@ -51,6 +52,25 @@ function TargetPaymentTab() {
   const hasPMI  = monthlyPMI > 0 && (pcProg === "conventional" || pcProg === "jumbo");
   const hasData = noteRate > 0 && la > 0;
   const dpAmt   = hp > 0 && dpPct > 0 ? Math.round(hp * dpPct / 100) : null;
+
+  // Max seller concessions by program / LTV / occupancy
+  var tgtLtv = hp > 0 ? la / hp * 100 : 0;
+  var tgtMaxSCPct = (function() {
+    var prog = pcProg || "conventional";
+    var occ  = pcOcc  || "primary";
+    if (prog === "fha")   return 6;
+    if (prog === "va")    return 4;
+    if (prog === "usda")  return 6;
+    if (prog === "jumbo") return 3;
+    if (prog === "nonqm") return null;
+    if (occ === "investment") return 2;
+    if (tgtLtv > 90) return 3;
+    if (tgtLtv > 75) return 6;
+    return 9;
+  })();
+  var tgtMaxSCStr = tgtMaxSCPct === null
+    ? "Varies by lender"
+    : (tgtMaxSCPct + "%" + (hp > 0 ? " (up to $" + Math.round(hp * tgtMaxSCPct / 100).toLocaleString("en-US") + ")" : ""));
 
   // Bisection solver: find monthly rate given target payment, loan amount, and term
   function solveMonthlyRate(targetPmt, loanAmt, periods) {
@@ -268,6 +288,7 @@ function TargetPaymentTab() {
           { label: "Rate",          value: noteRate.toFixed(3) + "%" },
           { label: "Payment (P&I)", value: "$" + basePmt.toLocaleString("en-US") + "/mo", bold: true },
           hasPITI ? { label: "Payment (PITI)", value: "$" + (basePmt + Math.round(monthlyOther)).toLocaleString("en-US") + "/mo", bold: true } : null,
+          { label: "Max Seller Conc.", value: tgtMaxSCStr },
         ].filter(Boolean);
         return (
           <div style={{ marginBottom: 20, padding: "12px 18px", background: isDark ? "#0D1820" : "#F5F8FA", borderRadius: 10, border: "1px solid " + border, display: "inline-block", minWidth: 260 }}>

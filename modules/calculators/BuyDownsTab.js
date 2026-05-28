@@ -25,6 +25,8 @@ function BuyDownsTab() {
   const [pcTerm] = useLocalStorage("pc_term", "30");
   const [pcHP]   = useLocalStorage("pc_hp",   "");
   const [pcDP]   = useLocalStorage("pc_dp",   "");
+  const [pcProg] = useLocalStorage("pc_prog", "conventional");
+  const [pcOcc]  = useLocalStorage("pc_occ",  "primary");
 
   // Monthly non-PI components
   const [dtiTax] = useLocalStorage("dti_tax", "0");
@@ -46,6 +48,25 @@ function BuyDownsTab() {
                      + (parseFloat(dtiPMI) || 0);
   const hasPITI = monthlyOther > 0;
   const hasData = noteRate > 0 && la > 0;
+
+  // Max seller concessions by program / LTV / occupancy
+  var bydLtv = hp > 0 ? la / hp * 100 : 0;
+  var bydMaxSCPct = (function() {
+    var prog = pcProg || "conventional";
+    var occ  = pcOcc  || "primary";
+    if (prog === "fha")   return 6;
+    if (prog === "va")    return 4;
+    if (prog === "usda")  return 6;
+    if (prog === "jumbo") return 3;
+    if (prog === "nonqm") return null;
+    if (occ === "investment") return 2;
+    if (bydLtv > 90) return 3;
+    if (bydLtv > 75) return 6;
+    return 9;
+  })();
+  var bydMaxSCStr = bydMaxSCPct === null
+    ? "Varies by lender"
+    : (bydMaxSCPct + "%" + (hp > 0 ? " (up to $" + Math.round(hp * bydMaxSCPct / 100).toLocaleString("en-US") + ")" : ""));
 
   const PROGRAMS = [
     { id: "321", name: "3/2/1 Buydown", offsets: [3, 2, 1] },
@@ -155,6 +176,7 @@ function BuyDownsTab() {
           { label: "Rate",          value: noteRate.toFixed(3) + "%" },
           { label: "Payment (P&I)", value: "$" + mktPI.toLocaleString("en-US") + "/mo", bold: true },
           hasPITI ? { label: "Payment (PITI)", value: "$" + mktPITI.toLocaleString("en-US") + "/mo", bold: true } : null,
+          { label: "Max Seller Conc.", value: bydMaxSCStr },
         ].filter(Boolean).map(function(row, i) {
           return (
             <div key={i} style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "3px 0" }}>
