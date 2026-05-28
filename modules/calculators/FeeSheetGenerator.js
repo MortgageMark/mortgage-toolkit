@@ -2618,19 +2618,23 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
               return (
                 <div style={{ marginTop:8, padding:"10px 12px", background:"linear-gradient(135deg,#162447,#1e3a5f)", borderRadius:8 }}>
                   {[
+                    fees.isPurchase   ?     ["Purchase Price",  parseFloat(purchasePrice)||0,                                false   ] : null,
+                    fees.isPurchase   ?     ["Loan Amount",    (parseFloat(loanAmount)||0) + (fees.govUpfrontFee||0),        "parens"] : null,
+                    pdfDP             > 0 ? ["Down Payment",    pdfDP,             false] : null,
                     ["Closing Costs",       pdfClosingCosts,   false],
                     pdfAdditionalFees > 0 ? ["Additional Fees", pdfAdditionalFees, false] : null,
                     ["Prepaids & Escrow",   pdfPrepaids,       false],
                     pdfSummaryCredits > 0 ? ["Credits",        -pdfSummaryCredits, true]  : null,
                     fees.debtPayoffs  > 0 ? ["Debt Payoffs",    fees.debtPayoffs,  false] : null,
-                    pdfDP             > 0 ? ["Down Payment",    pdfDP,             false] : null,
                   ].filter(Boolean).map(function(pair) {
-                    var val = pair[1];
+                    var val      = pair[1];
+                    var isRed    = pair[2] === true;
+                    var isParens = pair[2] === "parens";
                     return (
                       <div key={pair[0]} style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
                         <span style={{ fontSize:10, color:"rgba(255,255,255,0.75)" }}>{pair[0]}</span>
-                        <span style={{ fontSize:10, fontWeight:600, color: pair[2] ? "#fca5a5" : "rgba(255,255,255,0.9)" }}>
-                          {pair[2] ? "− " + fmt(Math.abs(Math.round(val))) : fmt(Math.round(val))}
+                        <span style={{ fontSize:10, fontWeight:600, color: isRed ? "#fca5a5" : "rgba(255,255,255,0.9)" }}>
+                          {isRed ? "− " + fmt(Math.abs(Math.round(val))) : isParens ? "(" + fmt(Math.round(val)) + ")" : fmt(Math.round(val))}
                         </span>
                       </div>
                     );
