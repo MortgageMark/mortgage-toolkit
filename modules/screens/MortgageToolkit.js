@@ -1237,7 +1237,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
               const regularMods  = sidebarMods.filter(m => !INTERNAL_SIDEBAR_IDS.includes(m.id) && !BUILDER_SIDEBAR_IDS.includes(m.id));
               const builderMods  = sidebarMods.filter(m => BUILDER_SIDEBAR_IDS.includes(m.id));
               const internalMods = sidebarMods.filter(m => INTERNAL_SIDEBAR_IDS.includes(m.id));
-              const navBtn = (isActive, onClick, icon, label) => (
+              const navBtn = (isActive, onClick, icon, label, isClientVisible) => (
                 <button onClick={onClick} style={{
                   display: "flex", alignItems: "center", width: "100%",
                   padding: navCollapsed ? "10px 0" : "10px 18px 10px 15px",
@@ -1251,6 +1251,9 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                 }}>
                   <span style={{ fontSize: navCollapsed ? 17 : 14, marginRight: navCollapsed ? 0 : 8, lineHeight: 1, flexShrink: 0 }}>{icon}</span>
                   {!navCollapsed && label}
+                  {!navCollapsed && userRole === "lo" && isClientVisible === false && (
+                    <span title="Hidden from client" style={{ width: 7, height: 7, borderRadius: "50%", background: "#F87171", display: "inline-block", flexShrink: 0, marginLeft: "auto", alignSelf: "center" }} />
+                  )}
                 </button>
               );
               const sectionHead = (label) => navCollapsed ? null : (
