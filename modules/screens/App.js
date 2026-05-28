@@ -833,11 +833,20 @@ function App() {
   const [showTasksContacts,    setShowTasksContacts]    = React.useState(false);
   const [showChangePassword,   setShowChangePassword]   = React.useState(false);
   const [sidebarPinned,        setSidebarPinned]        = React.useState(true);
+  const [mobileSidebarOpen,    setMobileSidebarOpen]    = React.useState(false);
+  const [isMobile,             setIsMobile]             = React.useState(window.innerWidth < 768);
   const [contactView,          setContactView]          = React.useState("internal");
   const [contactsKey,          setContactsKey]          = React.useState(0);
   const [darkMode,             setDarkMode]             = useLocalStorage("app_dark", false);
   const [userRole,             setUserRole]             = useLocalStorage("app_role", "admin");
   const [activeContactInfo,    setActiveContactInfo]    = React.useState(null);
+
+  // ── Mobile resize listener ────────────────────────────────────────────────
+  React.useEffect(function() {
+    var handler = function() { setIsMobile(window.innerWidth < 768); };
+    window.addEventListener("resize", handler);
+    return function() { window.removeEventListener("resize", handler); };
+  }, []);
 
   // ── Browser back-button: history state refs ─────────────────────────────
   const _bNavPrev    = React.useRef(null);  // last screen key pushed
@@ -1410,7 +1419,7 @@ function App() {
   // Sidebar is visible for internal users on all non-scenario screens
   const showSidebar = !!(isInternal && loggedInUser && !activeScenario && !authLoading &&
     !showChangePassword && !showProfileSetup && !showMyInfo && !showUsers);
-  const sidebarWidth = showSidebar ? (sidebarPinned ? 220 : 42) : 0;
+  const sidebarWidth = showSidebar && !isMobile ? (sidebarPinned ? 220 : 42) : 0;
 
   // Determine which nav item is "active" (mutually exclusive highlights)
   const inContacts   = showContacts && !showTasksContacts;
@@ -1431,7 +1440,7 @@ function App() {
     return (
       <button
         key={label}
-        onClick={onClick}
+        onClick={function() { onClick(); if (isMobile) setMobileSidebarOpen(false); }}
         style={{
           display: "block", width: "100%", textAlign: "left",
           padding: "9px 16px", border: "none", cursor: "pointer",
@@ -1455,22 +1464,54 @@ function App() {
       {!disclaimerAcked && <DisclaimerModal onAck={handleAckDisclaimer} />}
 
       {/* ── Global fixed sidebar (internal users, non-scenario screens) ── */}
-      {showSidebar && (
-        <div style={{
+
+      {/* Mobile: floating hamburger button (shown when sidebar is closed) */}
+      {showSidebar && isMobile && !mobileSidebarOpen && (
+        <button
+          onClick={function() { setMobileSidebarOpen(true); }}
+          title="Open menu"
+          style={{
+            position: "fixed", top: 12, left: 12, zIndex: 200,
+            background: "#1e3a5f", border: "none", borderRadius: 8,
+            padding: "8px 10px", cursor: "pointer", color: "#fff",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.28)",
+          }}
+        >
+          {SidebarIcon}
+        </button>
+      )}
+
+      {/* Mobile: backdrop behind open sidebar */}
+      {showSidebar && isMobile && mobileSidebarOpen && (
+        <div
+          onClick={function() { setMobileSidebarOpen(false); }}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 199 }}
+        />
+      )}
+
+      {/* Sidebar panel */}
+      {showSidebar && (!isMobile || mobileSidebarOpen) && (
+        <div style={isMobile ? {
+          position: "fixed", left: 0, top: 0,
+          width: 240, height: "100vh",
+          background: "#1e3a5f", zIndex: 200,
+          display: "flex", flexDirection: "column",
+          overflow: "hidden", boxSizing: "border-box",
+          boxShadow: "4px 0 24px rgba(0,0,0,0.35)",
+        } : {
           position: "fixed", left: 0, top: 0,
           width: sidebarPinned ? 220 : 42,
           height: "100vh",
-          background: "#1e3a5f",
-          zIndex: 200,
+          background: "#1e3a5f", zIndex: 200,
           display: "flex", flexDirection: "column",
-          overflow: "hidden",
-          transition: "width 0.2s ease",
+          overflow: "hidden", transition: "width 0.2s ease",
           borderRight: "1px solid rgba(0,0,0,0.18)",
           boxSizing: "border-box",
         }}>
 
           {/* ── Contact / user name at top of sidebar ── */}
-          {sidebarPinned && (
+          {(sidebarPinned || isMobile) && (
             <div style={{
               padding: "16px 16px 12px",
               borderBottom: "1px solid rgba(255,255,255,0.12)",
@@ -1498,16 +1539,15 @@ function App() {
             </div>
           )}
 
-          {/* Pin / expand button */}
+          {/* Pin / expand button (desktop) OR close button (mobile) */}
           <div style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: sidebarPinned ? "space-between" : "center",
+            display: "flex", alignItems: "center",
+            justifyContent: (sidebarPinned || isMobile) ? "space-between" : "center",
             padding: "10px 10px 6px",
             borderBottom: "1px solid rgba(255,255,255,0.1)",
             flexShrink: 0,
           }}>
-            {sidebarPinned && (
+            {(sidebarPinned || isMobile) && (
               <span style={{
                 fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.85)",
                 fontFamily: "'Inter', system-ui, sans-serif",
@@ -1516,25 +1556,36 @@ function App() {
                 Home Loan Toolkit
               </span>
             )}
-            <button
-              onClick={function() { setSidebarPinned(function(p) { return !p; }); }}
-              title={sidebarPinned ? "Collapse sidebar" : "Expand sidebar"}
-              style={{
-                background: "none", border: "none", cursor: "pointer",
-                color: "rgba(255,255,255,0.75)", fontSize: 15,
-                padding: "3px 5px", lineHeight: 1,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                borderRadius: 4, transition: "color 0.2s",
-              }}
-              onMouseEnter={function(e) { e.currentTarget.style.color = "#fff"; }}
-              onMouseLeave={function(e) { e.currentTarget.style.color = "rgba(255,255,255,0.75)"; }}
-            >
-              {SidebarIcon}
-            </button>
+            {isMobile ? (
+              <button
+                onClick={function() { setMobileSidebarOpen(false); }}
+                style={{
+                  background: "rgba(255,255,255,0.12)", border: "none", borderRadius: 6,
+                  padding: "5px 10px", color: "#fff", fontSize: 16, cursor: "pointer",
+                  lineHeight: 1, flexShrink: 0,
+                }}
+              >&#10005;</button>
+            ) : (
+              <button
+                onClick={function() { setSidebarPinned(function(p) { return !p; }); }}
+                title={sidebarPinned ? "Collapse sidebar" : "Expand sidebar"}
+                style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  color: "rgba(255,255,255,0.75)", fontSize: 15,
+                  padding: "3px 5px", lineHeight: 1,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  borderRadius: 4, transition: "color 0.2s",
+                }}
+                onMouseEnter={function(e) { e.currentTarget.style.color = "#fff"; }}
+                onMouseLeave={function(e) { e.currentTarget.style.color = "rgba(255,255,255,0.75)"; }}
+              >
+                {SidebarIcon}
+              </button>
+            )}
           </div>
 
-          {/* Nav items — only when expanded */}
-          {sidebarPinned && (
+          {/* Nav items — shown when expanded (desktop) or always (mobile) */}
+          {(sidebarPinned || isMobile) && (
             <div style={{ flex: 1, overflowY: "auto", paddingTop: 8, paddingBottom: 16 }}>
 
               {/* Dashboards section */}
@@ -1543,10 +1594,8 @@ function App() {
               </div>
               {sidebarNavBtn("Contact Dashboard", inContacts, function() {
                 if (showContacts) {
-                  // Already on Contact Dashboard — reset to list view
                   setContactsKey(function(k) { return k + 1; });
                 } else {
-                  // Navigate to Contact Dashboard (from Scenario Dashboard, Tasks, etc.)
                   setShowContacts(true);
                   setShowTasksScenarios(false);
                   setShowTasksContacts(false);
@@ -1572,7 +1621,6 @@ function App() {
                 setShowContacts(false);
                 setShowTasksScenarios(false);
               })}
-
 
             </div>
           )}
