@@ -1273,14 +1273,14 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                   )}
                   {sectionHead("Toolkit")}
                   {regularMods.map(m =>
-                    navBtn(activeModule === m.id, () => { setActiveModule(m.id); setSidebarOpen(false); }, m.icon, m.label, CLIENT_TAB_IDS.includes(m.id))
+                    navBtn(activeModule === m.id, () => { setActiveModule(m.id); setSidebarOpen(false); }, m.icon, m.label, CLIENT_TAB_IDS.includes(m.id) ? enabledModules.includes(m.id) : undefined)
                   )}
                   {builderMods.length > 0 && (
                     <React.Fragment>
                       {!navCollapsed && <div style={{ height: 4 }} />}
                       {sectionHead("Builder")}
                       {builderMods.map(m =>
-                        navBtn(activeModule === m.id, () => { setActiveModule(m.id); setSidebarOpen(false); }, m.icon, m.label, CLIENT_TAB_IDS.includes(m.id))
+                        navBtn(activeModule === m.id, () => { setActiveModule(m.id); setSidebarOpen(false); }, m.icon, m.label, CLIENT_TAB_IDS.includes(m.id) ? enabledModules.includes(m.id) : undefined)
                       )}
                     </React.Fragment>
                   )}
@@ -1289,7 +1289,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                       {!navCollapsed && <div style={{ height: 4 }} />}
                       {sectionHead("Internal")}
                       {internalMods.map(m =>
-                        navBtn(activeModule === m.id, () => { setActiveModule(m.id); setSidebarOpen(false); }, m.icon, m.label, CLIENT_TAB_IDS.includes(m.id))
+                        navBtn(activeModule === m.id, () => { setActiveModule(m.id); setSidebarOpen(false); }, m.icon, m.label, CLIENT_TAB_IDS.includes(m.id) ? enabledModules.includes(m.id) : undefined)
                       )}
                     </React.Fragment>
                   )}
