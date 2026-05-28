@@ -193,7 +193,7 @@ function useSyncSession(scenarioId, isLO, displayName) {
 // Rendered inside MortgageToolkit below the tab bar.
 // LO sees: connection dot, peer status, mode toggle, share link button.
 // Borrower sees: connection dot, mode indicator.
-function LiveSessionBar({ scenarioId, isLO, mode, setMode, connected, peerConnected, peerName, darkMode, onInviteClient }) {
+function LiveSessionBar({ scenarioId, isLO, mode, setMode, connected, peerConnected, peerName, darkMode, onInviteClient, panel }) {
   const [copied,  setCopied]  = useState(false);
   const [invited, setInvited] = useState(false);
   const c = window.COLORS || {};
@@ -243,11 +243,11 @@ function LiveSessionBar({ scenarioId, isLO, mode, setMode, connected, peerConnec
     <div style={{
       display: "flex", alignItems: "center", justifyContent: "space-between",
       flexWrap: "wrap", gap: 10,
-      padding: "9px 16px",
-      background: barBg,
-      border: "1px solid " + barBorder,
-      borderRadius: 8,
-      marginBottom: 14,
+      padding: panel ? "12px 16px" : "9px 16px",
+      background: panel ? "transparent" : barBg,
+      border: panel ? "none" : ("1px solid " + barBorder),
+      borderRadius: panel ? 0 : 8,
+      marginBottom: panel ? 0 : 14,
       fontFamily: f,
     }}>
 

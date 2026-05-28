@@ -1,5 +1,5 @@
 // modules/screens/MortgageToolkit.js
-const { useState, useEffect, useCallback, useMemo } = React;
+const { useState, useEffect, useCallback, useMemo, useRef } = React;
 const useLocalStorage = window.useLocalStorage;
 
 // All calculator components (loaded before this file):
@@ -525,12 +525,27 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [navCollapsed, setNavCollapsed] = useLocalStorage("app_nav_collapsed", false);
   const [showLenderPanel, setShowLenderPanel] = useState(false);
+  const [showLivePanel,   setShowLivePanel]   = useState(false);
+  const [livePanelPos,    setLivePanelPos]    = useState(null);
+  const liveBtnRef   = useRef(null);
+  const livePanelRef = useRef(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener("resize", handler);
     return () => window.removeEventListener("resize", handler);
   }, []);
+  // Live session panel click-outside
+  useEffect(() => {
+    if (!showLivePanel) return;
+    function handleOutside(e) {
+      const inBtn   = liveBtnRef.current   && liveBtnRef.current.contains(e.target);
+      const inPanel = livePanelRef.current && livePanelRef.current.contains(e.target);
+      if (!inBtn && !inPanel) setShowLivePanel(false);
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [showLivePanel]);
   // Prevent the browser from scrolling the outer page behind the 100vh container.
   // Without this, on mobile the PersistentFooter (rendered as a sibling in App.js)
   // creates extra body height that the browser can scroll to, causing the stuck-footer bug.
@@ -1277,6 +1292,50 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
             })()}
             </div>{/* end scrollable nav */}
 
+            {/* ── Live Session — compact button pinned above profile ── */}
+            {LiveSessionBar && syncScenarioId && (() => {
+              var dotColor = syncConnected && syncPeerConnected ? "#22C55E"
+                           : syncConnected ? "#F59E0B" : "#64748B";
+              return (
+                <div ref={liveBtnRef} style={{ flexShrink: 0, borderTop: "1px solid rgba(255,255,255,0.10)" }}>
+                  <button
+                    onClick={function() {
+                      if (!showLivePanel && liveBtnRef.current) {
+                        var r = liveBtnRef.current.getBoundingClientRect();
+                        setLivePanelPos({
+                          left: r.right + 8,
+                          top:  Math.min(r.top, window.innerHeight - 240),
+                        });
+                      }
+                      setShowLivePanel(function(p) { return !p; });
+                    }}
+                    style={{
+                      display: "flex", alignItems: "center", width: "100%",
+                      padding: navCollapsed ? "10px 0" : "9px 18px 9px 15px",
+                      background: showLivePanel ? "rgba(255,255,255,0.10)" : "transparent",
+                      color: showLivePanel ? "#fff" : "rgba(255,255,255,0.65)",
+                      border: "none", cursor: "pointer",
+                      fontSize: 13, fontWeight: 600, fontFamily: font,
+                      justifyContent: navCollapsed ? "center" : "flex-start",
+                      gap: 8, transition: "all 0.15s",
+                    }}
+                  >
+                    <span style={{ position: "relative", display: "inline-flex", flexShrink: 0 }}>
+                      <span style={{ fontSize: navCollapsed ? 17 : 14, lineHeight: 1 }}>📡</span>
+                      <span style={{
+                        position: "absolute", top: -2, right: -3,
+                        width: 7, height: 7, borderRadius: "50%",
+                        background: dotColor,
+                        border: "1.5px solid " + headerBg,
+                        transition: "background 0.3s",
+                      }} />
+                    </span>
+                    {!navCollapsed && <span>Live Session</span>}
+                  </button>
+                </div>
+              );
+            })()}
+
             {/* ── Profile — pinned to bottom of sidebar ── */}
             {!isSharedView && AppHeader && (
               <div style={{
@@ -1437,9 +1496,38 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
 
       </div>{/* end page-body flex */}
 
-      {/* ── Live Session Bar — pinned to bottom of viewport ── */}
-      {LiveSessionBar && syncScenarioId && (
-        <div style={{ flexShrink: 0, padding: "0 16px 8px" }}>
+      <div style={{ height: 32 }} />
+
+      {/* ── Live Session Popover — fixed, escapes overflow:hidden sidebar ── */}
+      {showLivePanel && livePanelPos && LiveSessionBar && syncScenarioId && (
+        <div
+          ref={livePanelRef}
+          style={{
+            position: "fixed",
+            top:  livePanelPos.top,
+            left: livePanelPos.left,
+            zIndex: 600,
+            width: 360,
+            background: darkMode ? "#0F1E2D" : "#fff",
+            borderRadius: 12,
+            boxShadow: "0 8px 32px rgba(0,0,0,0.28)",
+            border: "1px solid " + (darkMode ? "#1E3A50" : "#BFDBFE"),
+            overflow: "hidden",
+          }}
+        >
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "10px 14px",
+            borderBottom: "1px solid " + (darkMode ? "#1E3A50" : "#E5EAF0"),
+          }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: darkMode ? "#fff" : "#1B2A3B", fontFamily: font }}>
+              📡 Live Session
+            </span>
+            <button
+              onClick={function() { setShowLivePanel(false); }}
+              style={{ border: "none", background: "transparent", cursor: "pointer", color: darkMode ? "#64748B" : "#94A3B8", fontSize: 16, lineHeight: 1, padding: "2px 4px" }}
+            >✕</button>
+          </div>
           <LiveSessionBar
             scenarioId={syncScenarioId}
             isLO={syncIsLO}
@@ -1450,10 +1538,10 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
             peerName={syncPeerName}
             darkMode={darkMode}
             onInviteClient={syncIsLO && syncInviteClient ? function () { syncInviteClient(syncDisplayName); } : null}
+            panel={true}
           />
         </div>
       )}
-      <div style={{ height: LiveSessionBar && syncScenarioId ? 0 : 32 }} />
     </div>
 
     {/* ── Settings Panel ── */}
