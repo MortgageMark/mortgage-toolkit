@@ -87,6 +87,7 @@ function LeadStatusSelect({ value, onChange, style }) {
 function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpenContact, onUsers, onMyInfo, pageTitle,
   groupFilter: groupFilterProp, setGroupFilter: setGroupFilterProp }) {
   const c = useThemeColors();
+  const isTaskView = pageTitle === "Tasks: Scenarios"; // tasks view hides/adds specific columns
   const [darkMode, setDarkMode] = useLocalStorage("app_dark", false);
   const [scenarios, setScenarios] = useLocalStorage("scenarios", []);
   const [groupFilterInternal, setGroupFilterInternal] = useState("active");
@@ -2096,10 +2097,12 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                           Contact {arrow("contact")}
                         </th>
 
-                        {/* ID — sortable */}
-                        <th style={clickTh} onClick={function() { handleSort("uid"); }}>
-                          ID {arrow("uid")}
-                        </th>
+                        {/* ID — sortable (hidden in task view) */}
+                        {!isTaskView && (
+                          <th style={clickTh} onClick={function() { handleSort("uid"); }}>
+                            ID {arrow("uid")}
+                          </th>
+                        )}
 
                         {/* Scenario Name — sortable */}
                         <th style={clickTh} onClick={function() { handleSort("clientName"); }}>
@@ -2123,13 +2126,21 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                           </select>
                         </th>
 
-                        {/* Created — sortable */}
-                        <th style={clickTh} onClick={function() { handleSort("createdAt"); }}>
-                          Created {arrow("createdAt")}
-                        </th>
+                        {/* FU columns — task view only */}
+                        {isTaskView && <th style={thStyle}>FU Next</th>}
+                        {isTaskView && <th style={thStyle}>FU Who</th>}
+                        {isTaskView && <th style={thStyle}>FU Priority</th>}
+                        {isTaskView && <th style={{ ...thStyle, minWidth: 140 }}>Quick Notes</th>}
 
-                        {/* Loan Officer */}
-                        <th style={thStyle}>LO</th>
+                        {/* Created — sortable (hidden in task view) */}
+                        {!isTaskView && (
+                          <th style={clickTh} onClick={function() { handleSort("createdAt"); }}>
+                            Created {arrow("createdAt")}
+                          </th>
+                        )}
+
+                        {/* Loan Officer (hidden in task view) */}
+                        {!isTaskView && <th style={thStyle}>LO</th>}
 
                         {/* Actions column */}
                         <th style={thStyle}></th>
@@ -2220,13 +2231,15 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                           }
                         </td>
 
-                        {/* ID */}
-                        <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
-                          {scenario.uid
-                            ? <span style={{ fontFamily: "monospace", fontSize: "11px", color: c.textSecondary || "#888", letterSpacing: "0.03em" }}>{scenario.uid}</span>
-                            : <span style={{ color: c.textSecondary || "#aaa" }}>—</span>
-                          }
-                        </td>
+                        {/* ID (hidden in task view) */}
+                        {!isTaskView && (
+                          <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                            {scenario.uid
+                              ? <span style={{ fontFamily: "monospace", fontSize: "11px", color: c.textSecondary || "#888", letterSpacing: "0.03em" }}>{scenario.uid}</span>
+                              : <span style={{ color: c.textSecondary || "#aaa" }}>—</span>
+                            }
+                          </td>
+                        )}
 
                         {/* Scenario Name */}
                         <td style={tdStyle}>
@@ -2269,19 +2282,50 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                           })()}
                         </td>
 
-                        {/* Created */}
-                        <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
-                          <span style={{ color: c.textSecondary || "#888", fontSize: "12px" }}>
-                            {formatDate(scenario.createdAt)}
-                          </span>
-                        </td>
+                        {/* FU fields from linked contact (task view only) */}
+                        {isTaskView && (() => {
+                          const ct = contactsMap[scenario.contact_id] || {};
+                          const fuDate = ct.fu_date
+                            ? new Date(ct.fu_date + "T00:00:00").toLocaleDateString("en-US", { month: "2-digit", day: "2-digit" })
+                            : "";
+                          const dash = <span style={{ color: c.textSecondary || "#aaa" }}>—</span>;
+                          return (
+                            <React.Fragment>
+                              <td style={{ ...tdStyle, whiteSpace: "nowrap", fontSize: "12px" }}>
+                                {fuDate ? fuDate : dash}
+                              </td>
+                              <td style={{ ...tdStyle, whiteSpace: "nowrap", fontSize: "12px" }}>
+                                {ct.fu_who || dash}
+                              </td>
+                              <td style={{ ...tdStyle, whiteSpace: "nowrap", fontSize: "12px" }}>
+                                {ct.fu_priority || dash}
+                              </td>
+                              <td style={{ ...tdStyle, fontSize: "12px", maxWidth: 160 }}>
+                                {ct.note_quick
+                                  ? <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ct.note_quick}</span>
+                                  : dash}
+                              </td>
+                            </React.Fragment>
+                          );
+                        })()}
 
-                        {/* Loan Officer */}
-                        <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
-                          <span style={{ fontSize: "12px", color: c.text }}>
-                            {scenario.createdByName || <span style={{ color: c.textSecondary || "#aaa" }}>—</span>}
-                          </span>
-                        </td>
+                        {/* Created (hidden in task view) */}
+                        {!isTaskView && (
+                          <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                            <span style={{ color: c.textSecondary || "#888", fontSize: "12px" }}>
+                              {formatDate(scenario.createdAt)}
+                            </span>
+                          </td>
+                        )}
+
+                        {/* Loan Officer (hidden in task view) */}
+                        {!isTaskView && (
+                          <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                            <span style={{ fontSize: "12px", color: c.text }}>
+                              {scenario.createdByName || <span style={{ color: c.textSecondary || "#aaa" }}>—</span>}
+                            </span>
+                          </td>
+                        )}
 
                         {/* Actions */}
                         <td style={{ ...tdStyle, whiteSpace: "nowrap" }} onClick={function(e) { e.stopPropagation(); }}>

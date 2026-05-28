@@ -233,6 +233,7 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
   const isPartner   = !!(user && (user.role === "realtor" || user.role === "builder"));
   const isCloudUser = !!(user && user.supabaseUser && supabase);
   const isAdmin     = !!(user && user.role === "admin");
+  const isTaskView  = pageTitle === "Tasks: Contacts"; // task view has different columns
   const [darkMode, setDarkMode] = useLocalStorage("app_dark", false);
 
   const [contacts,        setContacts]        = useState([]);
@@ -1022,14 +1023,19 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
                     ),
                     // Contact 2 — not sortable
                     React.createElement("th", { key: "contact2", style: thStyle }, "Contact 2"),
-                    // Created — sortable
-                    React.createElement("th", { key: "created", style: Object.assign({}, clkTh, { width: "95px" }),
+                    // FU columns (task view only)
+                    isTaskView && React.createElement("th", { key: "fu_date",     style: Object.assign({}, thStyle, { width: "80px"   }) }, "FU Next"),
+                    isTaskView && React.createElement("th", { key: "fu_who",      style: Object.assign({}, thStyle, { width: "100px"  }) }, "FU Who"),
+                    isTaskView && React.createElement("th", { key: "fu_priority", style: Object.assign({}, thStyle, { width: "90px"   }) }, "FU Priority"),
+                    isTaskView && React.createElement("th", { key: "note_quick",  style: Object.assign({}, thStyle, { minWidth: "140px" }) }, "Quick Notes"),
+                    // Created (hidden in task view)
+                    !isTaskView && React.createElement("th", { key: "created", style: Object.assign({}, clkTh, { width: "95px" }),
                       onClick: function() { handleSort("created_at"); } },
                       React.createElement("span", null, "Created"), arrow("created_at")
                     ),
-                    // Actions column (delete)
-                    React.createElement("th", { key: "actions", style: Object.assign({}, thStyle, { width: "50px" }) })
-                  ];
+                    // Actions column / delete (hidden in task view)
+                    !isTaskView && React.createElement("th", { key: "actions", style: Object.assign({}, thStyle, { width: "50px" }) })
+                  ].filter(Boolean);
                 })()
               )
             ),
@@ -1118,13 +1124,37 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
                       : React.createElement("span", { style: { color: "#334155" } }, "—")
                   ),
 
-                  // Created
-                  React.createElement("td", {
+                  // FU Next (task view only)
+                  isTaskView && React.createElement("td", { style: Object.assign({}, tdStyle, { whiteSpace: "nowrap", fontSize: "12px" }) },
+                    contact.fu_date
+                      ? new Date(contact.fu_date + "T00:00:00").toLocaleDateString("en-US", { month: "2-digit", day: "2-digit" })
+                      : React.createElement("span", { style: { color: "#334155" } }, "—")
+                  ),
+
+                  // FU Who (task view only)
+                  isTaskView && React.createElement("td", { style: Object.assign({}, tdStyle, { whiteSpace: "nowrap", fontSize: "12px" }) },
+                    contact.fu_who || React.createElement("span", { style: { color: "#334155" } }, "—")
+                  ),
+
+                  // FU Priority (task view only)
+                  isTaskView && React.createElement("td", { style: Object.assign({}, tdStyle, { whiteSpace: "nowrap", fontSize: "12px" }) },
+                    contact.fu_priority || React.createElement("span", { style: { color: "#334155" } }, "—")
+                  ),
+
+                  // Quick Notes (task view only)
+                  isTaskView && React.createElement("td", { style: Object.assign({}, tdStyle, { fontSize: "12px" }) },
+                    contact.note_quick
+                      ? React.createElement("span", { style: { display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, contact.note_quick)
+                      : React.createElement("span", { style: { color: "#334155" } }, "—")
+                  ),
+
+                  // Created (hidden in task view)
+                  !isTaskView && React.createElement("td", {
                     style: Object.assign({}, tdStyle, { color: "#475569", whiteSpace: "nowrap" }),
                   }, created),
 
-                  // Delete button (admin only)
-                  React.createElement("td", {
+                  // Delete button (admin only, hidden in task view)
+                  !isTaskView && React.createElement("td", {
                     style: Object.assign({}, tdStyle, { textAlign: "center" }),
                     onClick: function(e) { e.stopPropagation(); },
                   },
