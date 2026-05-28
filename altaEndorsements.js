@@ -1,6 +1,6 @@
 // =============================================================================
 // ALTA STANDARD ENDORSEMENTS — RULES ENGINE
-// Mortgage Toolkit | Mortgage Mark / CMG Home Loans
+// Home Loan Toolkit | Mortgage Mark / CMG Home Loans
 // Applies to: All U.S. states EXCEPT Texas (use texasTitleEndorsements.js for TX)
 // Special state overrides: see stateOverrides.js (NY, FL, NJ — coming in Step 4)
 // =============================================================================

@@ -1,6 +1,6 @@
 // =============================================================================
 // TEXAS TITLE ENDORSEMENTS — RULES ENGINE SPEC
-// Mortgage Toolkit | Mortgage Mark / CMG Home Loans
+// Home Loan Toolkit | Mortgage Mark / CMG Home Loans
 // =============================================================================
 //
 // HOW TO USE THIS FILE:

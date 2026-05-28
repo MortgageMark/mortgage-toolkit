@@ -6,6 +6,14 @@
 const readLS = (k) => { try { const v = localStorage.getItem("mtk_" + k); return v !== null ? JSON.parse(v) : null; } catch { return null; } };
 const writeLS = (k, v) => { try { localStorage.setItem("mtk_" + k, JSON.stringify(v)); } catch {} };
 
+function fmtPhoneDashes(val) {
+  if (!val) return "";
+  const d = String(val).replace(/\D/g, "");
+  if (d.length === 10) return d.slice(0,3) + "-" + d.slice(3,6) + "-" + d.slice(6);
+  if (d.length === 11 && d[0] === "1") return d.slice(1,4) + "-" + d.slice(4,7) + "-" + d.slice(7);
+  return val;
+}
+
 function propagateLOToPreQual(member) {
   if (!member) return;
   const streetParts = [member.address].filter(Boolean);
@@ -14,13 +22,13 @@ function propagateLOToPreQual(member) {
   const keys = {
     "mtk_pq_lo": member.name,
     "mtk_pq_lonmls": member.nmls || "",
-    "mtk_pq_loph": member.phone || "",
+    "mtk_pq_loph": fmtPhoneDashes(member.phone),
     "mtk_pq_loem": member.email_display || member.email || "",
     "mtk_pq_loaddr": streetParts.join(", "),
     "mtk_pq_loaddr2": cityParts.join(", "),
     "mtk_pq_lotitle": member.title || "",
-    "mtk_pq_locell": member.cell || "",
-    "mtk_pq_lofax": member.fax || "",
+    "mtk_pq_locell": fmtPhoneDashes(member.cell),
+    "mtk_pq_lofax": fmtPhoneDashes(member.fax),
     "mtk_pq_loweb": member.website || "",
     "mtk_pq_brnmls": member.branchNmls || "",
     "mtk_pq_co": member.company || "",
@@ -44,7 +52,8 @@ function propagateSharedValues() {
     writeLS("hel_value", hp);
     writeLS("sns_price", hp);
     writeLS("cce_price", parseFloat(hp) || 0);
-    writeLS("pq_pp", hp);
+    // pq_pp (Max Purchase Price) is intentionally NOT synced from pc_hp —
+    // it's an LO-set authorization ceiling, independent of the PC home price.
     writeLS("lpc_price", hp);
     writeLS("ra_chv", hp);  // sync PC home value → Refi Analyzer home value
   }
@@ -82,8 +91,10 @@ function propagateSharedValues() {
     const taxM = readLS("pc_taxm");
     const taxR = readLS("pc_taxr");
     const taxD = readLS("pc_tax");
-    const hse = readLS("pc_hse");
-    const taxBasis = hse ? hpNum * 0.80 : hpNum;
+    const pcState = readLS("pc_state");
+    const pcOcc = readLS("pc_occ");
+    const hse = pcState === "TX" && pcOcc === "primary";
+    const taxBasis = hse ? hpNum * 0.70 : hpNum;
     const monthlyTaxProp = taxM === "rate" ? Math.round(taxBasis * ((parseFloat(taxR) || 0) / 100) / 12) : Math.round(parseFloat(taxD) || 0);
     writeLS("dti_tax", String(monthlyTaxProp));
     writeLS("fs_mt", String(monthlyTaxProp));

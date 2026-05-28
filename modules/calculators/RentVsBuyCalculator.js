@@ -198,20 +198,20 @@ function RentVsBuyCalculator() {
           )}
         </div>
         <div className="mtk-grid-3" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-          <LabeledInput label="Home Price" value={homePrice} onChange={setHomePrice} prefix="$" />
+          <LabeledInput label="Home Price" value={homePrice} onChange={setHomePrice} prefix="$" useCommas />
           <LabeledInput label="Down Payment %" value={downPct} onChange={setDownPct} suffix="%" />
           <LabeledInput label="Interest Rate" value={rate} onChange={setRate} suffix="%" />
           <LabeledInput label="Loan Term (years)" value={termYrs} onChange={setTermYrs} />
           <LabeledInput label="Property Tax Rate" value={propTaxRate} onChange={setPropTaxRate} suffix="%" />
-          <LabeledInput label="Annual Insurance" value={insurance} onChange={setInsurance} prefix="$" />
-          <LabeledInput label="Monthly HOA" value={hoa} onChange={setHoa} prefix="$" />
+          <LabeledInput label="Annual Insurance" value={insurance} onChange={setInsurance} prefix="$" useCommas />
+          <LabeledInput label="Monthly HOA" value={hoa} onChange={setHoa} prefix="$" useCommas />
           <LabeledInput label="Maintenance %" value={maint} onChange={setMaint} suffix="%" />
           <LabeledInput label="Appreciation Rate" value={appreciation} onChange={setAppreciation} suffix="%" />
         </div>
       </SectionCard>
       <SectionCard title="RENTING COSTS" accent={c.blue || COLORS.blue}>
         <div className="mtk-grid-3" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-          <LabeledInput label="Monthly Rent" value={monthlyRent} onChange={setMonthlyRent} prefix="$" />
+          <LabeledInput label="Monthly Rent" value={monthlyRent} onChange={setMonthlyRent} prefix="$" useCommas />
           <LabeledInput label="Annual Rent Increase" value={rentIncrease} onChange={setRentIncrease} suffix="%" />
           <LabeledInput label="Investment Return" value={investReturn} onChange={setInvestReturn} suffix="%" />
           <LabeledInput label="Tax Bracket" value={taxBracket} onChange={setTaxBracket} suffix="%" />

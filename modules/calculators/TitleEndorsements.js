@@ -199,7 +199,7 @@ function TitleEndorsements({ isInternal = false, user = null }) {
     const stFees = getStateFees(selectedState);
     if (!stFees?.basicRate) return 0;
     return isPurchase
-      ? (la <= 0 ? 0 : Math.round(stFees.basicRate(la) * (stFees.simultaneousRate || 0.35)))
+      ? (la <= 0 ? 0 : stFees.simultaneousFlatFee !== undefined ? stFees.simultaneousFlatFee : Math.round(stFees.basicRate(la) * (stFees.simultaneousRate || 0.35)))
       : Math.round(stFees.basicRate(la));
   }, [la, isPurchase, selectedState]);
 

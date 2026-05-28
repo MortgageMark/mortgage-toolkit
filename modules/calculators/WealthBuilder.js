@@ -236,7 +236,7 @@ function WealthBuilder() {
           <LabeledInput label="Loan Amount" prefix="$" value={loanAmount} onChange={setLoanAmount} useCommas />
           <LabeledInput label="Interest Rate" value={wbRate} onChange={setWbRate} suffix="%" />
           <LabeledInput label="Loan Term" value={wbTerm} onChange={setWbTerm} suffix="years" />
-          <LabeledInput label="Monthly Rent (comparison)" prefix="$" value={wbRent} onChange={setWbRent} useCommas small />
+          <LabeledInput label="Monthly Rent (comparison)" prefix="$" value={wbRent} onChange={setWbRent} useCommas />
         </SectionCard>
 
         {/* RIGHT — Appreciation & Returns */}
@@ -248,8 +248,8 @@ function WealthBuilder() {
             </div>
           )}
           <LabeledInput label="Appreciation Rate" value={wbAppr} onChange={setWbAppr} suffix="%" />
-          <LabeledInput label="Market Return (renter invests DP)" value={wbMarket} onChange={setWbMarket} suffix="%" small hint="Default 7% (historical S&P avg)" />
-          <LabeledInput label="Property Tax Rate" value={wbPropTax} onChange={setWbPropTax} suffix="% of value" small />
+          <LabeledInput label="Market Return (renter invests DP)" value={wbMarket} onChange={setWbMarket} suffix="%" hint="Default 7% (historical S&P avg)" />
+          <LabeledInput label="Property Tax Rate" value={wbPropTax} onChange={setWbPropTax} suffix="% of value" />
           <Select label="Federal Tax Bracket" value={wbBracket} onChange={setWbBracket} options={[
             { value: "12", label: "12%" }, { value: "22", label: "22%" },
             { value: "24", label: "24%" }, { value: "32", label: "32%" },

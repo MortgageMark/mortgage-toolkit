@@ -2,14 +2,40 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mortgage Toolkit — Mortgage Mark · CMG Home Loans</title>
-  <meta name="description" content="Comprehensive mortgage toolkit by Mortgage Mark, CMG Home Loans. Payment calculator, refinance analyzer, fee sheets, and more.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Home Loan Toolkit — Mortgage Mark · CMG Home Loans</title>
+  <meta name="description" content="Comprehensive home loan toolkit by Mortgage Mark, CMG Home Loans. Payment calculator, refinance analyzer, fee sheets, and more.">
   <meta name="theme-color" content="#0C4160">
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'DM Sans', sans-serif; background: #F5F8FA; -webkit-font-smoothing: antialiased; }
+    /* ─── Prevent ALL horizontal pan/scroll on mobile ───────────────────
+       overflow-x:hidden alone is ignored by iOS Safari at the viewport level.
+       overscroll-behavior-x:none kills rubber-band horizontal bounce.
+       touch-action:pan-y tells the browser only vertical drags are valid;
+       the tab bar overrides this with pan-x so its own scroll still works. */
+    html {
+      overflow-x: hidden;
+      overscroll-behavior-x: none;
+      max-width: 100vw;
+    }
+    html, body {
+      max-width: 100vw;
+      overflow-x: hidden;
+      overscroll-behavior-x: none;
+    }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: #F5F8FA;
+      -webkit-font-smoothing: antialiased;
+      touch-action: pan-y;
+      -webkit-overflow-scrolling: auto;
+    }
+    #root {
+      overflow-x: hidden;
+      max-width: 100vw;
+      position: relative;
+    }
     /* ─── Responsive ─────────────────────── */
     @media (max-width: 768px) {
       .mtk-grid-2 { grid-template-columns: 1fr !important; }
@@ -17,10 +43,17 @@
       .mtk-grid-12 { grid-template-columns: 1fr !important; }
       .mtk-metrics { flex-direction: column !important; }
       .mtk-scenarios { grid-template-columns: 1fr !important; }
-      .mtk-tab-bar { flex-wrap: wrap !important; }
-      .mtk-header-flex { flex-direction: column !important; gap: 10px !important; align-items: flex-start !important; }
+      .mtk-tab-bar { flex-wrap: nowrap !important; overflow-x: auto !important; -webkit-overflow-scrolling: touch; scrollbar-width: none; touch-action: pan-x; }
+      .mtk-tab-bar::-webkit-scrollbar { display: none; }
+      /* .mtk-header-flex stacking removed — header now handles mobile layout inline */
       .mtk-lock-row { flex-direction: column !important; align-items: flex-start !important; }
       .mtk-lock-btns { margin-top: 8px !important; }
+      /* ── Mobile card containment ──────────────────────────────────────────
+         All flex/grid children must be able to shrink below their content size.
+         Cards and their contents must never exceed the viewport width. */
+      * { min-width: 0; }
+      [data-sc-body] { padding: 12px !important; }
+      [data-sc-body] > * { max-width: 100% !important; box-sizing: border-box !important; }
     }
     @media (max-width: 480px) {
       .mtk-grid-3 { grid-template-columns: 1fr !important; }
@@ -60,9 +93,57 @@
   <script crossorigin src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
   <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+  <!-- ─── Babel compile cache (localStorage) ────────────────────────────── -->
+  <!-- Wraps Babel.transform so compiled output is cached between page loads. -->
+  <!-- Each module only compiles once; subsequent visits skip Babel entirely. -->
+  <script>
+    (function() {
+      if (!window.Babel || typeof window.Babel.transform !== 'function') return;
+      var VER    = 'v182';
+      var PREFIX = 'bxc_' + VER + '_';
+      // FNV-32a hash — fast, low collision for source strings
+      function fnv32(str) {
+        var h = 2166136261;
+        for (var i = 0; i < str.length; i++) {
+          h ^= str.charCodeAt(i);
+          h = (Math.imul(h, 16777619)) >>> 0;
+        }
+        return h.toString(36);
+      }
+      // Remove stale entries from previous versions to free space
+      try {
+        Object.keys(localStorage)
+          .filter(function(k) { return k.startsWith('bxc_') && !k.startsWith(PREFIX); })
+          .forEach(function(k) { localStorage.removeItem(k); });
+      } catch(e) {}
+      // Wrap Babel.transform
+      var _orig = Babel.transform.bind(Babel);
+      Babel.transform = function(code, opts) {
+        var key = PREFIX + fnv32(code);
+        try {
+          var cached = localStorage.getItem(key);
+          if (cached) return { code: cached };
+        } catch(e) {}
+        var result = _orig(code, opts);
+        try {
+          localStorage.setItem(key, result.code);
+        } catch(e) {
+          // Quota exceeded — clear all bxc_ entries then retry once
+          try {
+            Object.keys(localStorage)
+              .filter(function(k) { return k.startsWith('bxc_'); })
+              .forEach(function(k) { localStorage.removeItem(k); });
+            localStorage.setItem(key, result.code);
+          } catch(e2) {}
+        }
+        return result;
+      };
+    })();
+  </script>
   <!-- ─── Supabase Client ─────────────────────────────────────────────── -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script>
@@ -75,38 +156,106 @@
       window._supabaseClient = null;
     }
   </script>
-  <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiTW9ydGdhZ2UgVG9vbGtpdCIsInNob3J0X25hbWUiOiJNb3J0Z2FnZSIsInN0YXJ0X3VybCI6Ii4iLCJkaXNwbGF5Ijoic3RhbmRhbG9uZSIsImJhY2tncm91bmRfY29sb3IiOiIjMTMzMTU1IiwidGhlbWVfY29sb3IiOiIjMTMzMTU1IiwiaWNvbnMiOlt7InNyYyI6ImRhdGE6aW1hZ2Uvc3ZnK3htbCw8c3ZnIHhtbG5zPSdodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2Zycgdmlld0JveD0nMCAwIDEwMCAxMDAnPjxyZWN0IHdpZHRoPScxMDAnIGhlaWdodD0nMTAwJyByeD0nMjAnIGZpbGw9JyMxMzMxNTUnLz48dGV4dCB4PSc1MCcgeT0nNjUnIGZvbnQtc2l6ZT0nNTAnIHRleHQtYW5jaG9yPSdtaWRkbGUnIGZpbGw9J3doaXRlJz7wn4+gPC90ZXh0Pjwvc3ZnPiIsInNpemVzIjoiNTEyeDUxMiIsInR5cGUiOiJpbWFnZS9zdmcreG1sIn1dfQ==" />
+  <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiSG9tZSBMb2FuIFRvb2xraXQiLCJzaG9ydF9uYW1lIjoiSG9tZSBMb2FucyIsInN0YXJ0X3VybCI6Ii4iLCJkaXNwbGF5Ijoic3RhbmRhbG9uZSIsImJhY2tncm91bmRfY29sb3IiOiIjMTMzMTU1IiwidGhlbWVfY29sb3IiOiIjMTMzMTU1IiwiaWNvbnMiOlt7InNyYyI6ImRhdGE6aW1hZ2Uvc3ZnK3htbCw8c3ZnIHhtbG5zPSdodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2Zycgdmlld0JveD0nMCAwIDEwMCAxMDAnPjxyZWN0IHdpZHRoPScxMDAnIGhlaWdodD0nMTAwJyByeD0nMjAnIGZpbGw9JyMxMzMxNTUnLz48dGV4dCB4PSc1MCcgeT0nNjUnIGZvbnQtc2l6ZT0nNTAnIHRleHQtYW5jaG9yPSdtaWRkbGUnIGZpbGw9J3doaXRlJz7wn4+gPC90ZXh0Pjwvc3ZnPiIsInNpemVzIjoiNTEyeDUxMiIsInR5cGUiOiJpbWFnZS9zdmcreG1sIn1dfQ==" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Mortgage Toolkit" />
+  <meta name="apple-mobile-web-app-title" content="Home Loan Toolkit" />
   <script>
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        const swCode = `
-          const CACHE_NAME = 'mtk-v2';
-          const ASSETS = [self.location.href.replace(/\\/sw\\.js$/, '/')];
-          self.addEventListener('install', e => e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())));
-          self.addEventListener('activate', e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))).then(() => self.clients.claim())));
-          self.addEventListener('fetch', e => {
-            if (e.request.method !== 'GET') return;
-            e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).then(resp => {
-              if (resp.status === 200) { const c = resp.clone(); caches.open(CACHE_NAME).then(cache => cache.put(e.request, c)); }
-              return resp;
-            }).catch(() => caches.match('/'))));
-          });
-        `;
-        const blob = new Blob([swCode], { type: 'application/javascript' });
-        const swUrl = URL.createObjectURL(blob);
-        navigator.serviceWorker.register(swUrl, { scope: '.' }).catch(() => {});
+      window.addEventListener('load', function() {
+        try {
+          // Build ASSETS list from every same-origin <script src> in the page,
+          // plus the HTML itself and the ES-module files loaded via import().
+          var base = location.href.replace(/[^/]*(\?.*)?$/, '');
+          var scriptUrls = Array.from(document.querySelectorAll('script[src]'))
+            .map(function(s) { return s.src; })
+            .filter(function(url) { return url.startsWith(location.origin); });
+          var ASSETS_LIST = JSON.stringify(
+            [location.href,
+             base + 'stateConfig.js',
+             base + 'stateOverrides.js',
+             base + 'altaEndorsements.js',
+             base + 'texasTitleEndorsements.js'
+            ].concat(scriptUrls)
+          );
+
+          var swCode = `
+            const CACHE_NAME = 'mtk-v259';
+            const ASSETS = ${ASSETS_LIST};
+
+            self.addEventListener('install', function(e) {
+              e.waitUntil(
+                caches.open(CACHE_NAME).then(function(cache) {
+                  // Cache all assets; ignore individual failures (404 etc.)
+                  return Promise.all(
+                    ASSETS.map(function(url) { return cache.add(url).catch(function(){}); })
+                  );
+                }).then(function() { return self.skipWaiting(); })
+              );
+            });
+
+            self.addEventListener('activate', function(e) {
+              e.waitUntil(
+                caches.keys().then(function(ks) {
+                  return Promise.all(
+                    ks.filter(function(k) { return k !== CACHE_NAME; })
+                      .map(function(k) { return caches.delete(k); })
+                  );
+                }).then(function() { return self.clients.claim(); })
+              );
+            });
+
+            self.addEventListener('fetch', function(e) {
+              if (e.request.method !== 'GET') return;
+              // Never cache Supabase API or font CSS (always needs fresh data)
+              if (e.request.url.indexOf('supabase.co') !== -1) return;
+              if (e.request.url.indexOf('fonts.googleapis.com') !== -1) return;
+              e.respondWith(
+                caches.match(e.request).then(function(r) {
+                  return r || fetch(e.request).then(function(resp) {
+                    if (resp.status === 200) {
+                      var c = resp.clone();
+                      caches.open(CACHE_NAME).then(function(cache) { cache.put(e.request, c); });
+                    }
+                    return resp;
+                  }).catch(function() { return caches.match(ASSETS[0]); });
+                })
+              );
+            });
+          `;
+
+          var blob = new Blob([swCode], { type: 'application/javascript' });
+          var swUrl = URL.createObjectURL(blob);
+          navigator.serviceWorker.register(swUrl, { scope: '.' }).catch(function() {});
+        } catch(e) {}
       });
     }
   </script>
 </head>
 <body>
+  <!-- ─── Visible error catcher — shows crash details instead of blank screen ── -->
+  <div id="mtk-error-box" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:#1a0000;color:#ff9999;font-family:monospace;font-size:13px;padding:24px;overflow:auto;z-index:99999;white-space:pre-wrap;"></div>
+  <script>
+    window.addEventListener('error', function(e) {
+      var box = document.getElementById('mtk-error-box');
+      if (box) {
+        box.style.display = 'block';
+        box.textContent += '❌ ERROR: ' + (e.message || e) + '\n   File: ' + (e.filename || '') + '\n   Line: ' + (e.lineno || '') + '\n\n';
+      }
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+      var box = document.getElementById('mtk-error-box');
+      if (box) {
+        box.style.display = 'block';
+        box.textContent += '❌ PROMISE REJECTION: ' + (e.reason || e) + '\n\n';
+      }
+    });
+  </script>
+
   <div id="root">
     <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:'DM Sans',sans-serif;gap:16px;">
       <div style="width:40px;height:40px;border:4px solid #e0e8ef;border-top-color:#0C4160;border-radius:50%;animation:mtk-spin 0.8s linear infinite;"></div>
-      <div style="color:#0C4160;font-size:15px;font-weight:600;letter-spacing:0.02em;">Loading Mortgage Toolkit…</div>
+      <div style="color:#0C4160;font-size:15px;font-weight:600;letter-spacing:0.02em;">Loading Home Loan Toolkit…</div>
     </div>
     <style>@keyframes mtk-spin{to{transform:rotate(360deg)}}</style>
   </div>
@@ -144,7 +293,7 @@
   <script type="text/babel" src="modules/constants.js"></script>
   <script type="text/babel" src="modules/utils.js"></script>
   <script type="text/babel" src="modules/hooks.js"></script>
-  <script type="text/babel" src="modules/storage.js"></script>
+  <script type="text/babel" src="modules/storage.js?v=2"></script>
   <script type="text/babel" src="modules/tokens.js"></script>
   <script type="text/babel" src="modules/propagation.js"></script>
 
@@ -154,12 +303,12 @@
   <script type="text/babel" src="modules/ui/NotifyClientButton.js"></script>
 
   <!-- Calculators -->
-  <script type="text/babel" src="modules/calculators/PaymentCalculator.js"></script>
-  <script type="text/babel" src="modules/calculators/RefinanceAnalyzer.js"></script>
-  <script type="text/babel" src="modules/calculators/FeeSheetGenerator.js"></script>
+  <script type="text/babel" src="modules/calculators/PaymentCalculator.js?v=2"></script>
+  <script type="text/babel" src="modules/calculators/RefinanceAnalyzer.js?v=6"></script>
+  <script type="text/babel" src="modules/calculators/FeeSheetGenerator.js?v=23"></script>
   <script type="text/babel" src="modules/calculators/MortgageComparison.js"></script>
   <script type="text/babel" src="modules/calculators/BreakEvenCalculator.js"></script>
-  <script type="text/babel" src="modules/calculators/PreQualLetter.js"></script>
+  <script type="text/babel" src="modules/calculators/PreQualLetter.js?v=5"></script>
   <script type="text/babel" src="modules/calculators/ForwardCommitment.js"></script>
   <script type="text/babel" src="modules/calculators/AffordabilityCalculator.js"></script>
   <script type="text/babel" src="modules/calculators/AmortizationSchedule.js"></script>
@@ -175,19 +324,31 @@
   <script type="text/babel" src="modules/calculators/RateWatchDashboard.js"></script>
   <script type="text/babel" src="modules/calculators/FlyerGenerator.js"></script>
   <script type="text/babel" src="modules/calculators/WealthBuilder.js"></script>
+  <script type="text/babel" src="modules/calculators/RecastCalculator.js"></script>
   <script type="text/babel" src="modules/calculators/TitleEndorsements.js"></script>
+  <script type="text/babel" src="modules/calculators/InterestRates.js"></script>
+  <script type="text/babel" src="modules/calculators/BuilderTab.js?v=34"></script>
+  <script type="text/babel" src="modules/calculators/BuyDownsTab.js"></script>
+  <script type="text/babel" src="modules/calculators/PermBuydownTab.js"></script>
+  <script type="text/babel" src="modules/calculators/TargetPaymentTab.js"></script>
+  <script type="text/babel" src="modules/calculators/PriceVsIncentiveTab.js"></script>
+  <script type="text/babel" src="modules/calculators/BuyerQualifierTab.js"></script>
+  <script type="text/babel" src="modules/calculators/BuildersBuyerTab.js"></script>
+  <script type="text/babel" src="modules/calculators/LLPATab.js"></script>
 
   <!-- Screens -->
   <script type="text/babel" src="modules/screens/SettingsPanel.js"></script>
   <script type="text/babel" src="modules/screens/LOSelector.js"></script>
   <script type="text/babel" src="modules/screens/AdminPanel.js"></script>
-  <script type="text/babel" src="modules/screens/LoginScreen.js"></script>
-  <script type="text/babel" src="modules/screens/ScenarioDashboard.js"></script>
-  <script type="text/babel" src="modules/screens/ContactDetail.js"></script>
-  <script type="text/babel" src="modules/screens/ContactsTab.js"></script>
+  <script type="text/babel" src="modules/screens/LoginScreen.js?v=2"></script>
+  <script type="text/babel" src="modules/screens/AppHeader.js"></script>
+  <script type="text/babel" src="modules/screens/ScenarioDashboard.js?v=2"></script>
+  <script type="text/babel" src="modules/screens/ContactDetail.js?v=4"></script>
+  <script type="text/babel" src="modules/screens/ContactsTab.js?v=2"></script>
   <script type="text/babel" src="modules/screens/UsersPanel.js"></script>
-  <script type="text/babel" src="modules/screens/MortgageToolkit.js"></script>
-  <script type="text/babel" src="modules/screens/App.js"></script>
+  <script type="text/babel" src="modules/sync/ScenarioSync.js"></script>
+  <script type="text/babel" src="modules/screens/MortgageToolkit.js?v=7"></script>
+  <script type="text/babel" src="modules/screens/App.js?v=3"></script>
 
   <!-- ─── Final render (must be last) ────────────────────────────────── -->
   <script type="text/babel">

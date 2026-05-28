@@ -1,5 +1,5 @@
 // modules/screens/LOSelector.js
-const { useState } = React;
+const { useState, useEffect } = React;
 const useLocalStorage = window.useLocalStorage;
 const useThemeColors = window.useThemeColors;
 const propagateLOToPreQual = window.propagateLOToPreQual;
@@ -13,6 +13,14 @@ function LOSelector() {
     return m.active && (m.role === "admin" || m.role === "lo" || m.role === "internal");
   });
 
+  // Re-propagate LO contact fields on mount so they're always populated from
+  // the roster — even after restoreCalculatorData clears pq_ fields on scenario entry.
+  useEffect(function() {
+    if (!selectedLO || !roster.length) return;
+    const member = roster.find(function(m) { return m.id === selectedLO; });
+    if (member) propagateLOToPreQual(member);
+  }, [selectedLO, roster]);
+
   const handleChange = function(e) {
     const memberId = e.target.value;
     // Write to localStorage immediately so mtk_propagated doesn't revert the selection
@@ -21,6 +29,8 @@ function LOSelector() {
     if (!memberId) return;
     const member = roster.find(function(m) { return m.id === memberId; });
     if (member) propagateLOToPreQual(member);
+    // Persist LO selection to Supabase immediately
+    window.dispatchEvent(new Event("mtk_save_scenario"));
   };
 
   return React.createElement("div", {

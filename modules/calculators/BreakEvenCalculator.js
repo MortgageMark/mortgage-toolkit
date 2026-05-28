@@ -48,9 +48,9 @@ function BreakEvenCalculator() {
           <LabeledInput label="Total Closing Costs" prefix="$" value={closingCosts} onChange={setClosingCosts} useCommas />
           <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 14, marginTop: 8 }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.gray, marginBottom: 8, fontFamily: font }}>FOR TRUE BREAK-EVEN (OPTIONAL)</div>
-            <LabeledInput label="Loan Balance" prefix="$" value={loanBalance} onChange={setLoanBalance} useCommas small />
-            <LabeledInput label="Current Rate" value={currentRate} onChange={setCurrentRate} suffix="%" small />
-            <LabeledInput label="New Rate" value={newRate} onChange={setNewRate} suffix="%" small />
+            <LabeledInput label="Loan Balance" prefix="$" value={loanBalance} onChange={setLoanBalance} useCommas />
+            <LabeledInput label="Current Rate" value={currentRate} onChange={setCurrentRate} suffix="%" />
+            <LabeledInput label="New Rate" value={newRate} onChange={setNewRate} suffix="%" />
           </div>
         </SectionCard>
         <div>

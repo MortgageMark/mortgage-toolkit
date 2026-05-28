@@ -25,7 +25,7 @@ function buildLetterId(seq) {
   return "PQ-" + ymd + "-" + String(seq).padStart(4, "0");
 }
 
-function PreQualLetter({ user, scenario, isInternal }) {
+function PreQualLetter({ user, scenario, isInternal, contact }) {
   const c = useThemeColors();
   const isClient = user?.role === "borrower";
 
@@ -65,6 +65,28 @@ function PreQualLetter({ user, scenario, isInternal }) {
   const [shareHistory, setShareHistory] = React.useState([]);   // send log (pq_letter_shares)
   const [showShareLog, setShowShareLog] = React.useState(false);
 
+  // Auto-save PQ params 2s after the LO changes them by asking MortgageToolkit
+  // to do the save — it uses its own auth-aware save path, which handles RLS correctly.
+  React.useEffect(() => {
+    if (!isInternal) return; // only LOs trigger saves
+    const t = setTimeout(function() {
+      window.dispatchEvent(new Event("mtk_save_scenario"));
+    }, 2000);
+    return function() { clearTimeout(t); };
+  }, [purchasePrice, loanAmount, maxRate, loanType, loanTerm]);
+
+  // LOSelector (child) dispatches mtk_propagated before this component's useLocalStorage
+  // listeners are registered (React runs child effects before parent effects). Re-propagate
+  // the selected LO here — by the time this parent effect runs, all listeners are ready.
+  React.useEffect(() => {
+    const memberId = (() => { try { return JSON.parse(localStorage.getItem("mtk_lo_selected")) || ""; } catch { return ""; } })();
+    const roster   = (() => { try { return JSON.parse(localStorage.getItem("mtk_roster"))      || []; } catch { return []; } })();
+    if (memberId && roster.length && window.propagateLOToPreQual) {
+      const member = roster.find(function(m) { return m.id === memberId; });
+      if (member) window.propagateLOToPreQual(member);
+    }
+  }, []);
+
   // Fetch letter history + share log when scenario changes
   React.useEffect(() => {
     if (!scenario || !scenario.id) {
@@ -92,14 +114,38 @@ function PreQualLetter({ user, scenario, isInternal }) {
   const [pOtherText, setPOtherText] = useLocalStorage("pq_p_othtxt", "");
 
   // contingency toggles
+  // funds for down payment toggles
+  const [fdpReady,    setFdpReady]    = useLocalStorage("pq_fdp_ready",    false);
+  const [fdpGift,     setFdpGift]     = useLocalStorage("pq_fdp_gift",     false);
+  const [fdpREOSale,  setFdpREOSale]  = useLocalStorage("pq_fdp_reosale",  false);
+  const [fdpCashRefi, setFdpCashRefi] = useLocalStorage("pq_fdp_cashrefi", false);
+
+  // contingency toggles
   const [cREO, setCREO] = useLocalStorage("pq_c_reo", false);
+  const [cREONonConting, setCREONonConting] = useLocalStorage("pq_c_reo_nc", false);
   const [cCredit, setCCredit] = useLocalStorage("pq_c_cred", false);
+  const [cCreditScore, setCCreditScore] = useLocalStorage("pq_c_credscore", false);
   const [cDebts, setCDebts] = useLocalStorage("pq_c_dbt", false);
   const [cDebtsClosing, setCDebtsClosing] = useLocalStorage("pq_c_dbtcl", false);
   const [cOther, setCOther] = useLocalStorage("pq_c_oth", false);
   const [cOtherText, setCOtherText] = useLocalStorage("pq_c_othtxt", "");
 
+  // LO Heartburn toggles + editable text
+  const [hbDTI,        setHbDTI]        = useLocalStorage("pq_hb_dti",         false);
+  const [hbDTIText,    setHbDTIText]    = useLocalStorage("pq_hb_dti_txt",      "This borrower is qualifying near the upper limit of their debt-to-income ratio. The approval is solid as structured — any change in monthly obligations prior to closing would require re-evaluation before funding. This could include taking on a new car payment, opening a credit card, co-signing on another loan, or an adjustment to the projected housing payment due to a change in taxes, insurance, or HOA dues.");
+  const [hbTiming,     setHbTiming]     = useLocalStorage("pq_hb_timing",       false);
+  const [hbTimingText, setHbTimingText] = useLocalStorage("pq_hb_timing_txt",   "There is a timing dependency that must be addressed before this loan can close. A delay in resolving this item may directly impact the closing timeline. This could include waiting on the sale and closing of an existing home, the seasoning of recently transferred gift funds, a lease expiration that must occur first, or a new job start date that income cannot be counted until after.");
+  const [hbDocs,       setHbDocs]       = useLocalStorage("pq_hb_docs",         false);
+  const [hbDocsText,   setHbDocsText]   = useLocalStorage("pq_hb_docs_txt",     "Final approval depends on documentation that is not yet available. Any delay in receiving this document may impact the closing timeline. This could include a P&L statement not yet prepared, tax returns that have not been filed yet, a bank statement for a month that has not closed, a divorce decree still pending finalization, or a gift letter with supporting sourcing documentation.");
+  const [hbCredit,     setHbCredit]     = useLocalStorage("pq_hb_credit",       false);
+  const [hbCreditText, setHbCreditText] = useLocalStorage("pq_hb_credit_txt",   "Steps are currently being taken to strengthen the credit profile. Projected score improvements are estimates — final scores will be confirmed prior to submission and are not guaranteed. This may include a pay-for-delete negotiation on a collection account, removal of an authorized user tradeline, disputing inaccurate derogatory items, or paying down revolving balances to improve credit utilization.");
+  const [hbIncome,     setHbIncome]     = useLocalStorage("pq_hb_income",       false);
+  const [hbIncomeText, setHbIncomeText] = useLocalStorage("pq_hb_income_txt",   "Income qualification is based on a variable or non-traditional earning pattern. Any deviation from the documented income history would require re-review prior to closing. This may apply to self-employed borrowers whose income is averaged over two years of tax returns, commission or bonus income subject to continuity requirements, a recent job change even at higher pay, or rental income dependent on lease agreements and depreciation schedules.");
+  const [hbAppr,       setHbAppr]       = useLocalStorage("pq_hb_appr",         false);
+  const [hbApprText,   setHbApprText]   = useLocalStorage("pq_hb_appr_txt",     "This approval is sensitive to the appraised value of the subject property. A meaningful gap between the purchase price and the appraised value may require renegotiation or additional funds at closing. This is most common in new construction with limited comparable sales, unique or custom properties, markets where prices are moving faster than appraised values, or properties with condition issues that an appraiser may flag prior to funding.");
+
   // PQ Fields (borrower-facing)
+  const [pqApplicant, setPqApplicant] = useLocalStorage("pq_applicant", "");
   const [bPurchasePrice, setBPurchasePrice] = useLocalStorage("pq_bpp", "");
   const [bLoanAmount, setBLoanAmount] = useLocalStorage("pq_bla", "");
   const [propertyAddress, setPropertyAddress] = useLocalStorage("pq_addr", "");
@@ -137,26 +183,47 @@ function PreQualLetter({ user, scenario, isInternal }) {
   if (pOther && pOtherText.trim()) providedItems.push(pOtherText.trim());
   const providedStr = providedItems.length > 0 ? providedItems.join(", ") : "None specified";
 
+  // ── Funds for down payment list builder ──
+  const fundsItems = [];
+  if (fdpReady)    fundsItems.push("Liquid Accounts (ex: checking, savings, etc.)");
+  if (fdpGift)     fundsItems.push("Semi-Liquid Accounts (ex: brokerage account, retirement account, etc.)");
+  if (fdpREOSale)  fundsItems.push("Proceeds from the sale of Real Estate Owned (REO)");
+  if (fdpCashRefi) fundsItems.push("Proceeds from the refinance of existing Real Estate Owned (REO)");
+  const fundsStr = fundsItems.length > 0 ? fundsItems : null;
+
   // ── Contingencies list builder ──
   const contingencyItems = [];
   if (cREO) contingencyItems.push({ key: "REO", text: "An existing home will need to be sold, closed, and funded before this closing." });
+  if (cREONonConting) contingencyItems.push({ key: "REO", text: "Existing home does NOT need to sell before closing. This loan is non contingent." });
   if (cCredit) contingencyItems.push({ key: "CREDIT", text: "The credit report will need to be updated — and acceptable — for underwriting." });
+  if (cCreditScore) contingencyItems.push({ key: "CREDIT", text: "Credit scores MUST be increased before closing in order to qualify and close." });
   if (cDebts) contingencyItems.push({ key: "DEBTS (before closing)", text: "Existing debt(s) will need to be paid off before closing." });
   if (cDebtsClosing) contingencyItems.push({ key: "DEBTS (at closing)", text: "Existing debt(s) will need to be paid at closing." });
   if (cOther && cOtherText.trim()) contingencyItems.push({ key: "OTHER", text: cOtherText.trim() });
 
-  // ── About tab client names (read-only) ──
-  const [abtC1First]  = useLocalStorage("abt_c1fn", "");
-  const [abtC1Last]   = useLocalStorage("abt_c1ln", "");
-  const [abtC2First]  = useLocalStorage("abt_c2fn", "");
-  const [abtC2Last]   = useLocalStorage("abt_c2ln", "");
-  const [abtC2OnLoan] = useLocalStorage("abt_c2loan", false);
+  // ── LO Heartburn items builder ──
+  const heartburnItems = [];
+  if (hbDTI    && hbDTIText.trim())    heartburnItems.push({ key: "DTI SENSITIVITY",    text: hbDTIText.trim() });
+  if (hbTiming && hbTimingText.trim()) heartburnItems.push({ key: "TIMING",              text: hbTimingText.trim() });
+  if (hbDocs   && hbDocsText.trim())   heartburnItems.push({ key: "PENDING DOCUMENTS",  text: hbDocsText.trim() });
+  if (hbCredit && hbCreditText.trim()) heartburnItems.push({ key: "CREDIT IN PROGRESS", text: hbCreditText.trim() });
+  if (hbIncome && hbIncomeText.trim()) heartburnItems.push({ key: "INCOME / EMPLOYMENT",text: hbIncomeText.trim() });
+  if (hbAppr   && hbApprText.trim())   heartburnItems.push({ key: "APPRAISAL SENSITIVITY", text: hbApprText.trim() });
 
-  const c1Name = [abtC1First, abtC1Last].filter(Boolean).join(" ");
-  const c2Name = abtC2OnLoan ? [abtC2First, abtC2Last].filter(Boolean).join(" ") : "";
-  const applicantLine = c1Name
-    ? (c2Name ? c1Name + " & " + c2Name : c1Name)
-    : "—";
+  // ── Client names (read-only for primary; writable for co-borrower) ──
+  const [abtC1First]                    = useLocalStorage("abt_c1fn",    "");
+  const [abtC1Last]                     = useLocalStorage("abt_c1ln",    "");
+  const [abtC2First,  setAbtC2First]    = useLocalStorage("abt_c2fn",    "");
+  const [abtC2Last,   setAbtC2Last]     = useLocalStorage("abt_c2ln",    "");
+  const [abtC2OnLoan, setAbtC2OnLoan]   = useLocalStorage("abt_c2loan",  false);
+  const [abtC2OnTitle,setAbtC2OnTitle]  = useLocalStorage("abt_c2title", false);
+
+  // Applicant name comes from the linked Contact; co-borrower appended when on loan
+  const primaryName = contact
+    ? [contact.first_name, contact.last_name].filter(Boolean).join(" ")
+    : [abtC1First, abtC1Last].filter(Boolean).join(" ");
+  const coName = abtC2OnLoan ? [abtC2First, abtC2Last].filter(Boolean).join(" ") : "";
+  const applicantLine = [primaryName, coName].filter(Boolean).join(" & ") || "—";
 
   // ── Live data object — passed to letterContent when no frozen snap is active ──
   const todayFormatted = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
@@ -174,9 +241,10 @@ function PreQualLetter({ user, scenario, isInternal }) {
     maxRate:         bInterestRate || maxRate,
     maxDTI:          maxDTI,
     points:          bPoints || discountPts || "0",
-    purchasePrice:   bPurchasePrice || purchasePrice,
     providedStr:     providedStr,
+    fundsStr:        fundsStr,
     contingencyItems: contingencyItems,
+    heartburnItems:  heartburnItems,
     loName:          loName,
     loTitle:         loTitle,
     loAddress:       loAddress,
@@ -190,11 +258,11 @@ function PreQualLetter({ user, scenario, isInternal }) {
     branchNMLS:      branchNMLS,
   };
 
-  const sectionLabel = { fontSize: "8.5px", textTransform: "uppercase", letterSpacing: "1.4px", color: "#999", marginBottom: "2px", fontWeight: 600 };
-  const cardStyle = { background: "#f7f9fb", borderRadius: "5px", padding: "8px 12px", marginBottom: "8px" };
-  const nameStyle = { fontSize: "12.5px", fontWeight: 700, color: COLORS.navy };
-  const valStyle = { fontSize: "11.5px", color: "#333" };
-  const labelStyle = { fontSize: "9.5px", color: "#888", marginBottom: "1px" };
+  const sectionLabel = { fontSize: "10px", textTransform: "uppercase", letterSpacing: "1.4px", color: "#999", marginBottom: "3px", fontWeight: 600 };
+  const cardStyle = { background: "#f7f9fb", borderRadius: "5px", padding: "10px 14px", marginBottom: "10px" };
+  const nameStyle = { fontSize: "15px", fontWeight: 700, color: COLORS.navy };
+  const valStyle = { fontSize: "13px", color: "#333" };
+  const labelStyle = { fontSize: "11px", color: "#888", marginBottom: "2px" };
 
   // ── EHL logo SVG (small) ──
   const ehlLogo = React.createElement("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 28 31", width: 22, height: 25, style: { display: "inline-block", verticalAlign: "middle" } },
@@ -205,7 +273,7 @@ function PreQualLetter({ user, scenario, isInternal }) {
   // ── Letter Content — parameterized; accepts live or frozen data object ──
   const letterContent = (d) => React.createElement("div", {
     className: "mtk-prequal-letter",
-    style: { maxWidth: "750px", margin: "0 auto", background: "#fff", borderRadius: "8px", padding: "18px 24px", fontFamily: font, color: "#333", fontSize: "11.5px", lineHeight: "1.5", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }
+    style: { maxWidth: "750px", margin: "0 auto", background: "#fff", borderRadius: "8px", padding: "24px 32px", fontFamily: font, color: "#333", fontSize: "13px", lineHeight: "1.6", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }
   },
     React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" } },
       React.createElement("div", null,
@@ -214,19 +282,19 @@ function PreQualLetter({ user, scenario, isInternal }) {
       ),
       React.createElement("img", { src: "modules/images/mortgage-mark-logo.png", alt: "MortgageMark.com", style: { height: "71px", objectFit: "contain" } })
     ),
-    React.createElement("h1", { style: { fontSize: "17px", fontWeight: 700, color: COLORS.navy, margin: "0 0 6px 0", letterSpacing: "-0.3px", textAlign: "center" } }, "Conditional Pre-Qualification Letter"),
-    React.createElement("div", { style: { height: "2px", background: "linear-gradient(to right, #1B8A5A, #1a5fa8)", marginBottom: "12px" } }),
-    React.createElement("p", { style: { fontSize: "10.5px", color: "#777", margin: "0 0 10px 0", fontStyle: "italic" } },
+    React.createElement("h1", { style: { fontSize: "20px", fontWeight: 700, color: COLORS.navy, margin: "0 0 8px 0", letterSpacing: "-0.3px", textAlign: "center" } }, "Conditional Pre-Qualification Letter"),
+    React.createElement("div", { style: { height: "2px", background: "linear-gradient(to right, #1B8A5A, #1a5fa8)", marginBottom: "14px" } }),
+    React.createElement("p", { style: { fontSize: "12px", color: "#777", margin: "0 0 12px 0", fontStyle: "italic" } },
       "This is not a loan approval or commitment to lend. Final approval is subject to full underwriting review."
     ),
-    React.createElement("p", { style: { fontSize: "10.5px", color: "#555", margin: "0 0 8px 0" } }, d.letterDate),
-    React.createElement("div", { style: { marginBottom: "8px" } },
-      React.createElement("div", { style: { fontSize: "11px", marginBottom: "1px" } },
+    React.createElement("p", { style: { fontSize: "12px", color: "#555", margin: "0 0 10px 0" } }, d.letterDate),
+    React.createElement("div", { style: { marginBottom: "10px" } },
+      React.createElement("div", { style: { fontSize: "13px", marginBottom: "1px" } },
         React.createElement("strong", null, "APPLICANT: "),
         React.createElement("strong", { style: { color: "#333" } }, d.applicantLine)
       )
     ),
-    React.createElement("div", { style: { fontSize: "11px", color: "#444", marginBottom: "8px" } },
+    React.createElement("div", { style: { fontSize: "13px", color: "#444", marginBottom: "10px" } },
       React.createElement("span", { style: { ...sectionLabel, display: "inline", marginBottom: 0 } }, "SUBJECT PROPERTY: "),
       React.createElement("span", null, d.propertyAddress || "TBD")
     ),
@@ -242,7 +310,7 @@ function PreQualLetter({ user, scenario, isInternal }) {
       ),
       React.createElement("div", null,
         React.createElement("div", { style: labelStyle }, "Interest Rate"),
-        React.createElement("div", { style: valStyle }, d.maxRate ? d.maxRate + "%" : "—")
+        React.createElement("div", { style: valStyle }, "Not Locked")
       ),
       React.createElement("div", null,
         React.createElement("div", { style: labelStyle }, "Term"),
@@ -259,58 +327,45 @@ function PreQualLetter({ user, scenario, isInternal }) {
     ),
     React.createElement("div", { style: { marginBottom: "8px" } },
       React.createElement("div", { style: sectionLabel }, "INFORMATION PROVIDED"),
-      React.createElement("div", { style: { fontSize: "11px", color: "#444" } }, d.providedStr)
+      React.createElement("div", { style: { fontSize: "13px", color: "#444" } }, d.providedStr)
     ),
     React.createElement("div", { style: sectionLabel }, "ELIGIBILITY DETERMINATION"),
-    React.createElement("p", { style: { fontSize: "11px", color: "#444", margin: "0 0 8px 0" } },
+    React.createElement("p", { style: { fontSize: "13px", color: "#444", margin: "0 0 10px 0" } },
       "Based on the information provided, the applicant(s) appear eligible for the financing described above, subject to satisfactory property appraisal, title review, and complete underwriting evaluation."
     ),
-    React.createElement("div", { style: { border: "1px solid #e0e0e0", borderRadius: "5px", padding: "6px 10px", marginBottom: "8px" } },
+    React.createElement("div", { style: { border: "1px solid #e0e0e0", borderRadius: "5px", padding: "8px 12px", marginBottom: "10px" } },
       React.createElement("div", { style: { ...sectionLabel, color: "#c0392b", marginBottom: "4px" } }, "THIS IS NOT A LOAN APPROVAL — CONDITIONS FOR FINAL APPROVAL"),
-      React.createElement("ul", { style: { margin: 0, paddingLeft: "16px", fontSize: "10.5px", color: "#444", lineHeight: "1.55" } },
+      React.createElement("ul", { style: { margin: 0, paddingLeft: "16px", fontSize: "12px", color: "#444", lineHeight: "1.6" } },
         React.createElement("li", null, "Acceptable property appraisal and title commitment"),
         React.createElement("li", null, "Satisfactory homeowner" + String.fromCharCode(8217) + "s insurance and flood determination"),
         React.createElement("li", null, "Compliance with all investor and agency guidelines"),
         React.createElement("li", null, "No material changes in financial condition prior to closing")
       )
     ),
-    d.contingencyItems && d.contingencyItems.length > 0
-      ? React.createElement(React.Fragment, null,
-          React.createElement("div", { style: sectionLabel }, "CONTINGENCIES FOR LOAN APPROVAL"),
-          React.createElement("ul", { style: { margin: "0 0 8px 0", paddingLeft: "16px", fontSize: "11px", color: "#444", lineHeight: "1.55" } },
-            d.contingencyItems.map(function(item) {
-              return React.createElement("li", { key: item.key },
-                React.createElement("strong", null, item.key + ": "),
-                item.text
-              );
-            })
-          )
-        )
-      : null,
-    React.createElement("div", { style: { marginTop: "14px", marginBottom: "10px" } },
-      d.loName ? React.createElement("div", { style: { ...nameStyle, marginBottom: "1px" } }, d.loName) : null,
-      (d.loTitle || d.loNMLS) ? React.createElement("div", { style: { fontSize: "11px", color: "#555" } },
-        [d.loTitle, d.loNMLS ? "NMLS: #" + d.loNMLS : null].filter(Boolean).join(", ")
-      ) : null,
-      (d.company || d.companyNMLS) ? React.createElement("div", { style: { fontSize: "11px", color: "#555" } },
-        [d.company, d.companyNMLS ? "NMLS #" + d.companyNMLS : null].filter(Boolean).join(", ")
-      ) : null,
-      (d.loAddress || d.loAddrCity) ? React.createElement("div", { style: { fontSize: "11px", color: "#555" } },
-        [d.loAddress, d.loAddrCity].filter(Boolean).join(", ")
-      ) : null,
-      (d.loPhone || d.loCell || d.loFax) ? React.createElement("div", { style: { fontSize: "11px", color: "#555", marginTop: "3px" } },
-        [d.loPhone ? "Office: " + formatPhone(d.loPhone) : null, d.loCell ? "Cell: " + formatPhone(d.loCell) : null, d.loFax ? "Fax: " + formatPhone(d.loFax) : null].filter(Boolean).join("  |  ")
-      ) : null,
-      d.loEmail ? React.createElement("div", { style: { fontSize: "11px", color: "#555" } }, d.loEmail) : null,
-      d.loWebsite ? React.createElement("a", { href: d.loWebsite, style: { fontSize: "11px", color: "#1a5fa8", textDecoration: "none" } }, d.loWebsite) : null
-    ),
-    React.createElement("div", { className: "pq-footer", style: { borderTop: "1px solid #ddd", paddingTop: "8px", marginTop: "6px" } },
+    React.createElement("div", { className: "pq-footer", style: { borderTop: "1px solid #ddd", paddingTop: "10px", marginTop: "10px" } },
+      React.createElement("div", { style: { marginBottom: "10px" } },
+        d.loName ? React.createElement("div", { style: { ...nameStyle, marginBottom: "1px" } }, d.loName) : null,
+        (d.loTitle || d.loNMLS) ? React.createElement("div", { style: { fontSize: "12.5px", color: "#555" } },
+          [d.loTitle, d.loNMLS ? "NMLS: #" + d.loNMLS : null].filter(Boolean).join(", ")
+        ) : null,
+        (d.company || d.companyNMLS) ? React.createElement("div", { style: { fontSize: "12.5px", color: "#555" } },
+          [d.company, d.companyNMLS ? "NMLS #" + d.companyNMLS : null].filter(Boolean).join(", ")
+        ) : null,
+        (d.loAddress || d.loAddrCity) ? React.createElement("div", { style: { fontSize: "12.5px", color: "#555" } },
+          [d.loAddress, d.loAddrCity].filter(Boolean).join(", ")
+        ) : null,
+        (d.loPhone || d.loCell || d.loFax) ? React.createElement("div", { style: { fontSize: "12.5px", color: "#555", marginTop: "4px" } },
+          [d.loPhone ? "Office: " + formatPhone(d.loPhone) : null, d.loCell ? "Cell: " + formatPhone(d.loCell) : null, d.loFax ? "Fax: " + formatPhone(d.loFax) : null].filter(Boolean).join("  |  ")
+        ) : null,
+        d.loEmail ? React.createElement("div", { style: { fontSize: "12.5px", color: "#555" } }, d.loEmail) : null,
+        d.loWebsite ? React.createElement("a", { href: d.loWebsite, style: { fontSize: "12.5px", color: "#1a5fa8", textDecoration: "none" } }, d.loWebsite) : null
+      ),
       React.createElement("div", { style: { display: "flex", alignItems: "flex-start", gap: "12px" } },
         React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", minWidth: "34px", paddingTop: "1px" } },
           ehlLogo,
-          React.createElement("span", { style: { fontSize: "5.5px", color: "#888", textAlign: "center", lineHeight: "1.2", marginTop: "3px", fontWeight: 600 } }, "EQUAL HOUSING", React.createElement("br"), "OPPORTUNITY")
+          React.createElement("span", { style: { fontSize: "6.5px", color: "#888", textAlign: "center", lineHeight: "1.2", marginTop: "3px", fontWeight: 600 } }, "EQUAL HOUSING", React.createElement("br"), "OPPORTUNITY")
         ),
-        React.createElement("div", { style: { fontSize: "7.5px", color: "#888", lineHeight: "1.5", flex: 1 } },
+        React.createElement("div", { style: { fontSize: "8.5px", color: "#888", lineHeight: "1.5", flex: 1 } },
           "This pre-approval is contingent upon, and subject to, the availability of this loan product and program in the secondary market from the issuance of this pre-approval through the closing and funding of the loan. CMG Home Loans reserves the right to revoke this pre-approval at any time if there is a change in your financial condition or credit history which would impair your ability to repay this obligation which would make you ineligible for the loan program, and/or if any information contained in your application is untrue, incomplete or incorrect. CMG Mortgage, Inc. dba CMG Home Loans, NMLS# 1820, is an equal housing lender. To verify our complete list of state licences, please visit ",
           React.createElement("a", { href: "https://www.cmgfi.com/corporate/licensing", style: { color: "#1B8A5A" } }, "www.cmgfi.com/corporate/licensing"),
           " and ",
@@ -318,80 +373,280 @@ function PreQualLetter({ user, scenario, isInternal }) {
           "."
         )
       ),
-      d.letterId ? React.createElement("div", { style: { marginTop: "5px", fontSize: "7px", color: "#bbb", textAlign: "right", letterSpacing: "0.5px" } },
+      d.letterId ? React.createElement("div", { style: { marginTop: "5px", fontSize: "8px", color: "#bbb", textAlign: "right", letterSpacing: "0.5px" } },
         "Letter ID: " + d.letterId
       ) : null
     )
   );
 
+  // ── Letter Page 2 — Funds & Contingencies (internal details, same branding) ──
+  const letterPage2Content = (d) => {
+    const hasFunds     = d.fundsStr && d.fundsStr.length > 0;
+    const hasConting   = d.contingencyItems && d.contingencyItems.length > 0;
+    const hasHeartburn = d.heartburnItems && d.heartburnItems.length > 0;
+    if (!hasFunds && !hasConting && !hasHeartburn) return null;
+    return React.createElement("div", {
+      className: "mtk-prequal-letter",
+      style: { maxWidth: "750px", margin: "0 auto", background: "#fff", borderRadius: "8px", padding: "24px 32px", fontFamily: font, color: "#333", fontSize: "13px", lineHeight: "1.6", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }
+    },
+      // Header (same as page 1)
+      React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" } },
+        React.createElement("div", null,
+          React.createElement("div", { style: { fontSize: "28px", fontWeight: 800, color: "#1B8A5A", letterSpacing: "-0.5px", lineHeight: "1" } }, "CMG"),
+          React.createElement("div", { style: { fontSize: "9px", color: "#1B8A5A", textTransform: "uppercase", letterSpacing: "3.5px", fontWeight: 700, lineHeight: "1.2", marginTop: "2px" } }, "Home Loans")
+        ),
+        React.createElement("img", { src: "modules/images/mortgage-mark-logo.png", alt: "MortgageMark.com", style: { height: "71px", objectFit: "contain" } })
+      ),
+      React.createElement("h1", { style: { fontSize: "20px", fontWeight: 700, color: COLORS.navy, margin: "0 0 8px 0", letterSpacing: "-0.3px", textAlign: "center" } }, "Loan Conditions & Contingencies"),
+      React.createElement("div", { style: { height: "2px", background: "linear-gradient(to right, #1B8A5A, #1a5fa8)", marginBottom: "14px" } }),
+      // Intro box
+      React.createElement("div", { style: { background: "#fff8e1", border: "1px solid #f59e0b", borderRadius: "6px", padding: "10px 14px", marginBottom: "14px" } },
+        React.createElement("div", { style: { fontSize: "12px", color: "#78350f", fontWeight: 700, marginBottom: "3px" } }, "Important — Please Read"),
+        React.createElement("p", { style: { fontSize: "12px", color: "#78350f", margin: 0 } },
+          "This page contains conditions and contingencies that are important for the full loan approval of the applicant(s) listed below. These items must be addressed prior to or at closing."
+        )
+      ),
+      // Date + Applicant + Subject Property
+      React.createElement("p", { style: { fontSize: "12px", color: "#555", margin: "0 0 10px 0" } }, d.letterDate),
+      React.createElement("div", { style: { marginBottom: "10px" } },
+        React.createElement("div", { style: { fontSize: "13px", marginBottom: "1px" } },
+          React.createElement("strong", null, "APPLICANT: "),
+          React.createElement("strong", { style: { color: "#333" } }, d.applicantLine)
+        )
+      ),
+      React.createElement("div", { style: { fontSize: "13px", color: "#444", marginBottom: "10px" } },
+        React.createElement("span", { style: { ...sectionLabel, display: "inline", marginBottom: 0 } }, "SUBJECT PROPERTY: "),
+        React.createElement("span", null, d.propertyAddress || "TBD")
+      ),
+      // Funds for down payment
+      hasFunds ? React.createElement("div", { style: { marginBottom: "12px" } },
+        React.createElement("div", { style: sectionLabel }, "SOURCE OF FUNDS FOR DOWN PAYMENT"),
+        React.createElement("p", { style: { fontSize: "13px", color: "#444", margin: "0 0 4px 0" } }, "Funds for the down payment and closing costs will be coming from the following:"),
+        React.createElement("ul", { style: { margin: 0, paddingLeft: "16px", fontSize: "13px", color: "#444", lineHeight: "1.6" } },
+          d.fundsStr.map(function(item) { return React.createElement("li", { key: item }, item); })
+        )
+      ) : null,
+      // Contingencies
+      hasConting ? React.createElement("div", { style: { marginBottom: "12px" } },
+        React.createElement("div", { style: sectionLabel }, "CONTINGENCIES FOR LOAN APPROVAL"),
+        React.createElement("ul", { style: { margin: "0 0 10px 0", paddingLeft: "16px", fontSize: "12px", color: "#444", lineHeight: "1.6" } },
+          d.contingencyItems.map(function(item) {
+            return React.createElement("li", { key: item.key },
+              React.createElement("strong", null, item.key + ": "),
+              item.text
+            );
+          })
+        )
+      ) : null,
+      // Notable Mentions (LO Heartburn — internal only, rendered as professional notes)
+      hasHeartburn ? React.createElement("div", { style: { marginBottom: "12px" } },
+        React.createElement("div", { style: sectionLabel }, "NOTABLE MENTIONS"),
+        React.createElement("div", { style: { background: "#fafafa", border: "1px solid #e5e7eb", borderRadius: "6px", padding: "10px 14px" } },
+          d.heartburnItems.map(function(item) {
+            return React.createElement("div", { key: item.key, style: { marginBottom: "8px" } },
+              React.createElement("div", { style: { fontSize: "10px", fontWeight: 700, color: "#6B7280", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "2px" } }, item.key),
+              React.createElement("div", { style: { fontSize: "12px", color: "#374151", lineHeight: "1.6" } }, item.text)
+            );
+          })
+        )
+      ) : null,
+      // Footer (same as page 1, "Page 2 of 2") — LO block moved inside, above disclaimer
+      React.createElement("div", { className: "pq-footer", style: { borderTop: "1px solid #ddd", paddingTop: "10px", marginTop: "10px" } },
+        // LO contact block — first inside footer, before disclaimer
+        React.createElement("div", { style: { marginBottom: "10px" } },
+          d.loName ? React.createElement("div", { style: { ...nameStyle, marginBottom: "1px" } }, d.loName) : null,
+          (d.loTitle || d.loNMLS) ? React.createElement("div", { style: { fontSize: "12.5px", color: "#555" } },
+            [d.loTitle, d.loNMLS ? "NMLS: #" + d.loNMLS : null].filter(Boolean).join(", ")
+          ) : null,
+          (d.company || d.companyNMLS) ? React.createElement("div", { style: { fontSize: "12.5px", color: "#555" } },
+            [d.company, d.companyNMLS ? "NMLS #" + d.companyNMLS : null].filter(Boolean).join(", ")
+          ) : null,
+          (d.loAddress || d.loAddrCity) ? React.createElement("div", { style: { fontSize: "12.5px", color: "#555" } },
+            [d.loAddress, d.loAddrCity].filter(Boolean).join(", ")
+          ) : null,
+          (d.loPhone || d.loCell || d.loFax) ? React.createElement("div", { style: { fontSize: "12.5px", color: "#555", marginTop: "4px" } },
+            [d.loPhone ? "Office: " + formatPhone(d.loPhone) : null, d.loCell ? "Cell: " + formatPhone(d.loCell) : null, d.loFax ? "Fax: " + formatPhone(d.loFax) : null].filter(Boolean).join("  |  ")
+          ) : null,
+          d.loEmail ? React.createElement("div", { style: { fontSize: "12.5px", color: "#555" } }, d.loEmail) : null,
+          d.loWebsite ? React.createElement("a", { href: d.loWebsite, style: { fontSize: "12.5px", color: "#1a5fa8", textDecoration: "none" } }, d.loWebsite) : null
+        ),
+        React.createElement("div", { style: { display: "flex", alignItems: "flex-start", gap: "12px" } },
+          React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", minWidth: "34px", paddingTop: "1px" } },
+            ehlLogo,
+            React.createElement("span", { style: { fontSize: "6.5px", color: "#888", textAlign: "center", lineHeight: "1.2", marginTop: "3px", fontWeight: 600 } }, "EQUAL HOUSING", React.createElement("br"), "OPPORTUNITY")
+          ),
+          React.createElement("div", { style: { fontSize: "8.5px", color: "#888", lineHeight: "1.5", flex: 1 } },
+            "This pre-approval is contingent upon, and subject to, the availability of this loan product and program in the secondary market from the issuance of this pre-approval through the closing and funding of the loan. CMG Home Loans reserves the right to revoke this pre-approval at any time if there is a change in your financial condition or credit history which would impair your ability to repay this obligation which would make you ineligible for the loan program, and/or if any information contained in your application is untrue, incomplete or incorrect. CMG Mortgage, Inc. dba CMG Home Loans, NMLS# 1820, is an equal housing lender. To verify our complete list of state licences, please visit ",
+            React.createElement("a", { href: "https://www.cmgfi.com/corporate/licensing", style: { color: "#1B8A5A" } }, "www.cmgfi.com/corporate/licensing"),
+            " and ",
+            React.createElement("a", { href: "https://www.nmlsconsumeraccess.org", style: { color: "#1B8A5A" } }, "www.nmlsconsumeraccess.org"),
+            "."
+          )
+        ),
+        React.createElement("div", { style: { marginTop: "5px", fontSize: "8px", color: "#bbb", textAlign: "right", letterSpacing: "0.5px" } },
+          (d.letterId ? "Letter ID: " + d.letterId + "  ·  " : "") + "Page 2 of 2"
+        )
+      )
+    );
+  };
+
   // ── Input form ──
+  const paramsReady = purchasePrice && loanAmount;
+
   const inputForm = () => React.createElement(React.Fragment, null,
-    React.createElement(SectionCard, { title: "Optional: Enter values for the PQ letter" },
-      React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" } },
-        React.createElement(LabeledInput, { label: "Purchase Price", value: bPurchasePrice, onChange: handleBPurchasePrice, prefix: "$", useCommas: true, hint: purchasePrice ? "Max: $" + Number(String(purchasePrice).replace(/,/g, "")).toLocaleString() : undefined }),
-        React.createElement(LabeledInput, { label: "Interest Rate (%)", value: bInterestRate, onChange: handleBInterestRate, hint: maxRate ? "Max: " + maxRate + "%" : undefined }),
-        React.createElement(LabeledInput, { label: "Property Address (optional)", value: propertyAddress, onChange: setPropertyAddress, type: "text" }),
-        React.createElement(LabeledInput, { label: "Loan Amount", value: bLoanAmount, onChange: handleBLoanAmount, prefix: "$", useCommas: true, hint: loanAmount ? "Max: $" + Number(String(loanAmount).replace(/,/g, "")).toLocaleString() : undefined }),
-        React.createElement(LabeledInput, { label: "Points Paid", value: bPoints, onChange: setBPoints }),
-        React.createElement(LabeledInput, { label: "Closing Date", value: bClosingDate, onChange: setBClosingDate, type: "date" })
+    // Warning for non-internal users without params
+    !isInternal && !paramsReady
+      ? React.createElement("div", {
+          style: { background: "#fff8e1", border: "1px solid #f59e0b", borderRadius: 8, padding: "16px 20px", marginBottom: 16, fontFamily: font }
+        },
+          React.createElement("div", { style: { fontWeight: 700, color: "#92400e", marginBottom: 4, fontSize: 14 } }, "Your PQ letter is not ready yet."),
+          React.createElement("div", { style: { color: "#78350f", fontSize: 13 } }, "Please contact your loan officer to set up your pre-qualification parameters before generating a letter.")
+        )
+      : null,
+    // Co-borrower tip
+    React.createElement("div", {
+      style: { background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8, padding: "12px 16px", marginBottom: 12, fontSize: 13, color: "#1e40af", display: "flex", gap: 10, alignItems: "flex-start" }
+    },
+      React.createElement("span", { style: { fontSize: 16 } }, "ℹ️"),
+      React.createElement("span", null,
+        React.createElement("strong", null, "Co-borrower: "),
+        "Enter the co-borrower's name below and check \"on the loan\" — their name will appear on the letter automatically."
       )
     ),
-    React.createElement("div", { style: isClient ? { pointerEvents: "none", opacity: 0.55, userSelect: "none" } : {} },
-    React.createElement(SectionCard, { title: "Internal: PQ Parameters" },
-      React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" } },
-        React.createElement(LabeledInput, { label: "Max Purchase Price", value: purchasePrice, onChange: setPurchasePrice, prefix: "$", useCommas: true }),
-        React.createElement(LabeledInput, { label: "Max Interest Rate (%)", value: maxRate, onChange: setMaxRate }),
-        React.createElement(Select, { label: "Loan Type", value: loanType, onChange: setLoanType, options: ["Conventional", "FHA", "VA", "USDA"].map(v => ({ value: v, label: v })) }),
-        React.createElement(LabeledInput, { label: "Max Loan Amount", value: loanAmount, onChange: setLoanAmount, prefix: "$", useCommas: true }),
-        React.createElement(LabeledInput, { label: "Discount Points", value: discountPts, onChange: setDiscountPts, suffix: "pts", hint: "Synced with Fee Sheet" }),
-        React.createElement(Select, { label: "Loan Term", value: loanTerm, onChange: setLoanTerm, options: ["30 Year", "20 Year", "15 Year", "10 Year"].map(v => ({ value: v, label: v })) })
-      )
+    // 2-column grid: Cards 1–5 (card 1 always; cards 2–5 internal only)
+    !isInternal && !paramsReady ? null : React.createElement("div", {
+      style: { display: "grid", gridTemplateColumns: isInternal ? "1fr 1fr" : "1fr", gap: "12px", alignItems: "start" }
+    },
+      // Card 1: Optional PQ values + Co-Borrower
+      React.createElement(SectionCard, { title: "Optional: Enter values for the PQ letter" },
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" } },
+          React.createElement(LabeledInput, { label: "Purchase Price", value: bPurchasePrice, onChange: handleBPurchasePrice, prefix: "$", useCommas: true, hint: purchasePrice ? "Max: $" + Number(String(purchasePrice).replace(/,/g, "")).toLocaleString() : undefined }),
+          React.createElement(LabeledInput, { label: "Loan Amount", value: bLoanAmount, onChange: handleBLoanAmount, prefix: "$", useCommas: true, hint: loanAmount ? "Max: $" + Number(String(loanAmount).replace(/,/g, "")).toLocaleString() : undefined }),
+          React.createElement(LabeledInput, { label: "Property Address (optional)", value: propertyAddress, onChange: setPropertyAddress, type: "text" }),
+          React.createElement(LabeledInput, { label: "Closing Date", value: bClosingDate, onChange: setBClosingDate, type: "date" })
+        ),
+        React.createElement("div", { style: { borderTop: "1px solid #e2e8f0", marginTop: "16px", paddingTop: "16px" } },
+          React.createElement("div", { style: { fontSize: "13px", fontWeight: 700, color: "#1e3a5f", marginBottom: "10px" } }, "Co-Borrower"),
+          React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "10px" } },
+            React.createElement(LabeledInput, { label: "First Name", value: abtC2First, onChange: setAbtC2First, type: "text", placeholder: "Co-borrower first name" }),
+            React.createElement(LabeledInput, { label: "Last Name",  value: abtC2Last,  onChange: setAbtC2Last,  type: "text", placeholder: "Co-borrower last name" })
+          ),
+          React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: "8px" } },
+            React.createElement("label", { style: { display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" } },
+              React.createElement("input", { type: "checkbox", checked: !!abtC2OnLoan, onChange: function(e) { setAbtC2OnLoan(e.target.checked); }, style: { width: 15, height: 15 } }),
+              "Co-borrower is on the loan"
+            ),
+            React.createElement("label", { style: { display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" } },
+              React.createElement("input", { type: "checkbox", checked: !!abtC2OnTitle, onChange: function(e) { setAbtC2OnTitle(e.target.checked); }, style: { width: 15, height: 15 } }),
+              "Co-borrower is on title"
+            )
+          )
+        )
+      ),
+      // Card 2: PQ Parameters (internal only)
+      !isInternal ? null : React.createElement(SectionCard, { title: "Internal: PQ Parameters" },
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" } },
+          React.createElement(LabeledInput, { label: "Max Purchase Price", value: purchasePrice, onChange: setPurchasePrice, prefix: "$", useCommas: true }),
+          React.createElement(LabeledInput, { label: "Max Loan Amount", value: loanAmount, onChange: setLoanAmount, prefix: "$", useCommas: true }),
+          React.createElement(Select, { label: "Loan Type", value: loanType, onChange: setLoanType, options: ["Conventional", "FHA", "VA", "USDA"].map(v => ({ value: v, label: v })) }),
+          React.createElement(Select, { label: "Loan Term", value: loanTerm, onChange: setLoanTerm, options: ["30 Year", "20 Year", "15 Year", "10 Year"].map(v => ({ value: v, label: v })) })
+        )
+      ),
     ),
-    React.createElement("div", { style: { marginBottom: "16px" } },
-      React.createElement(SectionCard, { title: "Internal: Documentation Reviewed" },
-        React.createElement(Toggle, { label: "Income", checked: pIncome, onChange: setPIncome }),
-        React.createElement(Toggle, { label: "Available Cash to Close", checked: pCashToClose, onChange: setPCashToClose }),
-        React.createElement(Toggle, { label: "Debts", checked: pDebts, onChange: setPDebts }),
-        React.createElement(Toggle, { label: "Assets", checked: pAssets, onChange: setPAssets }),
-        React.createElement(Toggle, { label: "Other", checked: pOther, onChange: setPOther }),
-        pOther ? React.createElement(LabeledInput, { label: "Other (specify)", value: pOtherText, onChange: setPOtherText, type: "text" }) : null
-      )
+    // Cards 3–5: full width, internal only
+    !isInternal ? null : React.createElement(SectionCard, { title: "Internal: Documentation Reviewed" },
+      React.createElement(Toggle, { label: "Income", checked: pIncome, onChange: setPIncome }),
+      React.createElement(Toggle, { label: "Available Cash to Close", checked: pCashToClose, onChange: setPCashToClose }),
+      React.createElement(Toggle, { label: "Debts", checked: pDebts, onChange: setPDebts }),
+      React.createElement(Toggle, { label: "Assets", checked: pAssets, onChange: setPAssets }),
+      React.createElement(Toggle, { label: "Other", checked: pOther, onChange: setPOther }),
+      pOther ? React.createElement(LabeledInput, { label: "Other (specify)", value: pOtherText, onChange: setPOtherText, type: "text" }) : null
     ),
-    React.createElement(SectionCard, { title: "Internal: Contingencies" },
+    !isInternal ? null : React.createElement(SectionCard, { title: "Internal: Source of Funds for Down Payment" },
+      React.createElement(Toggle, { label: "Liquid Accounts (ex: checking, savings, etc.)", checked: fdpReady, onChange: setFdpReady }),
+      React.createElement(Toggle, { label: "Semi-Liquid Accounts (ex: brokerage account, retirement account, etc.)", checked: fdpGift, onChange: setFdpGift }),
+      React.createElement(Toggle, { label: "Proceeds from the sale of Real Estate Owned (REO)", checked: fdpREOSale, onChange: setFdpREOSale }),
+      React.createElement(Toggle, { label: "Proceeds from the refinance of existing Real Estate Owned (REO)", checked: fdpCashRefi, onChange: setFdpCashRefi })
+    ),
+    !isInternal ? null : React.createElement(SectionCard, { title: "Internal: Contingencies" },
       React.createElement(Toggle, { label: "REAL ESTATE OWNED (REO): existing home must sell/close/fund before this closing", checked: cREO, onChange: setCREO }),
+      React.createElement(Toggle, { label: "REAL ESTATE OWNED (REO): existing home does NOT need to be sold before closing (i.e. this is not contingent)", checked: cREONonConting, onChange: setCREONonConting }),
       React.createElement(Toggle, { label: "CREDIT: credit report will need to be updated and acceptable for underwriting", checked: cCredit, onChange: setCCredit }),
+      React.createElement(Toggle, { label: "CREDIT: credit scores MUST be increased before closing in order to qualify and close.", checked: cCreditScore, onChange: setCCreditScore }),
       React.createElement(Toggle, { label: "DEBTS (before closing): existing debt(s) must be paid off before closing", checked: cDebts, onChange: setCDebts }),
       React.createElement(Toggle, { label: "DEBTS (at closing): existing debt(s) will be paid at closing", checked: cDebtsClosing, onChange: setCDebtsClosing }),
       React.createElement(Toggle, { label: "OTHER", checked: cOther, onChange: setCOther }),
       cOther ? React.createElement(LabeledInput, { label: "Other contingency (specify)", value: cOtherText, onChange: setCOtherText, type: "text" }) : null
     ),
-    React.createElement(LOSelector, null),
-    React.createElement(SectionCard, { title: "LO Signature Details" },
-      React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" } },
-        React.createElement(LabeledInput, { label: "LO Name", value: loName, onChange: setLoName, type: "text", placeholder: "e.g. Mark Ningard" }),
-        React.createElement(LabeledInput, { label: "Title / Role", value: loTitle, onChange: setLoTitle, type: "text", placeholder: "e.g. Senior Loan Officer" }),
-        React.createElement(LabeledInput, { label: "LO NMLS #", value: loNMLS, onChange: setLoNMLS, type: "text", placeholder: "e.g. 729612" }),
-        React.createElement(LabeledInput, { label: "Company", value: company, onChange: setCompany, type: "text", placeholder: "e.g. CMG Home Loans" }),
-        React.createElement(LabeledInput, { label: "Company NMLS #", value: companyNMLS, onChange: setCompanyNMLS, type: "text", placeholder: "e.g. 1820" }),
-        React.createElement(LabeledInput, { label: "Branch NMLS #", value: branchNMLS, onChange: setBranchNMLS, type: "text", placeholder: "e.g. 123456" }),
-        React.createElement(LabeledInput, { label: "Street Address", value: loAddress, onChange: setLoAddress, type: "text", placeholder: "e.g. 1234 Main St, Suite 100" }),
-        React.createElement(LabeledInput, { label: "City, State, Zip", value: loAddrCity, onChange: setLoAddrCity, type: "text", placeholder: "e.g. Houston, TX 77001" }),
-        React.createElement(LabeledInput, { label: "Office Phone", value: loPhone, onChange: setLoPhone, type: "text", placeholder: "(XXX) XXX-XXXX" }),
-        React.createElement(LabeledInput, { label: "Cell Phone", value: loCell, onChange: setLoCell, type: "text", placeholder: "(XXX) XXX-XXXX" }),
-        React.createElement(LabeledInput, { label: "Fax", value: loFax, onChange: setLoFax, type: "text", placeholder: "(XXX) XXX-XXXX" }),
-        React.createElement(LabeledInput, { label: "Email", value: loEmail, onChange: setLoEmail, type: "text", placeholder: "e.g. mark@cmghomeloans.com" }),
-        React.createElement(LabeledInput, { label: "Website URL", value: loWebsite, onChange: setLoWebsite, type: "text", placeholder: "e.g. www.markningard.com" })
-      )
-    )
+    // LO Heartburn — renders as "Notable Mentions" on the letter
+    !isInternal ? null : React.createElement(SectionCard, { title: "Internal: LO Heartburn" },
+      React.createElement("div", { style: { fontSize: 12, color: "#6B7280", marginBottom: 12, lineHeight: 1.5 } },
+        "Toggle items on to include them in the letter as \u201cNotable Mentions.\u201d Edit the text to fit the specific situation."
+      ),
+      ...[
+        { checked: hbDTI,    setChecked: setHbDTI,    label: "DTI Sensitivity",       text: hbDTIText,    setText: setHbDTIText    },
+        { checked: hbTiming, setChecked: setHbTiming, label: "Timing Dependency",     text: hbTimingText, setText: setHbTimingText  },
+        { checked: hbDocs,   setChecked: setHbDocs,   label: "Pending Documents",     text: hbDocsText,   setText: setHbDocsText    },
+        { checked: hbCredit, setChecked: setHbCredit, label: "Credit In Progress",    text: hbCreditText, setText: setHbCreditText  },
+        { checked: hbIncome, setChecked: setHbIncome, label: "Income / Employment",   text: hbIncomeText, setText: setHbIncomeText  },
+        { checked: hbAppr,   setChecked: setHbAppr,   label: "Appraisal Sensitivity", text: hbApprText,   setText: setHbApprText    },
+      ].map(function(item) {
+        return React.createElement("div", { key: item.label, style: { marginBottom: 10 } },
+          React.createElement(Toggle, { label: item.label, checked: item.checked, onChange: item.setChecked }),
+          item.checked ? React.createElement("textarea", {
+            value: item.text,
+            onChange: function(e) { item.setText(e.target.value); },
+            rows: 3,
+            style: {
+              width: "100%", marginTop: 6, padding: "7px 10px",
+              borderRadius: 6, border: "1px solid #d0d5dd",
+              fontSize: 12, fontFamily: font, lineHeight: 1.5,
+              boxSizing: "border-box", resize: "vertical", outline: "none",
+              color: "#333", background: "#fff",
+            }
+          }) : null
+        );
+      })
     ),
-    React.createElement("div", { style: { display: "flex", gap: "12px", justifyContent: "flex-end" } },
+    // LOSelector + LO Signature — full width, internal only
+    !isInternal ? null : React.createElement(React.Fragment, null,
+      React.createElement(LOSelector, null),
+      React.createElement(SectionCard, { title: "LO Signature Details" },
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" } },
+          React.createElement(LabeledInput, { label: "LO Name", value: loName, onChange: setLoName, type: "text", placeholder: "e.g. Mark Ningard" }),
+          React.createElement(LabeledInput, { label: "Title / Role", value: loTitle, onChange: setLoTitle, type: "text", placeholder: "e.g. Senior Loan Officer" }),
+          React.createElement(LabeledInput, { label: "LO NMLS #", value: loNMLS, onChange: setLoNMLS, type: "text", placeholder: "e.g. 729612" }),
+          React.createElement(LabeledInput, { label: "Company", value: company, onChange: setCompany, type: "text", placeholder: "e.g. CMG Home Loans" }),
+          React.createElement(LabeledInput, { label: "Company NMLS #", value: companyNMLS, onChange: setCompanyNMLS, type: "text", placeholder: "e.g. 1820" }),
+          React.createElement(LabeledInput, { label: "Branch NMLS #", value: branchNMLS, onChange: setBranchNMLS, type: "text", placeholder: "e.g. 123456" }),
+          React.createElement(LabeledInput, { label: "Street Address", value: loAddress, onChange: setLoAddress, type: "text", placeholder: "e.g. 1234 Main St, Suite 100" }),
+          React.createElement(LabeledInput, { label: "City, State, Zip", value: loAddrCity, onChange: setLoAddrCity, type: "text", placeholder: "e.g. Houston, TX 77001" }),
+          React.createElement(LabeledInput, { label: "Office Phone", value: loPhone, onChange: setLoPhone, onBlur: function(v) { const d = String(v).replace(/\D/g,""); setLoPhone(d.length === 10 ? d.slice(0,3)+"-"+d.slice(3,6)+"-"+d.slice(6) : d.length === 11 && d[0]==="1" ? d.slice(1,4)+"-"+d.slice(4,7)+"-"+d.slice(7) : v); }, type: "text", placeholder: "XXX-XXX-XXXX" }),
+          React.createElement(LabeledInput, { label: "Cell Phone", value: loCell, onChange: setLoCell, type: "text", placeholder: "(XXX) XXX-XXXX" }),
+          React.createElement(LabeledInput, { label: "Fax", value: loFax, onChange: setLoFax, onBlur: function(v) { const d = String(v).replace(/\D/g,""); setLoFax(d.length === 10 ? d.slice(0,3)+"-"+d.slice(3,6)+"-"+d.slice(6) : d.length === 11 && d[0]==="1" ? d.slice(1,4)+"-"+d.slice(4,7)+"-"+d.slice(7) : v); }, type: "text", placeholder: "XXX-XXX-XXXX" }),
+          React.createElement(LabeledInput, { label: "Display Email", value: loEmail, onChange: setLoEmail, type: "text", placeholder: "e.g. mark@cmghomeloans.com" }),
+          React.createElement(LabeledInput, { label: "Website URL", value: loWebsite, onChange: setLoWebsite, type: "text", placeholder: "e.g. www.markningard.com" })
+        )
+      )
+    ),
+    !isInternal && !paramsReady ? null : React.createElement("div", { style: { display: "flex", gap: "12px", justifyContent: "flex-end" } },
       React.createElement(Button, { onClick: () => {
         const missing = [];
-        if (!purchasePrice) missing.push("Max Purchase Price");
-        if (!loanAmount) missing.push("Max Loan Amount");
-        if (!maxRate) missing.push("Max Interest Rate");
+        if (!purchasePrice) missing.push("Max Purchase Price (PQ Parameters)");
+        if (!loanAmount)    missing.push("Max Loan Amount (PQ Parameters)");
+        if (!loName)        missing.push("LO Name");
+        if (!loTitle)       missing.push("Title / Role");
+        if (!loNMLS)        missing.push("LO NMLS #");
+        if (!company)       missing.push("Company");
+        if (!companyNMLS)   missing.push("Company NMLS #");
+        if (!branchNMLS)    missing.push("Branch NMLS #");
+        if (!loAddress)     missing.push("Street Address");
+        if (!loAddrCity)    missing.push("City, State, Zip");
+        if (!loPhone)       missing.push("Office Phone");
+        if (!loCell)        missing.push("Cell Phone");
+        if (!loEmail)       missing.push("Display Email");
         if (missing.length > 0) {
-          alert("Cannot generate letter. Please fill in the following required fields in Internal: PQ Parameters:\n\n• " + missing.join("\n• "));
+          alert("Cannot generate letter. Please fill in the following required fields:\n\n• " + missing.join("\n• "));
           return;
         }
         const seq = letterHistory.length + 1;
@@ -431,7 +686,9 @@ function PreQualLetter({ user, scenario, isInternal }) {
           points:          bPoints || "0",
           purchasePrice:   bPurchasePrice || purchasePrice,
           providedStr:     providedStr,
+          fundsStr:        fundsStr,
           contingencyItems: contingencyItems,
+          heartburnItems:  heartburnItems,
           loAddress:       loAddress,
           loAddrCity:      loAddrCity,
           loTitle:         loTitle,
@@ -449,6 +706,8 @@ function PreQualLetter({ user, scenario, isInternal }) {
             console.warn("PQ snapshot save failed:", error);
           }
         }).catch(err => console.warn("PQ snapshot save error:", err));
+        // Immediately save scenario calc data so client sees LO's params right away
+        window.dispatchEvent(new Event("mtk_save_scenario"));
       }, label: "Generate", primary: true })
     )
   );
@@ -491,10 +750,10 @@ function PreQualLetter({ user, scenario, isInternal }) {
                       React.createElement("td", { style: { padding: "5px 8px", textAlign: "right", color: "#555" } }, s.loanAmount ? fmt(s.loanAmount) : "—"),
                       React.createElement("td", { style: { padding: "5px 8px", textAlign: "center" } },
                         React.createElement("div", { style: { display: "flex", gap: "6px", justifyContent: "center" } },
-                          isInternal && React.createElement(Button, { label: "Re-export PDF", small: true, onClick: () => {
+                          React.createElement(Button, { label: "⬇️ PDF", small: true, onClick: () => {
                             setDisplaySnap(s);
                             setShowLetter(true);
-                            setTimeout(() => printLetter(), 100);
+                            setTimeout(() => downloadPDF(), 300);
                           }}),
                           React.createElement(Button, { label: "📧 Email", small: true, onClick: () => {
                             setSendModal(s);
@@ -726,16 +985,64 @@ function PreQualLetter({ user, scenario, isInternal }) {
     );
   };
 
+  const [pdfLoading, setPdfLoading] = React.useState(false);
+
+  const downloadPDF = async () => {
+    const page1El = document.getElementById("pq-letter-page1");
+    const page2El = document.getElementById("pq-letter-page2");
+    if (!page1El || !window.html2canvas || !window.jspdf) return;
+    setPdfLoading(true);
+    try {
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ orientation: "portrait", unit: "in", format: "letter" });
+      const pageW = 8.5;
+      const pageH = 11;
+      const margin = 0.4;
+      const contentW = pageW - margin * 2;
+      const maxH = pageH - margin * 2;
+
+      const renderPage = async (el) => {
+        const canvas = await window.html2canvas(el, {
+          scale: 2, useCORS: true, backgroundColor: "#ffffff", width: 760, windowWidth: 760,
+        });
+        const imgData = canvas.toDataURL("image/png");
+        const naturalH = (canvas.height / canvas.width) * contentW;
+        const fitW = naturalH <= maxH ? contentW : contentW * (maxH / naturalH);
+        const fitH = naturalH <= maxH ? naturalH : maxH;
+        const xOffset = margin + (contentW - fitW) / 2;
+        return { imgData, fitW, fitH, xOffset };
+      };
+
+      const p1 = await renderPage(page1El);
+      pdf.addImage(p1.imgData, "PNG", p1.xOffset, margin, p1.fitW, p1.fitH);
+
+      if (page2El) {
+        pdf.addPage("letter", "portrait");
+        const p2 = await renderPage(page2El);
+        pdf.addImage(p2.imgData, "PNG", p2.xOffset, margin, p2.fitW, p2.fitH);
+      }
+
+      const borrowerName = activeData.applicantLine || "PreQual";
+      pdf.save(borrowerName.replace(/\s+/g, "-") + "-PQ-Letter.pdf");
+    } catch(e) {
+      console.error("PDF download error:", e);
+    }
+    setPdfLoading(false);
+  };
+
   const printLetter = () => {
     const el = document.getElementById("pq-letter-print");
     if (!el) return;
     const css = [
       "@page { size: letter; margin: 0; }",
       "html, body { margin: 0; padding: 0; width: 8.5in; }",
-      "body { padding: 0.45in 0.55in; box-sizing: border-box; }",
+      "body { padding: 0.35in 0.45in; box-sizing: border-box; }",
       "* { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; }",
       "a { color: #1B8A5A !important; }",
-      "#pq-letter-print { overflow: visible !important; border: none !important; border-radius: 0 !important; }"
+      "#pq-letter-print { overflow: visible !important; border: none !important; border-radius: 0 !important; }",
+      ".mtk-prequal-letter { zoom: 0.93; }",
+      "#pq-letter-page1 { page-break-after: always; }",
+      "#pq-letter-page2 { page-break-before: always; }"
     ].join(" ");
     const baseHref = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
     const win = window.open("", "_blank", "width=900,height=750");
@@ -757,21 +1064,21 @@ function PreQualLetter({ user, scenario, isInternal }) {
             )
           : React.createElement("div", null),
         React.createElement("div", { style: { display: "flex", gap: "8px", flexWrap: "wrap" } },
-          React.createElement(Button, { label: "📧 Email Letter", small: true, primary: true, onClick: () => {
-            const snap = displaySnap || liveData;
-            setSendModal(snap);
-            setRecipientName("");
-            setRecipientEmail("");
-            setRecipientType("Realtor");
-            setSendNote("");
-            setCreateContact(false);
-          }}),
-          isInternal && React.createElement(Button, { label: "🖨️ Save / Print PDF", small: true, onClick: () => printLetter() }),
+          isInternal && React.createElement(Button, { label: "🖨️ Print PDF", small: true, onClick: () => printLetter() }),
+          React.createElement(Button, { label: pdfLoading ? "Generating…" : "⬇️ Download PDF", small: true, primary: true, onClick: downloadPDF, disabled: pdfLoading }),
           React.createElement(Button, { label: "Close Preview", small: true, onClick: () => { setShowLetter(false); setDisplaySnap(null); } })
         )
       ),
       React.createElement("div", { id: "pq-letter-print", style: { border: "1px solid " + COLORS.border, borderRadius: "10px", overflow: "hidden" } },
-        letterContent(activeData)
+        React.createElement("div", { id: "pq-letter-page1" }, letterContent(activeData)),
+        letterPage2Content(activeData)
+          ? React.createElement(React.Fragment, null,
+              React.createElement("div", { style: { height: "1px", background: COLORS.border, margin: "0 24px" } }),
+              React.createElement("div", { style: { textAlign: "center", fontSize: "10px", color: "#bbb", padding: "6px 0", background: "#f9f9f9", letterSpacing: "0.5px" } }, "— Page 2 —"),
+              React.createElement("div", { style: { height: "1px", background: COLORS.border, margin: "0 24px 0" } }),
+              React.createElement("div", { id: "pq-letter-page2" }, letterPage2Content(activeData))
+            )
+          : null
       )
     ),
     letterHistorySection(),

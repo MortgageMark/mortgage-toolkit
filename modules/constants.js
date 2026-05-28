@@ -11,7 +11,8 @@ const MTK_PREFIX = "mtk_";
 // lines 140-143
 const CALC_KEY_PREFIXES = [
   "pc_","ra_","fs_","mc_","be_","pq_","fc_","af_","am_","dti_",
-  "rvb_","sns_","biw_","cce_","hel_","lpc_","bud_","ohlc_","rw_","fly_","brand_","abt_","wb_","te_",
+  "rvb_","sns_","biw_","cce_","hel_","lpc_","bud_","ohlc_","rw_","fly_","brand_","abt_","wb_","te_","ir_","bld_","llpa_",
+  "bb_","tgt_",
   "uid"  // scenario unique ID — must be last so "uid" doesn't shadow "uid_*" prefixes
 ];
 
@@ -25,7 +26,12 @@ const CALC_SECTION_NAMES = {
   "lpc_": "Loan Product Compare", "bud_": "Budget", "ohlc_": "Overhead",
   "rw_": "Refinance", "fly_": "Flyer", "brand_": "Branding", "abt_": "About",
   "wb_": "Wealth Builder",
-  "te_": "Title Endorsements"
+  "te_": "Title Endorsements",
+  "ir_": "Interest Rates",
+  "bld_": "Builder",
+  "llpa_": "LLPA",
+  "bb_": "Builder's Overview",
+  "tgt_": "Target Payment"
 };
 
 // line 425
@@ -122,6 +128,31 @@ const PMI_ESSENT = {
   effective: "Dec 18, 2017",
 };
 
+// MGIC Borrower-Paid Single Premium rates (% of loan amount)
+// Primary residence, purchase, fixed-rate, standard coverage
+// FICO buckets match PMI_FICO_BUCKETS: [760, 740, 720, 700, 680, 660, 640, 620]
+const SPMI_RATES = [
+  { ltvMin: 95.01, ltvMax: 97,  rates: [1.19, 1.44, 1.75, 2.10, 2.49, 3.33, 3.68, 4.19] },
+  { ltvMin: 90.01, ltvMax: 95,  rates: [0.71, 0.87, 1.06, 1.28, 1.53, 2.03, 2.28, 2.63] },
+  { ltvMin: 85.01, ltvMax: 90,  rates: [0.46, 0.56, 0.67, 0.82, 0.99, 1.36, 1.57, 1.81] },
+  { ltvMin: 80.01, ltvMax: 85,  rates: [0.25, 0.30, 0.37, 0.45, 0.56, 0.76, 0.87, 0.97] },
+];
+
+function lookupSpmiRate(ltv, fico) {
+  var buckets = PMI_FICO_BUCKETS;
+  var ficoIdx = buckets.length - 1;
+  for (var i = 0; i < buckets.length; i++) {
+    if (fico >= buckets[i]) { ficoIdx = i; break; }
+  }
+  for (var j = 0; j < SPMI_RATES.length; j++) {
+    var row = SPMI_RATES[j];
+    if (ltv > row.ltvMin && ltv <= row.ltvMax) {
+      return row.rates[ficoIdx] / 100;
+    }
+  }
+  return null;
+}
+
 // lines 612-618
 const COLORS_DARK = {
   navy: "#8BB8D4", navyLight: "#A0CBE3", blue: "#48A0CE", blueLight: "#1A2E3C",
@@ -154,6 +185,7 @@ const MODULE_DEFS = [
   { id: "locks",     label: "Rate Locks",           icon: "🔒" },
   { id: "afford",    label: "Affordability",        icon: "🏠" },
   { id: "amort",     label: "Amortization",         icon: "📅" },
+  { id: "recast",    label: "Loan Recast",          icon: "💸" },
   { id: "dti",       label: "DTI Calculator",       icon: "📐" },
   { id: "rentvsbuy", label: "Rent vs Buy",          icon: "🏘️" },
   { id: "sellernet", label: "Seller Net Sheet",     icon: "💵" },
@@ -256,6 +288,8 @@ const STATE_APPR_RATES = {
   WI:4.5, WY:3.5, DC:4.5,
 };
 
+window.SPMI_RATES       = SPMI_RATES;
+window.lookupSpmiRate   = lookupSpmiRate;
 window.MTK_PREFIX       = MTK_PREFIX;
 window.CALC_KEY_PREFIXES = CALC_KEY_PREFIXES;
 window.CALC_SECTION_NAMES = CALC_SECTION_NAMES;
@@ -272,3 +306,154 @@ window.FHA_LIMITS         = FHA_LIMITS;
 window.LEAD_STATUSES      = LEAD_STATUSES;
 window.LOAN_PURPOSES      = LOAN_PURPOSES;
 window.STATE_APPR_RATES   = STATE_APPR_RATES;
+
+// ── Affordable / DPA programs ────────────────────────────────────────────────
+// reducedMI: true → use cov:25 rows in PMI lookup tables (HomeReady / HFA coverage)
+// dpa: true      → program provides Down Payment Assistance (show DPA fields in UI)
+// maxDpaPct      → max DPA as % of loan amount (informational default, not enforced)
+const DPA_PROGRAMS = [
+  { id: "none",        label: "None",                              reducedMI: false, dpa: false },
+  { id: "homeready",   label: "HomeReady (Fannie Mae)",            reducedMI: true,  dpa: false },
+  { id: "homeposs",    label: "Home Possible (Freddie Mac)",       reducedMI: true,  dpa: false },
+  { id: "hfa_fannie",  label: "HFA Preferred (Fannie Mae)",        reducedMI: true,  dpa: false },
+  { id: "hfa_freddie", label: "HFA Advantage (Freddie Mac)",       reducedMI: true,  dpa: false },
+  { id: "tsahc", label: "TSAHC (TX Heroes / Home Sweet TX)", reducedMI: true, dpa: true, maxDpaPct: 5,
+    programFees: [
+      { key: "compliance", label: "TSAHC Compliance Fee", amount: 250 },
+      { key: "funding",    label: "TSAHC Funding Fee",    amount: 200 },
+      { key: "taxcert",    label: "Tax Cert Service Fee",  amount: 85  },
+    ],
+    requiredOriginationPct: 1.0,
+    extraOriginationFico: { ficoMin: 620, ficoMax: 639, addPct: 0.25 },
+  },
+  { id: "seth",        label: "SETH 5 Star / MyHome Plus",         reducedMI: true,  dpa: true,  maxDpaPct: 5,   bondFee: 350 },
+  { id: "tdhca", label: "TDHCA My First/Choice TX Home", reducedMI: true, dpa: true, maxDpaPct: 5,
+    programFees: [
+      { key: "compliance", label: "Compliance File Review Fee (Hilltop)", amount: 225 },
+      { key: "purchfile",  label: "Purchase File Funding Fee (TMS)",      amount: 319 },
+      { key: "taxsvc",     label: "Tax Service Fee (TMS)",                amount: 80  },
+      { key: "fraud",      label: "Fraud Prevention (TMS)",               amount: 20  },
+      { key: "flood",      label: "Life of Loan Flood Fee (TMS)",         amount: 15  },
+    ],
+    optionalProgramFees: [
+      { key: "mcc_combo",      label: "MCC Combo Issuance Fee (Hilltop)",       amount: 400  },
+      { key: "mcc_standalone", label: "MCC Stand-Alone Issuance Fee (Hilltop)", amount: 1000 },
+    ],
+    mhuFundingPct: 0.50,
+    requiredOriginationPct: 0.50,
+    originationLabel: "Max Origination",
+  },
+  { id: "chenoa",      label: "Chenoa Fund",                       reducedMI: true,  dpa: true,  maxDpaPct: 3.5, bondFee: 350 },
+];
+window.DPA_PROGRAMS = DPA_PROGRAMS;
+
+// ── Loan Warning Rules ────────────────────────────────────────────────────────
+// Each rule: { id, label, severity, message, condition(state) }
+// severity: "error" (red) | "warning" (amber)
+// condition receives: { loanProgram, occupancy, propType, loanAmount, homePrice, ltv, fico, pcState, purpose }
+// LOs can suppress individual rules by ID via Settings → Warnings.
+const WARNING_RULES = [
+  {
+    id: "conv-investment-ltv",
+    label: "Conv. Investment > 80% LTV",
+    severity: "warning",
+    message: "Conventional investment properties typically require 20% down (max 80% LTV). Verify program guidelines before proceeding.",
+    condition: ({ loanProgram, occupancy, ltv }) =>
+      loanProgram === "conventional" && occupancy === "investment" && ltv > 80,
+  },
+  {
+    id: "conv-2-4unit-ltv",
+    label: "Conv. 2–4 Unit > 75% LTV",
+    severity: "warning",
+    message: "2–4 unit properties on conventional loans typically require 25% down (max 75% LTV).",
+    condition: ({ loanProgram, propType, ltv }) =>
+      loanProgram === "conventional" && ["duplex", "3plex", "4plex"].includes(propType) && ltv > 75,
+  },
+  {
+    id: "fha-non-primary",
+    label: "FHA Non-Owner Occupied",
+    severity: "error",
+    message: "FHA loans require owner-occupied primary residences. Investment and vacation properties are not eligible.",
+    condition: ({ loanProgram, occupancy }) =>
+      loanProgram === "fha" && occupancy !== "primary",
+  },
+  {
+    id: "va-non-primary",
+    label: "VA Non-Owner Occupied",
+    severity: "error",
+    message: "VA loans are for primary residences only. Investment and vacation properties are not eligible.",
+    condition: ({ loanProgram, occupancy }) =>
+      loanProgram === "va" && occupancy !== "primary",
+  },
+  {
+    id: "usda-non-primary",
+    label: "USDA Non-Owner Occupied",
+    severity: "error",
+    message: "USDA loans require owner-occupied primary residences. Investment and vacation properties are not eligible.",
+    condition: ({ loanProgram, occupancy }) =>
+      loanProgram === "usda" && occupancy !== "primary",
+  },
+  {
+    id: "conforming-exceeded",
+    label: "Conforming Limit Exceeded",
+    severity: "warning",
+    message: "Loan amount exceeds the conventional conforming limit for this state. Consider selecting the Jumbo loan program.",
+    condition: ({ loanProgram, loanAmount, pcState }) => {
+      if (loanProgram !== "conventional") return false;
+      const limit = (window.CONFORMING_LIMITS || {})[pcState] || 806500;
+      return loanAmount > 0 && loanAmount > limit;
+    },
+  },
+  {
+    id: "fha-limit-exceeded",
+    label: "FHA Loan Limit Exceeded",
+    severity: "warning",
+    message: "Loan amount exceeds the FHA loan limit for this area. The borrower may not qualify for FHA financing at this amount.",
+    condition: ({ loanProgram, loanAmount, pcState }) => {
+      if (loanProgram !== "fha") return false;
+      const limit = (window.FHA_LIMITS || {})[pcState] || 524225;
+      return loanAmount > 0 && loanAmount > limit;
+    },
+  },
+  {
+    id: "fha-fico-low",
+    label: "FHA Credit Score < 580",
+    severity: "warning",
+    message: "FHA requires a minimum 580 credit score for 3.5% down. Borrowers with scores 500–579 must put 10% down.",
+    condition: ({ loanProgram, fico }) =>
+      loanProgram === "fha" && fico > 0 && fico < 580,
+  },
+  {
+    id: "conv-fico-low",
+    label: "Conv. Credit Score < 620",
+    severity: "warning",
+    message: "Conventional loans typically require a minimum 620 credit score. This file may not meet agency guidelines.",
+    condition: ({ loanProgram, fico }) =>
+      loanProgram === "conventional" && fico > 0 && fico < 620,
+  },
+  {
+    id: "jumbo-ltv-high",
+    label: "Jumbo > 80% LTV",
+    severity: "warning",
+    message: "Most jumbo programs require 20% down (max 80% LTV). Verify specific guidelines with your jumbo lender.",
+    condition: ({ loanProgram, ltv }) =>
+      loanProgram === "jumbo" && ltv > 80,
+  },
+  {
+    id: "va-fico-advisory",
+    label: "VA Credit Score < 580",
+    severity: "warning",
+    message: "VA has no official minimum credit score, but most lenders require 580–620. Verify with your investor.",
+    condition: ({ loanProgram, fico }) =>
+      loanProgram === "va" && fico > 0 && fico < 580,
+  },
+  {
+    id: "conv-vacation-ltv",
+    label: "Conv. Second Home > 90% LTV",
+    severity: "warning",
+    message: "Second/vacation home conventional loans are typically capped at 90% LTV. Verify program eligibility.",
+    condition: ({ loanProgram, occupancy, ltv }) =>
+      loanProgram === "conventional" && occupancy === "vacation" && ltv > 90,
+  },
+];
+window.WARNING_RULES = WARNING_RULES;

@@ -5,6 +5,7 @@ const useLocalStorage = window.useLocalStorage;
 // All calculator components (loaded before this file):
 const PaymentCalculator = window.PaymentCalculator;
 const RefinanceAnalyzer = window.RefinanceAnalyzer;
+const RefinanceAnalysis = window.RefinanceAnalysis;
 const FeeSheetGenerator = window.FeeSheetGenerator;
 const MortgageComparison = window.MortgageComparison;
 const BreakEvenCalculator = window.BreakEvenCalculator;
@@ -23,7 +24,17 @@ const OpenHouseLeadCapture = window.OpenHouseLeadCapture;
 const RateWatchDashboard = window.RateWatchDashboard;
 const FlyerGenerator = window.FlyerGenerator;
 const WealthBuilder = window.WealthBuilder;
+const RecastCalculator = window.RecastCalculator;
 const TitleEndorsements = window.TitleEndorsements;
+const InterestRates = window.InterestRates;
+const BuilderTab = window.BuilderTab;
+const BuyDownsTab = window.BuyDownsTab;
+const PermBuydownTab = window.PermBuydownTab;
+const TargetPaymentTab = window.TargetPaymentTab;
+const PriceVsIncentiveTab = window.PriceVsIncentiveTab;
+const BuyerQualifierTab  = window.BuyerQualifierTab;
+const BuildersBuyerTab  = window.BuildersBuyerTab;
+const LLPATab = window.LLPATab;
 const SettingsPanel = window.SettingsPanel;
 const LOSelector = window.LOSelector;
 const AdminPanel = window.AdminPanel;
@@ -34,6 +45,9 @@ const saveContactToSupabase = window.saveContactToSupabase;
 const fetchAuditLog = window.fetchAuditLog;
 const LEAD_STATUSES = window.LEAD_STATUSES;
 const NotifyClientButton = window.NotifyClientButton;
+const AppHeader = window.AppHeader;
+const useSyncSession = window.useSyncSession || function () { return { connected: false, mode: "exploring", setMode: function () {}, peerConnected: false, peerName: "" }; };
+const LiveSessionBar = window.LiveSessionBar;
 
 // Theme / style globals (loaded before this file via constants.js or hooks.js):
 const COLORS = window.COLORS;
@@ -44,15 +58,26 @@ const ThemeContext = window.ThemeContext;
 // MODULES array with component refs — built here since all components are loaded
 const MODULES = [
   // ── Primary tabs (visible to all roles in order) ──
-  { id: "refi",       label: "Refi Analyzer",        icon: "\uD83D\uDD04", component: RefinanceAnalyzer },
-  { id: "payment",    label: "Payment Calculator", icon: "\uD83D\uDCB0", component: PaymentCalculator },
-  { id: "amort",      label: "Amortization",        icon: "\uD83D\uDCC5", component: AmortizationSchedule },
-  { id: "dti",        label: "DTI Calculator",       icon: "\uD83D\uDCD0", component: DTICalculator },
-  { id: "fees",       label: "Fee Sheet",            icon: "\uD83D\uDCCB", component: FeeSheetGenerator },
-  { id: "compare",    label: "Compare Loans",        icon: "\u2696\uFE0F", component: MortgageComparison },
-  { id: "prequal",    label: "Pre-Qual Letter",      icon: "\u2709\uFE0F", component: PreQualLetter },
-  { id: "sellernet",  label: "Seller Net Sheet",     icon: "\uD83D\uDCB5", component: SellerNetSheet },
-  { id: "rentvsbuy",  label: "Rent vs Buy",          icon: "\uD83C\uDFD8\uFE0F", component: RentVsBuyCalculator },
+  { id: "refi",         label: "Refi: Existing Loan",    icon: "\uD83D\uDD04", component: RefinanceAnalyzer },
+  { id: "payment",      label: "Payment Calculator",     icon: "\uD83D\uDD22", component: PaymentCalculator },
+  { id: "refi-analysis",label: "Refi: Analysis",         icon: "\uD83D\uDCCA", component: RefinanceAnalysis },
+  { id: "amort",        label: "Amortization",           icon: "\uD83D\uDCC5", component: AmortizationSchedule },
+  { id: "recast",       label: "Loan Recast",            icon: "\uD83D\uDCB8", component: RecastCalculator },
+  { id: "dti",          label: "DTI Calculator",         icon: "\uD83D\uDCD0", component: DTICalculator },
+  { id: "fees",         label: "Fee Sheet",              icon: "\uD83D\uDCB2", component: FeeSheetGenerator },
+  { id: "compare",      label: "Compare Loans",          icon: "\u2696\uFE0F", component: MortgageComparison },
+  { id: "prequal",      label: "Pre-Qual Letter",        icon: "\u2705",       component: PreQualLetter },
+  { id: "sellernet",    label: "Seller Net Sheet",       icon: "\uD83D\uDCB0", component: SellerNetSheet },
+  { id: "builder",      label: "Builder",                icon: "\ud83c\udfe0", component: BuilderTab },
+  { id: "buydowns",     label: "Temp Buydown",           icon: "\uD83D\uDCC9", component: BuyDownsTab },
+  { id: "permbuyd",     label: "Perm Buydown",           icon: "\u2B07\uFE0F", component: PermBuydownTab },
+  { id: "targetpmt",    label: "Target Payment",         icon: "\uD83C\uDFAF", component: TargetPaymentTab },
+  { id: "pricevsinc",   label: "Price vs. Incentive",    icon: "\u2696\uFE0F", component: PriceVsIncentiveTab },
+  { id: "buyerqual",    label: "Buyer Qualifier",        icon: "\u2705",       component: BuyerQualifierTab },
+  { id: "bbbuyer",      label: "Builder's Overview",     icon: "\ud83c\udfe0", component: BuildersBuyerTab },
+  { id: "interestrates",label: "Interest Rates",         icon: "%",            component: InterestRates },
+  { id: "rentvsbuy",    label: "Rent vs Buy",            icon: "\uD83C\uDFD8\uFE0F", component: RentVsBuyCalculator },
+  { id: "titleendorsements", label: "Title Endorsements",icon: "\uD83D\uDCDC", component: TitleEndorsements },
   // ── Admin-only tabs (second row) ──
   { id: "breakeven",  label: "Break-Even",           icon: "\uD83D\uDCCA", component: BreakEvenCalculator },
   { id: "locks",      label: "Rate Locks",            icon: "\uD83D\uDD12", component: ForwardCommitment },
@@ -65,12 +90,25 @@ const MODULES = [
   { id: "flyer",      label: "Flyer Generator",       icon: "\uD83D\uDCF0", component: FlyerGenerator },
   { id: "ratewatch",  label: "Rate Watch",            icon: "\uD83D\uDCC8", component: RateWatchDashboard },
   { id: "wealthbuilder",    label: "Wealth Builder",      icon: "\uD83C\uDFE6", component: WealthBuilder },
-  { id: "titleendorsements", label: "Title Endorsements", icon: "\uD83D\uDCCB", component: TitleEndorsements },
+  { id: "llpa",             label: "LLPA",                icon: "\uD83D\uDCCA", component: LLPATab },
 ];
 
 // These tabs are hidden from everyone except admins.
 // For admins they appear in a separate shaded row beneath the primary tabs.
-const ADMIN_ONLY_MODULE_IDS = ["breakeven", "locks", "afford", "closing", "heloc", "programs", "budget", "openhouse", "flyer", "ratewatch", "wealthbuilder", "rentvsbuy", "titleendorsements"];
+const ADMIN_ONLY_MODULE_IDS = ["breakeven", "locks", "afford", "closing", "heloc", "programs", "budget", "openhouse", "flyer", "ratewatch", "wealthbuilder", "rentvsbuy", "llpa", "pricevsinc", "buyerqual"];
+
+// Visible to internal (LO) + admin users only — appear in the primary tab bar, not shown to borrowers/realtors.
+const INTERNAL_MODULE_IDS = ["builder", "buydowns", "permbuyd", "targetpmt", "bbbuyer", "interestrates"];
+
+// All tabs that a borrower could potentially see (base set + grantable extras).
+// Used by the "Client sees" strip so the LO can tell at a glance what's shared.
+const CLIENT_TAB_IDS = ["payment", "fees", "breakeven", "amort", "recast", "dti", "prequal", "sellernet", "rentvsbuy", "refi", "refi-analysis", "compare"];
+
+// These tabs are grouped under the "Internal" section header in the left sidebar.
+const INTERNAL_SIDEBAR_IDS = ["interestrates", "titleendorsements"];
+
+// These tabs are grouped under the "Builder" section header in the left sidebar.
+const BUILDER_SIDEBAR_IDS = ["builder", "buydowns", "permbuyd", "targetpmt", "bbbuyer"];
 
 function fmtPhone(val) {
   if (!val) return "";
@@ -95,12 +133,6 @@ function ScenarioContactPanel({ contactId, scenarioId, scenario, darkMode, color
   const [newNote, setNewNote] = useState("");
   const [addingNote, setAddingNote] = useState(false);
   const [auditLog, setAuditLog] = useState([]);
-
-  // ── Co-Borrower (moved from AboutTab) ──
-  const [c2fn, setC2fn] = useLocalStorage("abt_c2fn", "");
-  const [c2ln, setC2ln] = useLocalStorage("abt_c2ln", "");
-  const [c2OnLoan, setC2OnLoan] = useLocalStorage("abt_c2loan", false);
-  const [c2OnTitle, setC2OnTitle] = useLocalStorage("abt_c2title", false);
 
   useEffect(() => {
     if (!contactId) { setLoading(false); return; }
@@ -384,55 +416,6 @@ function ScenarioContactPanel({ contactId, scenarioId, scenario, darkMode, color
           </div>
         </div>
 
-        {/* Co-Borrower */}
-        <div style={{ ...cardStyle, flex: 1, marginBottom: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: c.navy || COLORS.navy, marginBottom: 14 }}>
-            Co-Borrower
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
-            <div>
-              <label style={labelStyle}>First Name</label>
-              <input
-                type="text"
-                value={c2fn}
-                onChange={e => setC2fn(e.target.value)}
-                placeholder="Co-borrower first name…"
-                style={inputStyle}
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>Last Name</label>
-              <input
-                type="text"
-                value={c2ln}
-                onChange={e => setC2ln(e.target.value)}
-                placeholder="Co-borrower last name…"
-                style={inputStyle}
-              />
-            </div>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13, color: c.text || (darkMode ? "#E0EAF0" : "#1B2A3B") }}>
-              <input
-                type="checkbox"
-                checked={!!c2OnLoan}
-                onChange={e => setC2OnLoan(e.target.checked)}
-                style={{ width: 16, height: 16, accentColor: COLORS.blue, cursor: "pointer" }}
-              />
-              Will Co-Borrower be on the Loan?
-            </label>
-            <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13, color: c.text || (darkMode ? "#E0EAF0" : "#1B2A3B") }}>
-              <input
-                type="checkbox"
-                checked={!!c2OnTitle}
-                onChange={e => setC2OnTitle(e.target.checked)}
-                style={{ width: 16, height: 16, accentColor: COLORS.blue, cursor: "pointer" }}
-              />
-              Will Co-Borrower be on Title?
-            </label>
-          </div>
-        </div>
-
       </div>
 
       {/* ── Permanent Notes ── */}
@@ -525,7 +508,8 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
   const [userRole, setUserRole] = useLocalStorage("app_role", "admin");
   const [darkMode, setDarkMode] = useLocalStorage("app_dark", false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [brandName] = useLocalStorage("brand_name", "Mortgage Toolkit");
+  const [settingsInitialTab, setSettingsInitialTab] = useState(null);
+  const [brandName] = useLocalStorage("brand_name", "Home Loan Toolkit");
   const [brandSub] = useLocalStorage("brand_sub", "MORTGAGE MARK \u00B7 CMG HOME LOANS \u00B7 NMLS #729612");
   const [brandLogo] = useLocalStorage("brand_logo", "");
   const [brandColor] = useLocalStorage("brand_color", COLORS.navy);
@@ -534,9 +518,32 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
   // Internal person: which modules to show to borrower
   const allModuleIds = MODULES.map(m => m.id);
   const [enabledModules, setEnabledModules] = useLocalStorage("app_enabled_mods", allModuleIds);
-  const [showModuleSelector, setShowModuleSelector] = useState(false);
+  const [pcProgram] = useLocalStorage("pc_prog", "conventional");
+  const [pcPurpose] = useLocalStorage("pc_purpose", "purchase");
   const [showAdmin, setShowAdmin] = useState(false);
   const [headerContact, setHeaderContact] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [navCollapsed, setNavCollapsed] = useLocalStorage("app_nav_collapsed", false);
+  const [showLenderPanel, setShowLenderPanel] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+  // Prevent the browser from scrolling the outer page behind the 100vh container.
+  // Without this, on mobile the PersistentFooter (rendered as a sibling in App.js)
+  // creates extra body height that the browser can scroll to, causing the stuck-footer bug.
+  useEffect(() => {
+    const prevBody = document.body.style.overflow;
+    const prevHtml = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevBody;
+      document.documentElement.style.overflow = prevHtml;
+    };
+  }, []);
   const isInternal = (function() {
     if (!user) return false;
     if (user.isInternal === true) return true;
@@ -549,10 +556,24 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
   // Admin-only features (second row, purpose filter bypass) only active when admin is in Admin View
   const showAdminTabs = isAdmin && userRole === "admin";
 
+  // ── Live Session Sync ─────────────────────────────────────────────────────
+  const syncScenarioId  = activeScenario && activeScenario.id ? activeScenario.id : null;
+  const syncIsLO        = isInternal;
+  const syncDisplayName = user && user.name ? user.name : (syncIsLO ? "Loan Officer" : "Borrower");
+  const { connected: syncConnected, mode: syncMode, setMode: setSyncMode,
+          peerConnected: syncPeerConnected, peerName: syncPeerName,
+          inviteClient: syncInviteClient } =
+    useSyncSession(syncScenarioId, syncIsLO, syncDisplayName);
+  // Borrower is read-only in "agreed" mode — except on the Pre-Qual Letter tab
+  const syncReadOnly = syncMode === "agreed" && !syncIsLO && activeModule !== "prequal";
+
   const toggleModule = (id) => {
     setEnabledModules(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
   const toggleAll = (on) => { setEnabledModules(on ? allModuleIds : []); };
+  const toggleSection = (ids, on) => {
+    setEnabledModules(prev => on ? [...new Set([...prev, ...ids])] : prev.filter(id => !ids.includes(id)));
+  };
 
   // ── Shared Value Propagation ──────────────────────────────────────
   // When Payment Calculator values change, propagate to all other modules.
@@ -632,9 +653,10 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
   }, []);
 
   // ── Magic link: jump to the destination tab on first mount ──────────────────
-  // view.html stores the destination key in sessionStorage before redirecting here.
-  // Map destination keys → MODULES ids, then clear sessionStorage so it doesn't
-  // re-trigger on subsequent renders or page refreshes.
+  // On mount: navigate to the right default tab.
+  // Explicit view_dest (set by view.html before redirect) takes priority.
+  // Otherwise: purchases → Payment Calculator, refi scenarios → Refi: Existing Loan.
+  // Both cases are handled in one effect so view_dest isn't consumed before we can check it.
   useEffect(() => {
     var DEST_TO_MODULE = {
       fee_sheet:         "fees",
@@ -648,7 +670,11 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
     if (dest && DEST_TO_MODULE[dest]) {
       setActiveModule(DEST_TO_MODULE[dest]);
       try { sessionStorage.removeItem("mtk_view_dest"); } catch(e) {}
+      return; // explicit destination wins — skip loan_purpose default
     }
+    // No explicit destination — route by loan purpose
+    const lp = activeScenario?.loan_purpose || "";
+    setActiveModule(lp.startsWith("refi") ? "refi" : "payment");
   }, []); // empty deps — run once on mount only
 
   // Run propagation whenever the active tab changes (so destination tabs load fresh values)
@@ -664,13 +690,6 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
     };
     window.addEventListener("storage", handler);
     return () => window.removeEventListener("storage", handler);
-  }, [propagateSharedValues]);
-
-  // Propagation via custom event (for same-tab localStorage writes)
-  useEffect(() => {
-    const handler = () => propagateSharedValues();
-    window.addEventListener("mtk_propagated", handler);
-    return () => window.removeEventListener("mtk_propagated", handler);
   }, [propagateSharedValues]);
 
   // Handle ?tabs= URL param for shared links
@@ -692,30 +711,62 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
     if (!showAdminTabs) {
       mods = mods.filter(m => !ADMIN_ONLY_MODULE_IDS.includes(m.id));
     }
-    // Purpose-based tab filtering — applies whenever not in Admin View
-    if (!showAdminTabs) {
+    // Internal-only tabs (LO + Admin) — never shown to borrowers or realtors.
+    // Exception: builder role sees the Builder tab only.
+    if (!isInternal) {
+      const isBuilder = user && user.role === "builder";
+      mods = mods.filter(m => {
+        if (INTERNAL_MODULE_IDS.includes(m.id)) {
+          return isBuilder && (m.id === "builder" || m.id === "buydowns" || m.id === "permbuyd" || m.id === "targetpmt" || m.id === "bbbuyer");
+        }
+        return true;
+      });
+    }
+    // Purpose-based tab filtering — skipped entirely for admin users
+    if (!showAdminTabs && !isAdmin) {
       const loanPurpose = activeScenario?.loan_purpose || "purchase";
       const isRefi = loanPurpose.startsWith("refi");
       if (isRefi) {
-        mods = mods.filter(m => !["compare", "prequal", "sellernet", "rentvsbuy"].includes(m.id));
+        mods = mods.filter(m => !["compare", "prequal", "sellernet", "rentvsbuy", "builder"].includes(m.id));
       } else {
-        mods = mods.filter(m => m.id !== "refi");
+        mods = mods.filter(m => m.id !== "refi" && m.id !== "refi-analysis");
       }
     }
+    // Hide refi tabs when Payment Calculator is set to purchase
+    if (pcPurpose === "purchase") {
+      mods = mods.filter(m => m.id !== "refi" && m.id !== "refi-analysis");
+    }
+    // Hide purchase-only tabs when Payment Calculator is set to a refi
+    if (pcPurpose !== "purchase") {
+      mods = mods.filter(m => m.id !== "prequal" && m.id !== "sellernet");
+    }
+    // Recast is only available on conventional loans — FHA/VA/USDA don't allow recasts
+    if (!showAdminTabs && ["fha", "va", "usda"].includes(pcProgram)) {
+      mods = mods.filter(m => m.id !== "recast");
+    }
+    const CLIENT_TABS = ["payment", "amort", "dti", "fees", "compare", "prequal", "sellernet", "rentvsbuy", "refi", "refi-analysis"];
+    const BUILDER_TABS = [...CLIENT_TABS.filter(id => id !== "refi" && id !== "refi-analysis"), "builder", "buydowns", "permbuyd", "targetpmt", "bbbuyer"];
     return mods.filter(m => {
       if (user && user.role === "borrower") {
         const isPurchase = !activeScenario || !activeScenario.loan_purpose || (activeScenario.loan_purpose || "").startsWith("purchase") || activeScenario.loan_purpose === "purchase";
         const base = isPurchase
-          ? ["payment", "fees", "compare", "breakeven", "amort", "dti", "prequal", "sellernet"]
-          : ["payment", "fees", "compare", "breakeven", "amort"];
+          ? ["payment", "fees", "breakeven", "amort", "recast", "dti", "prequal", "sellernet"]
+          : ["payment", "fees", "breakeven", "amort"];
         const extra = Array.isArray(user.borrowerPermissions) ? user.borrowerPermissions : [];
         return base.concat(extra).includes(m.id);
       }
-      if (userRole === "client") return ["payment", "amort", "dti", "fees", "compare", "prequal", "sellernet", "rentvsbuy", "refi"].includes(m.id);
-      if (userRole === "realtor") return ["payment", "amort", "dti", "fees", "compare", "prequal", "sellernet", "rentvsbuy", "refi"].includes(m.id);
+      if (user && user.role === "realtor") {
+        const isOwnScenario = activeScenario && user.supabaseUser && activeScenario.createdBy === user.supabaseUser.id;
+        const realtorTabs = isOwnScenario ? CLIENT_TABS : CLIENT_TABS.filter(id => id !== "dti");
+        return realtorTabs.includes(m.id);
+      }
+      if (user && user.role === "builder") return BUILDER_TABS.includes(m.id);
+      if (userRole === "client") return CLIENT_TABS.includes(m.id);
+      if (userRole === "realtor") return CLIENT_TABS.includes(m.id);
+      if (userRole === "builder") return BUILDER_TABS.includes(m.id);
       return true;
     });
-  }, [user, userRole, isSharedView, urlTabs, isInternal, enabledModules, isAdmin, activeScenario, showAdminTabs]);
+  }, [user, userRole, isSharedView, urlTabs, isInternal, enabledModules, isAdmin, activeScenario, showAdminTabs, pcProgram, pcPurpose]);
 
   const ActiveComponent = MODULES.find(m => m.id === activeModule)?.component || (filteredModules[0]?.component || PaymentCalculator);
 
@@ -744,10 +795,48 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
     return () => clearInterval(intervalId);
   }, [user, activeScenario]);
 
-  // Auto-select first visible tab if current is hidden
-  // Skip for "contact_tab" — it's a special internal tab not in MODULES
+  // ── On-demand save triggered by calculators via mtk_save_scenario event ──
   useEffect(() => {
-    if (activeModule === "contact_tab") return;
+    if (!user || !user.supabaseUser || !activeScenario || !activeScenario.id) return;
+    const handleOnDemandSave = () => {
+      try {
+        const client = window._supabaseClient;
+        if (!client) return;
+        const calculationData = snapshotCalculatorData();
+        client.from("scenarios")
+          .update({ calculation_data: calculationData, updated_at: new Date().toISOString() })
+          .eq("id", activeScenario.id)
+          .then(function(res) { if (res.error) console.warn("MTK on-demand save failed:", res.error.message); })
+          .catch(function(err) { console.warn("MTK on-demand save error:", err); });
+      } catch (err) {
+        console.warn("MTK on-demand save exception:", err);
+      }
+    };
+    window.addEventListener("mtk_save_scenario", handleOnDemandSave);
+    return () => window.removeEventListener("mtk_save_scenario", handleOnDemandSave);
+  }, [user, activeScenario]);
+
+  // ── Save on page hide (tab switch, minimize, browser close) ────────────
+  useEffect(() => {
+    if (!user || !user.supabaseUser || !activeScenario || !activeScenario.id) return;
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        const client = window._supabaseClient;
+        if (!client) return;
+        const calculationData = snapshotCalculatorData();
+        client.from("scenarios")
+          .update({ calculation_data: calculationData, updated_at: new Date().toISOString() })
+          .eq("id", activeScenario.id);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [user, activeScenario]);
+
+  // Auto-select first visible tab if current is hidden
+  // Skip for "contact_tab" and "__modules__" — special tabs not in MODULES
+  useEffect(() => {
+    if (activeModule === "contact_tab" || activeModule === "__modules__") return;
     if (filteredModules.length > 0 && !filteredModules.find(m => m.id === activeModule)) {
       setActiveModule(filteredModules[0].id);
     }
@@ -773,10 +862,13 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
     : `linear-gradient(135deg, ${brandColor} 0%, ${brandColor}DD 50%, ${brandColor}AA 100%)`;
 
   // LO contact info — shown in header for borrower/client view only
-  const [loName]    = useLocalStorage("pq_lo",    "");
-  const [loPhone]   = useLocalStorage("pq_loph",  "");
-  const [loEmail]   = useLocalStorage("pq_loem",  "");
-  const [loWebsite] = useLocalStorage("pq_loweb", "");
+  const [loName]    = useLocalStorage("pq_lo",      "");
+  const [loPhone]   = useLocalStorage("pq_loph",    "");
+  const [loEmail]   = useLocalStorage("pq_loem",    "");
+  const [loWebsite] = useLocalStorage("pq_loweb",   "");
+  const [loNMLS]    = useLocalStorage("pq_lonmls",  "");
+  const [loTitle]   = useLocalStorage("pq_lotitle", "");
+  const [loCell]    = useLocalStorage("pq_locell",  "");
 
   const btnStyle = { padding: "6px 12px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.1)", color: "#fff", fontSize: 13, cursor: "pointer", fontFamily: font, display: "flex", alignItems: "center", gap: 4 };
 
@@ -839,7 +931,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
 
   return (
     <ThemeContext.Provider value={{ dark: darkMode, colors }}>
-    <div style={{ fontFamily: font, background: darkMode ? "linear-gradient(180deg, #1A2530 0%, #152028 100%)" : "linear-gradient(180deg, #F5F8FA 0%, #EDF2F5 100%)", minHeight: "100vh", transition: "background 0.3s" }}>
+    <div style={{ fontFamily: font, background: darkMode ? "linear-gradient(180deg, #1A2530 0%, #152028 100%)" : "linear-gradient(180deg, #F5F8FA 0%, #EDF2F5 100%)", height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden", transition: "background 0.3s" }}>
 
       {/* ── Print-only branded header ── */}
       <div className="mtk-print-only mtk-print-header">
@@ -851,111 +943,78 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
       </div>
 
       {/* ── Header ── */}
-      <div className="mtk-no-print" style={{ background: headerBg, padding: "20px 24px 16px", color: "#fff" }}>
-        <div className="mtk-header-flex" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <div className="mtk-no-print" style={{ background: headerBg, padding: "20px 24px 16px", color: "#fff", flexShrink: 0 }}>
+        <div className="mtk-header-flex" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          {/* Left: hamburger + title */}
+          <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 12, flex: 1, minWidth: 0 }}>
+            {isMobile && (
+              <button onClick={() => setSidebarOpen(true)} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 7, padding: "8px 10px", color: "#fff", fontSize: 20, cursor: "pointer", lineHeight: 1, flexShrink: 0 }}>&#9776;</button>
+            )}
             {headerContact ? (
-              <React.Fragment>
-                {/* Client avatar */}
-                <div style={{
-                  width: 44, height: 44, borderRadius: "50%", flexShrink: 0,
-                  background: "rgba(72,160,206,0.25)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 20, fontWeight: 800, color: COLORS.blue,
-                }}>
-                  {(headerContact.first_name || "?").charAt(0).toUpperCase()}
-                </div>
-                <div>
-                  {/* Client name — clickable link */}
-                  <div
+              <div style={{ minWidth: 0, overflow: "hidden" }}>
+                {/* Contact name */}
+                <div style={{ fontSize: isMobile ? 16 : 20, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <span
                     onClick={onOpenContact ? function() { onOpenContact(activeScenario.contact_id); } : undefined}
                     style={{
-                      fontSize: 20, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.2,
                       cursor: onOpenContact ? "pointer" : "default",
-                      display: "inline-block",
                       textDecoration: onOpenContact ? "underline" : "none",
                       textDecorationColor: "rgba(255,255,255,0.45)",
                       textUnderlineOffset: "3px",
                     }}
                   >
-                    {[headerContact.prefix, headerContact.first_name, headerContact.nickname ? "\u201C" + headerContact.nickname + "\u201D" : null, headerContact.last_name].filter(Boolean).join(" ") || "Unnamed Contact"}
-                  </div>
-                  {/* Phone + Email */}
-                  {(headerContact.phone_cell || headerContact.phone_work || headerContact.phone_home || headerContact.email_personal || headerContact.email_work) ? (
-                    <div style={{ display: "flex", gap: 16, marginTop: 3, fontSize: 12, opacity: 0.8, alignItems: "center" }}>
-                      {(headerContact.phone_cell || headerContact.phone_work || headerContact.phone_home) && (
-                        <span>{fmtPhone(headerContact.phone_cell || headerContact.phone_work || headerContact.phone_home)}</span>
-                      )}
-                      {(headerContact.email_personal || headerContact.email_work) && (
-                        <span>{headerContact.email_personal || headerContact.email_work}</span>
-                      )}
-                    </div>
-                  ) : null}
-                  {/* Scenario ID + Lead Status */}
-                  <div style={{ display: "flex", gap: 10, marginTop: 3, fontSize: 10, opacity: 0.6, alignItems: "center" }}>
-                    {activeScenario && activeScenario.clientName && (
-                      <span style={{ fontFamily: "monospace", letterSpacing: "0.04em" }}>
-                        {activeScenario.clientName}
-                      </span>
-                    )}
-                    {activeScenario && activeScenario.lead_status && activeScenario.lead_status !== "?" && (
-                      <span style={{ fontFamily: font }}>
-                        {activeScenario.clientName ? "\u00B7" : ""} {activeScenario.lead_status}
-                      </span>
-                    )}
-                  </div>
+                    {[headerContact.prefix, headerContact.first_name, headerContact.nickname ? "“" + headerContact.nickname + "”" : null, headerContact.last_name].filter(Boolean).join(" ") || "Unnamed Contact"}
+                  </span>
                 </div>
-              </React.Fragment>
+                {/* Scenario name — small line below contact name */}
+                {activeScenario && activeScenario.clientName && (
+                  <div style={{ fontSize: 11, opacity: 0.72, fontStyle: "italic", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: 1, fontFamily: font }}>
+                    {activeScenario.clientName}
+                  </div>
+                )}
+                {/* Lead Status */}
+                {activeScenario && activeScenario.lead_status && activeScenario.lead_status !== "?" && (
+                  <div style={{ display: "flex", gap: 10, marginTop: 2, fontSize: 10, opacity: 0.6, alignItems: "center" }}>
+                    <span style={{ fontFamily: font }}>{activeScenario.lead_status}</span>
+                  </div>
+                )}
+              </div>
             ) : (
               <React.Fragment>
-                {brandLogo ? (
+                {!isMobile && (brandLogo ? (
                   <img src={brandLogo} alt="Logo" style={{ height: 40, borderRadius: 8 }} onError={e => { e.target.style.display = "none"; }} />
                 ) : (
                   <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(72,160,206,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 800, color: COLORS.blue }}>
                     {brandName.charAt(0)}
                   </div>
-                )}
-                <div>
-                  <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em" }}>{brandName}</div>
-                  <div style={{ fontSize: 11, opacity: 0.6, letterSpacing: "0.06em" }}>{brandSub}</div>
+                ))}
+                <div style={{ minWidth: 0, overflow: "hidden" }}>
+                  <div style={{ fontSize: isMobile ? 17 : 22, fontWeight: 800, letterSpacing: "-0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{brandName}</div>
+                  {!isMobile && <div style={{ fontSize: 11, opacity: 0.6, letterSpacing: "0.06em" }}>{brandSub}</div>}
                 </div>
               </React.Fragment>
             )}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              {!isSharedView && (
-                <>
-                  {isInternal && user && user.role !== "borrower" && <button onClick={() => setShowModuleSelector(!showModuleSelector)} style={{ ...btnStyle, background: showModuleSelector ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.1)", fontSize: 13 }} title="Select borrower modules">Modules</button>}
-                  {isAdmin && React.createElement("button", {
-                    onClick: function() { setShowAdmin(true); },
-                    style: Object.assign({}, btnStyle, { fontSize: 13 }),
-                    title: "Team Administration"
-                  }, "\uD83D\uDC65")}
-                  {isAdmin && <button onClick={() => setSettingsOpen(true)} style={btnStyle} title="Settings">{"\u2699\uFE0F"}</button>}
-                  {isAdmin && isInternal && (
-                    <select value={userRole} onChange={(e) => setUserRole(e.target.value)} style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.1)", color: "#fff", fontSize: 11, fontWeight: 600, fontFamily: font, cursor: "pointer" }}>
-                      <option value="admin" style={{ color: "#333" }}>Admin View</option>
-                      <option value="lo" style={{ color: "#333" }}>Loan Officer</option>
-                      <option value="realtor" style={{ color: "#333" }}>Realtor Partner</option>
-                      <option value="client" style={{ color: "#333" }}>Client View</option>
-                    </select>
-                  )}
-                  <button onClick={() => setDarkMode(!darkMode)} style={btnStyle} title={darkMode ? "Switch to light mode" : "Switch to dark mode"}>
-                    {darkMode ? "\u2600\uFE0F" : "\uD83C\uDF19"}
-                  </button>
-                  {onOpenContact && <button onClick={function() { onOpenContact(null); }} style={{ ...btnStyle, background: "rgba(255,255,255,0.18)", fontWeight: 700 }} title="Go to Contacts">Contacts</button>}
-                  {onOpenProfile && <button onClick={onOpenProfile} style={{ ...btnStyle, background: "rgba(255,255,255,0.18)", fontWeight: 700 }} title="My Profile">👤 My Profile</button>}
-                  {onBackToScenarios && <button onClick={onBackToScenarios} style={{ ...btnStyle, background: "rgba(255,255,255,0.18)", fontWeight: 700 }} title="Back to Scenarios">Scenarios</button>}
-                  {NotifyClientButton && isInternal && activeScenario && activeScenario.contact_id && headerContact && (
-                    <NotifyClientButton
-                      scenario={activeScenario}
-                      contact={headerContact}
-                      activeModule={activeModule}
-                      user={user}
-                    />
-                  )}
-                  <button onClick={onLogout} style={{ ...btnStyle, fontSize: 13, opacity: 0.7 }} title="Logout">Log Out</button>
-                </>
+          {/* Right: profile circle — never shrinks */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              {!isSharedView && AppHeader && (
+                <AppHeader
+                  user={user}
+                  darkMode={darkMode}
+                  setDarkMode={setDarkMode}
+                  userRole={userRole}
+                  setUserRole={isAdmin && isInternal ? setUserRole : null}
+                  onContacts={onOpenContact ? function() { onOpenContact(null); } : null}
+                  onScenarios={onBackToScenarios || null}
+                  onMyProfile={onOpenProfile || null}
+                  onTeam={isAdmin ? function() { setShowAdmin(true); } : null}
+                  onTemplates={function() { setSettingsInitialTab(null); setSettingsOpen(true); }}
+                  onWarnings={isInternal ? function() { setSettingsInitialTab("warnings"); setSettingsOpen(true); } : null}
+                  onModules={isInternal ? function() { setActiveModule("__modules__"); } : null}
+                  onLogout={onLogout}
+                  isInternal={isInternal}
+                  isAdmin={isAdmin}
+                />
               )}
             </div>
         </div>
@@ -987,22 +1046,11 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
             )}
           </div>
         )}
-        {/* ── Primary tab row ── */}
-        <div className="mtk-tab-bar" style={{ display: "flex", gap: 4, marginTop: 16, overflowX: "auto", paddingBottom: 4 }}>
-          {isInternal && !isSharedView && activeScenario && activeScenario.contact_id && (
-            <button onClick={() => setActiveModule("contact_tab")} style={{
-              padding: "10px 16px", borderRadius: 8, cursor: "pointer",
-              fontSize: 12, fontWeight: 600, fontFamily: font, whiteSpace: "nowrap",
-              background: activeModule === "contact_tab" ? "rgba(255,255,255,0.2)" : "transparent",
-              color: activeModule === "contact_tab" ? "#fff" : "rgba(255,255,255,0.7)",
-              border: activeModule === "contact_tab" ? "none" : "1px dashed rgba(255,255,255,0.35)",
-              transition: "all 0.2s",
-            }}>{"\uD83D\uDC64"} Contact Notes</button>
-          )}
+        <div style={{ display: "none" }}>
           {filteredModules.filter(m => !ADMIN_ONLY_MODULE_IDS.includes(m.id)).map((m) => (
-            <button key={m.id} onClick={() => setActiveModule(m.id)} style={{
+            <button key={m.id} data-tab-active={activeModule === m.id ? "true" : undefined} onClick={() => setActiveModule(m.id)} style={{
               padding: "10px 16px", borderRadius: 8, border: "none", cursor: "pointer",
-              fontSize: 12, fontWeight: 600, fontFamily: font, whiteSpace: "nowrap",
+              fontSize: 12, fontWeight: 600, fontFamily: font, whiteSpace: "nowrap", flexShrink: 0,
               background: activeModule === m.id ? "rgba(255,255,255,0.2)" : "transparent",
               color: activeModule === m.id ? "#fff" : "rgba(255,255,255,0.6)",
               transition: "all 0.2s",
@@ -1015,7 +1063,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
             {filteredModules.filter(m => ADMIN_ONLY_MODULE_IDS.includes(m.id)).map((m) => (
               <button key={m.id} onClick={() => setActiveModule(m.id)} style={{
                 padding: "7px 13px", borderRadius: 6, border: "none", cursor: "pointer",
-                fontSize: 11, fontWeight: 600, fontFamily: font, whiteSpace: "nowrap",
+                fontSize: 11, fontWeight: 600, fontFamily: font, whiteSpace: "nowrap", flexShrink: 0,
                 background: activeModule === m.id ? "rgba(255,255,255,0.18)" : "transparent",
                 color: activeModule === m.id ? "#fff" : "rgba(255,255,255,0.45)",
                 transition: "all 0.2s",
@@ -1025,47 +1073,200 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
         )}
       </div>
 
-      {/* ── Internal Module Selector Panel ── */}
-      {isInternal && showModuleSelector && (
-        <div className="mtk-no-print" style={{ padding: "16px 24px", background: darkMode ? "#0D1B26" : "#EDF4FA", borderBottom: `1px solid ${darkMode ? "#1E3040" : "#D1E3F0"}` }}>
-          <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: colors.navy, fontFamily: font }}>{"\uD83D\uDCCB"} Module Selector</div>
-                <div style={{ fontSize: 11, color: colors.gray, fontFamily: font }}>Choose which tabs the borrower will see when they log in.</div>
-              </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => toggleAll(true)} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${colors.border || "#D1D9E0"}`, background: colors.bgAlt || "#F5F8FA", color: colors.navy, fontSize: 11, fontWeight: 600, fontFamily: font, cursor: "pointer" }}>Select All</button>
-                <button onClick={() => toggleAll(false)} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${colors.border || "#D1D9E0"}`, background: colors.bgAlt || "#F5F8FA", color: colors.navy, fontSize: 11, fontWeight: 600, fontFamily: font, cursor: "pointer" }}>Clear All</button>
-              </div>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 6 }}>
-              {MODULES.filter(m => isAdmin || !ADMIN_ONLY_MODULE_IDS.includes(m.id)).map(m => (
-                <label key={m.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 6, background: enabledModules.includes(m.id) ? (darkMode ? "#1A3040" : "#fff") : "transparent", border: `1px solid ${enabledModules.includes(m.id) ? (darkMode ? "#2A4050" : "#D1E3F0") : "transparent"}`, cursor: "pointer", fontSize: 12, fontWeight: 500, color: enabledModules.includes(m.id) ? colors.navy : (colors.gray || "#999"), fontFamily: font, transition: "all 0.15s" }}>
-                  <input type="checkbox" checked={enabledModules.includes(m.id)} onChange={() => toggleModule(m.id)} style={{ width: 15, height: 15, accentColor: COLORS.navy }} />
-                  <span>{m.icon}</span> {m.label}
-                </label>
-              ))}
-            </div>
-            <div style={{ marginTop: 10, fontSize: 10, color: colors.gray, fontFamily: font }}>
-              {"\uD83D\uDC64"} Logged in as: <strong>{user?.name}</strong> ({user?.email}) — Internal Team Member
+
+      {/* ── Page body: sidebar + content ── */}
+      <div style={{ display: "flex", flex: 1, overflow: "hidden", alignItems: "stretch", position: "relative" }}>
+
+        {/* Mobile backdrop */}
+        {isMobile && sidebarOpen && (
+          <div onClick={() => setSidebarOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 99 }} />
+        )}
+
+        {/* ── Contact Lender panel (borrower only) ── */}
+        {showLenderPanel && !isInternal && (
+          <div
+            onClick={() => setShowLenderPanel(false)}
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{ background: "#fff", borderRadius: 14, boxShadow: "0 12px 48px rgba(0,0,0,0.22)", padding: "28px 28px 24px", maxWidth: 360, width: "100%", position: "relative", fontFamily: font }}
+            >
+              {/* Close */}
+              <button
+                onClick={() => setShowLenderPanel(false)}
+                style={{ position: "absolute", top: 12, right: 14, background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#94a3b8", lineHeight: 1 }}
+              >×</button>
+
+              {brandLogo && <img src={brandLogo} alt="" style={{ maxHeight: 36, marginBottom: 12 }} />}
+
+              {loName && <div style={{ fontSize: 19, fontWeight: 800, color: "#1B2A3B", marginBottom: 2, fontFamily: font }}>{loName}</div>}
+              {(loTitle || loNMLS) && (
+                <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16, fontFamily: font }}>
+                  {[loTitle, loNMLS ? `NMLS #${loNMLS}` : null].filter(Boolean).join(" · ")}
+                </div>
+              )}
+
+              {!loName && !loTitle && !loNMLS && !loPhone && !loCell && !loEmail && !loWebsite ? (
+                <div style={{ color: "#94a3b8", fontSize: 14, textAlign: "center", padding: "12px 0", fontFamily: font }}>
+                  Lender contact info not available.
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {loPhone && (
+                    <a href={`tel:${loPhone.replace(/\D/g,"")}`} style={{ display: "flex", alignItems: "center", gap: 12, color: "#1B2A3B", textDecoration: "none" }}>
+                      <span style={{ fontSize: 20, width: 28, textAlign: "center", flexShrink: 0 }}>📞</span>
+                      <div>
+                        <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: font }}>Office</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, fontFamily: font }}>{loPhone}</div>
+                      </div>
+                    </a>
+                  )}
+                  {loCell && (
+                    <a href={`tel:${loCell.replace(/\D/g,"")}`} style={{ display: "flex", alignItems: "center", gap: 12, color: "#1B2A3B", textDecoration: "none" }}>
+                      <span style={{ fontSize: 20, width: 28, textAlign: "center", flexShrink: 0 }}>📱</span>
+                      <div>
+                        <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: font }}>Cell</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, fontFamily: font }}>{loCell}</div>
+                      </div>
+                    </a>
+                  )}
+                  {loEmail && (
+                    <a href={`mailto:${loEmail}`} style={{ display: "flex", alignItems: "center", gap: 12, color: "#1B2A3B", textDecoration: "none" }}>
+                      <span style={{ fontSize: 20, width: 28, textAlign: "center", flexShrink: 0 }}>✉️</span>
+                      <div>
+                        <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: font }}>Email</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, fontFamily: font }}>{loEmail}</div>
+                      </div>
+                    </a>
+                  )}
+                  {loWebsite && (
+                    <a href={loWebsite.startsWith("http") ? loWebsite : "https://" + loWebsite} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 12, color: "#1B2A3B", textDecoration: "none" }}>
+                      <span style={{ fontSize: 20, width: 28, textAlign: "center", flexShrink: 0 }}>🌐</span>
+                      <div>
+                        <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: font }}>Website</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, fontFamily: font }}>{loWebsite}</div>
+                      </div>
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ── Content ── */}
-      <div style={{ padding: 20, maxWidth: 1200, margin: "0 auto" }}>
+        {/* ── Left sidebar ── */}
+        {(!isMobile || sidebarOpen) && (
+          <div className="mtk-no-print" style={isMobile ? {
+            /* Mobile: fixed overlay */
+            position: "fixed", top: 0, left: 0, height: "100vh", width: 230, zIndex: 100,
+            background: headerBg, overflowY: "auto", padding: "0 0 24px",
+            display: "flex", flexDirection: "column",
+            boxShadow: "4px 0 24px rgba(0,0,0,0.45)",
+          } : {
+            /* Desktop: simple flex item — always full height because the page body is
+               overflow:hidden and only the content area scrolls. No sticky needed. */
+            width: navCollapsed ? 44 : 192, flexShrink: 0,
+            background: headerBg, overflowY: "auto", padding: "0 0 24px",
+            display: "flex", flexDirection: "column",
+            transition: "width 0.2s",
+          }}>
+            {/* Mobile: close button */}
+            {isMobile && (
+              <div style={{ display: "flex", justifyContent: "flex-end", padding: "12px 12px 8px" }}>
+                <button onClick={() => setSidebarOpen(false)} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 7, padding: "6px 12px", color: "#fff", fontSize: 16, cursor: "pointer" }}>&#10005;</button>
+              </div>
+            )}
+            {/* Desktop: collapse/expand toggle */}
+            {!isMobile && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: navCollapsed ? "center" : "space-between", padding: "12px 10px 4px" }}>
+                {!navCollapsed && (
+                  <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", color: "rgba(255,255,255,0.55)", textTransform: "uppercase", paddingLeft: 4, whiteSpace: "nowrap" }}>
+                    Home Loan Toolkit
+                  </span>
+                )}
+                <button
+                  onClick={() => setNavCollapsed(!navCollapsed)}
+                  title={navCollapsed ? "Expand menu" : "Collapse menu"}
+                  style={{ background: "rgba(255,255,255,0.1)", border: "none", borderRadius: 6, padding: "5px 7px", color: "rgba(255,255,255,0.75)", cursor: "pointer", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="0.75" y="0.75" width="14.5" height="14.5" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+                    <line x1="5" y1="0.75" x2="5" y2="15.25" stroke="currentColor" strokeWidth="1.5"/>
+                  </svg>
+                </button>
+              </div>
+            )}
+            {/* ── Sidebar nav content ── */}
+            {(() => {
+              const sidebarMods  = filteredModules.filter(m => !ADMIN_ONLY_MODULE_IDS.includes(m.id));
+              const regularMods  = sidebarMods.filter(m => !INTERNAL_SIDEBAR_IDS.includes(m.id) && !BUILDER_SIDEBAR_IDS.includes(m.id));
+              const builderMods  = sidebarMods.filter(m => BUILDER_SIDEBAR_IDS.includes(m.id));
+              const internalMods = sidebarMods.filter(m => INTERNAL_SIDEBAR_IDS.includes(m.id));
+              const navBtn = (isActive, onClick, icon, label) => (
+                <button onClick={onClick} style={{
+                  display: "flex", alignItems: "center", width: "100%",
+                  padding: navCollapsed ? "10px 0" : "10px 18px 10px 15px",
+                  justifyContent: navCollapsed ? "center" : "flex-start",
+                  background: isActive ? "rgba(255,255,255,0.18)" : "transparent",
+                  color: isActive ? "#fff" : "rgba(255,255,255,0.6)",
+                  border: "none",
+                  borderLeft: navCollapsed ? "none" : (isActive ? "3px solid rgba(255,255,255,0.9)" : "3px solid transparent"),
+                  cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: font,
+                  transition: "all 0.15s", whiteSpace: "nowrap", overflow: "hidden",
+                }}>
+                  <span style={{ fontSize: navCollapsed ? 17 : 14, marginRight: navCollapsed ? 0 : 8, lineHeight: 1, flexShrink: 0 }}>{icon}</span>
+                  {!navCollapsed && label}
+                </button>
+              );
+              const sectionHead = (label) => navCollapsed ? null : (
+                <div style={{ padding: "14px 15px 4px", fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)", fontFamily: font }}>{label}</div>
+              );
+              return (
+                <React.Fragment>
+                  {!navCollapsed && <div style={{ height: 6 }} />}
+                  {/* ── Contacts + Scenarios shortcuts ── */}
+                  {!isInternal
+                    ? navBtn(false, () => { setShowLenderPanel(true); setSidebarOpen(false); }, "📞", "Contact Lender")
+                    : (onOpenContact && navBtn(false, () => { onOpenContact(null); setSidebarOpen(false); }, <span style={{filter:"grayscale(1) invert(1) opacity(0.7)"}}>👥</span>, "Contacts"))
+                  }
+                  {onBackToScenarios && navBtn(false, () => { onBackToScenarios(); setSidebarOpen(false); }, "🗂️", "Scenarios")}
+                  {(!isInternal || onOpenContact || onBackToScenarios) && !navCollapsed && (
+                    <div style={{ margin: "6px 15px 2px", borderBottom: "1px solid rgba(255,255,255,0.12)" }} />
+                  )}
+                  {sectionHead("Toolkit")}
+                  {regularMods.map(m =>
+                    navBtn(activeModule === m.id, () => { setActiveModule(m.id); setSidebarOpen(false); }, m.icon, m.label, CLIENT_TAB_IDS.includes(m.id))
+                  )}
+                  {builderMods.length > 0 && (
+                    <React.Fragment>
+                      {!navCollapsed && <div style={{ height: 4 }} />}
+                      {sectionHead("Builder")}
+                      {builderMods.map(m =>
+                        navBtn(activeModule === m.id, () => { setActiveModule(m.id); setSidebarOpen(false); }, m.icon, m.label, CLIENT_TAB_IDS.includes(m.id))
+                      )}
+                    </React.Fragment>
+                  )}
+                  {internalMods.length > 0 && (
+                    <React.Fragment>
+                      {!navCollapsed && <div style={{ height: 4 }} />}
+                      {sectionHead("Internal")}
+                      {internalMods.map(m =>
+                        navBtn(activeModule === m.id, () => { setActiveModule(m.id); setSidebarOpen(false); }, m.icon, m.label, CLIENT_TAB_IDS.includes(m.id))
+                      )}
+                    </React.Fragment>
+                  )}
+                </React.Fragment>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* ── Content ── */}
+        <div style={{ flex: 1, minWidth: 0, padding: isMobile ? "12px 12px 40px" : 20, overflowY: "auto", overflowX: "hidden" }}>
         {isSharedView && (
           <div style={{ padding: "8px 14px", background: darkMode ? "#1A3040" : "#E8F4FD", borderRadius: 8, marginBottom: 16, fontSize: 12, color: COLORS.blue, fontWeight: 600, fontFamily: font, border: `1px solid ${COLORS.blue}33` }}>
             {"\uD83D\uDCCE"} Shared View — Showing {filteredModules.length} selected tool{filteredModules.length !== 1 ? "s" : ""}. <a href={window.location.href.split("?")[0]} style={{ color: COLORS.blue, textDecoration: "underline" }}>{"View full toolkit \u2192"}</a>
-          </div>
-        )}
-        {!isSharedView && userRole !== "admin" && (
-          <div style={{ padding: "8px 14px", background: darkMode ? "#2E2818" : COLORS.goldLight, borderRadius: 8, marginBottom: 16, fontSize: 12, color: COLORS.gold, fontWeight: 600, fontFamily: font, border: darkMode ? "1px solid #4A3C1A" : "1px solid #FFE082" }}>
-            {userRole === "client" ? "Client View \u2014 You can view payment calculations, compare loans, and analyze break-even scenarios." :
-             userRole === "realtor" ? "Realtor Partner View \u2014 Access payment tools, fee sheets, loan comparisons, and pre-qualification letters." :
-             "Loan Officer View \u2014 Full access to all tools including rate locks and internal analytics."}
           </div>
         )}
         {!isSharedView && user && user.role === "borrower" && (
@@ -1083,18 +1284,128 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
             </div>
           </div>
         )}
-        {activeModule === "contact_tab" && isInternal && activeScenario && activeScenario.contact_id
+        {/* Agreed-mode banner for borrower */}
+        {syncReadOnly && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 16px", marginBottom: 14, background: darkMode ? "#0C1E0E" : "#F0FDF4", border: "1px solid " + (darkMode ? "#166534" : "#86EFAC"), borderRadius: 8, fontSize: 12, fontWeight: 600, color: darkMode ? "#4ADE80" : "#166534", fontFamily: font }}>
+            🔒 <span>Numbers are locked. Your LO will guide any changes from here.</span>
+          </div>
+        )}
+        {activeModule === "__modules__" && isInternal ? (
+          <div key="__modules__" className="mtk-fade-in" style={{ maxWidth: 320 }}>
+
+            {(() => {
+              const modSectionHead = (label) => (
+                <div style={{ padding: "4px 4px 6px", fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: colors.gray || "#94a3b8", fontFamily: font }}>{label}</div>
+              );
+              const modRow = (m, accentColor) => (
+                <label key={m.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px 9px 12px", borderRadius: 7, background: enabledModules.includes(m.id) ? (darkMode ? "#1A3040" : "#fff") : "transparent", borderLeft: `3px solid ${enabledModules.includes(m.id) ? accentColor : "transparent"}`, cursor: "pointer", fontSize: 13, fontWeight: 600, color: enabledModules.includes(m.id) ? colors.navy : (colors.gray || "#999"), fontFamily: font, transition: "all 0.15s" }}>
+                  <input type="checkbox" checked={enabledModules.includes(m.id)} onChange={() => toggleModule(m.id)} style={{ width: 15, height: 15, accentColor: accentColor, flexShrink: 0 }} />
+                  <span style={{ fontSize: 14, lineHeight: 1, flexShrink: 0 }}>{m.icon}</span>
+                  <span>{m.label}</span>
+                </label>
+              );
+
+              const toolkitMods  = MODULES.filter(m => !INTERNAL_MODULE_IDS.includes(m.id) && !ADMIN_ONLY_MODULE_IDS.includes(m.id) && !BUILDER_SIDEBAR_IDS.includes(m.id) && !INTERNAL_SIDEBAR_IDS.includes(m.id));
+              const builderMods  = MODULES.filter(m => BUILDER_SIDEBAR_IDS.includes(m.id));
+              const internalMods = MODULES.filter(m => INTERNAL_SIDEBAR_IDS.includes(m.id));
+              const adminMods    = MODULES.filter(m => ADMIN_ONLY_MODULE_IDS.includes(m.id));
+
+              const btnStyle = { padding: "5px 12px", borderRadius: 6, border: `1px solid ${colors.border || "#D1D9E0"}`, background: colors.bgAlt || "#F5F8FA", color: colors.navy, fontSize: 12, fontWeight: 600, fontFamily: font, cursor: "pointer" };
+              const sectionBtns = (ids) => (
+                <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                  <button onClick={() => toggleSection(ids, true)} style={btnStyle}>Select All</button>
+                  <button onClick={() => toggleSection(ids, false)} style={btnStyle}>Clear All</button>
+                </div>
+              );
+
+              return (
+                <React.Fragment>
+
+                  {/* ── Toolkit ── */}
+                  <div style={{ marginBottom: 24 }}>
+                    {modSectionHead("Toolkit")}
+                    <div style={{ fontSize: 12, color: colors.gray, fontFamily: font, marginBottom: 10 }}>Choose which tabs the borrower sees when they log in.</div>
+                    {sectionBtns(toolkitMods.map(m => m.id))}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      {toolkitMods.map(m => modRow(m, COLORS.navy))}
+                    </div>
+                  </div>
+
+                  {/* ── Builder ── */}
+                  <div style={{ marginBottom: 24 }}>
+                    {modSectionHead("Builder")}
+                    <div style={{ fontSize: 12, color: colors.gray, fontFamily: font, marginBottom: 10 }}>Optionally expose builder tools to the borrower.</div>
+                    {sectionBtns(builderMods.map(m => m.id))}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      {builderMods.map(m => modRow(m, COLORS.navy))}
+                    </div>
+                  </div>
+
+                  {/* ── Internal ── */}
+                  <div style={{ marginBottom: 24 }}>
+                    {modSectionHead("Internal")}
+                    <div style={{ fontSize: 12, color: colors.gray, fontFamily: font, marginBottom: 10 }}>Always visible to the internal team only — not configurable for borrowers.</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      {internalMods.map(m => (
+                        <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px 9px 12px", borderRadius: 7, borderLeft: "3px solid transparent", fontSize: 13, fontWeight: 600, color: colors.gray || "#999", fontFamily: font }}>
+                          <span style={{ fontSize: 14, lineHeight: 1, flexShrink: 0 }}>{m.icon}</span>
+                          <span>{m.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* ── Admin-Only ── */}
+                  {showAdminTabs && (
+                    <div style={{ marginBottom: 24 }}>
+                      {modSectionHead("Admin Only")}
+                      <div style={{ fontSize: 12, color: colors.gray, fontFamily: font, marginBottom: 10 }}>These tabs are only visible when viewing as Admin.</div>
+                      {sectionBtns(adminMods.map(m => m.id))}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                        {adminMods.map(m => modRow(m, COLORS.gold))}
+                      </div>
+                    </div>
+                  )}
+
+                </React.Fragment>
+              );
+            })()}
+
+            <div style={{ marginTop: 8, fontSize: 11, color: colors.gray, fontFamily: font }}>
+              👤 Logged in as: <strong>{user?.name}</strong> ({user?.email}) — Internal Team Member
+            </div>
+          </div>
+        ) : activeModule === "contact_tab" && isInternal && activeScenario && activeScenario.contact_id
           ? <ScenarioContactPanel key={activeScenario.contact_id} contactId={activeScenario.contact_id} scenarioId={activeScenario.id} scenario={activeScenario} darkMode={darkMode} colors={colors} onOpenContact={onOpenContact} />
-          : <div key={activeModule} className="mtk-fade-in"><ActiveComponent isInternal={isInternal} user={user} scenario={activeScenario} /></div>
+          : <div key={activeModule} className="mtk-fade-in" style={syncReadOnly ? { pointerEvents: "none", userSelect: "none", opacity: 0.93 } : {}}>
+              <ActiveComponent isInternal={isInternal} user={user} scenario={activeScenario} contact={headerContact} />
+            </div>
         }
       </div>
 
-      {/* ── Footer removed — replaced by PersistentFooter in App.js ── */}
-      <div style={{ height: 32 }} />
+      </div>{/* end page-body flex */}
+
+      {/* ── Live Session Bar — pinned to bottom of viewport ── */}
+      {LiveSessionBar && syncScenarioId && (
+        <div style={{ flexShrink: 0, padding: "0 16px 8px" }}>
+          <LiveSessionBar
+            scenarioId={syncScenarioId}
+            isLO={syncIsLO}
+            mode={syncMode}
+            setMode={setSyncMode}
+            connected={syncConnected}
+            peerConnected={syncPeerConnected}
+            peerName={syncPeerName}
+            darkMode={darkMode}
+            onInviteClient={syncIsLO && syncInviteClient ? function () { syncInviteClient(syncDisplayName); } : null}
+          />
+        </div>
+      )}
+      <div style={{ height: LiveSessionBar && syncScenarioId ? 0 : 32 }} />
     </div>
 
     {/* ── Settings Panel ── */}
-    <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} darkMode={darkMode} allModules={MODULES} />
+    <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} darkMode={darkMode} allModules={MODULES} openTab={settingsInitialTab} />
 
     {showAdmin && user && user.role === "admin" && React.createElement(AdminPanel, {
       currentUser: user,

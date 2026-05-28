@@ -25,7 +25,6 @@ function AffordabilityCalculator() {
   const [insRate, setInsRate] = useLocalStorage("af_ins", "0.35");
   const [frontDTI, setFrontDTI] = useLocalStorage("af_fdti", "28");
   const [backDTI, setBackDTI] = useLocalStorage("af_bdti", "43");
-  const [hoaDues, setHoaDues] = useLocalStorage("af_hoa", "0");
 
   const calc = useMemo(() => {
     const grossMo = ((parseFloat(annualIncome) || 0) + (parseFloat(coIncome) || 0)) / 12;
@@ -37,7 +36,6 @@ function AffordabilityCalculator() {
     const insPct = (parseFloat(insRate) || 0.35) / 100 / 12;
     const fd = (parseFloat(frontDTI) || 28) / 100;
     const bd = (parseFloat(backDTI) || 43) / 100;
-    const hoa = parseFloat(hoaDues) || 0;
     const maxHousingFront = fd * grossMo;
     const maxHousingBack = bd * grossMo - debts;
     const maxHousing = Math.min(maxHousingFront, maxHousingBack);
@@ -46,18 +44,18 @@ function AffordabilityCalculator() {
     const k = r > 0 ? (r * pow) / (pow - 1) : 1 / n;
     const pmiR = dp < 0.2 ? (1 - dp) * 0.005 / 12 : 0;
     const denom = (1 - dp) * k + taxPct + insPct + pmiR;
-    const maxHome = denom > 0 ? Math.max(0, (maxHousing - hoa) / denom) : 0;
+    const maxHome = denom > 0 ? Math.max(0, maxHousing / denom) : 0;
     const maxLoan = maxHome * (1 - dp);
     const downPayment = maxHome * dp;
     const piPayment = pmt(r, n, maxLoan);
     const taxMo = maxHome * taxPct;
     const insMo = maxHome * insPct;
     const pmiMo = dp < 0.2 ? maxLoan * 0.005 / 12 : 0;
-    const totalPayment = piPayment + taxMo + insMo + pmiMo + hoa;
+    const totalPayment = piPayment + taxMo + insMo + pmiMo;
     const actualFrontDTI = grossMo > 0 ? (totalPayment / grossMo) * 100 : 0;
     const actualBackDTI = grossMo > 0 ? ((totalPayment + debts) / grossMo) * 100 : 0;
-    return { grossMo, maxHome, maxLoan, downPayment, piPayment, taxMo, insMo, pmiMo, hoa, totalPayment, maxHousing, limitedBy, actualFrontDTI, actualBackDTI, debts };
-  }, [annualIncome, coIncome, monthlyDebts, rate, term, downPct, taxRate, insRate, frontDTI, backDTI, hoaDues]);
+    return { grossMo, maxHome, maxLoan, downPayment, piPayment, taxMo, insMo, pmiMo, totalPayment, maxHousing, limitedBy, actualFrontDTI, actualBackDTI, debts };
+  }, [annualIncome, coIncome, monthlyDebts, rate, term, downPct, taxRate, insRate, frontDTI, backDTI]);
 
   return (
     <div>
@@ -72,7 +70,6 @@ function AffordabilityCalculator() {
           <LabeledInput label="Annual Income" prefix="$" value={annualIncome} onChange={setAnnualIncome} useCommas />
           <LabeledInput label="Co-Borrower Annual Income" prefix="$" value={coIncome} onChange={setCoIncome} useCommas />
           <LabeledInput label="Monthly Debt Payments" prefix="$" value={monthlyDebts} onChange={setMonthlyDebts} useCommas info="Car, student loans, credit card minimums, etc." />
-          <LabeledInput label="HOA Dues" prefix="$" value={hoaDues} onChange={setHoaDues} useCommas />
         </SectionCard>
         <SectionCard title="LOAN PARAMETERS" accent={c.blue || COLORS.blue}>
           <LabeledInput label="Interest Rate" value={rate} onChange={setRate} suffix="%" />
@@ -97,7 +94,6 @@ function AffordabilityCalculator() {
               { label: "Property Tax", value: calc.taxMo, color: c.blue || COLORS.blue },
               { label: "Homeowner's Insurance", value: calc.insMo, color: c.green || COLORS.green },
               calc.pmiMo > 0 && { label: "PMI", value: calc.pmiMo, color: c.gold || COLORS.gold },
-              calc.hoa > 0 && { label: "HOA Dues", value: calc.hoa, color: c.gray || COLORS.gray },
             ].filter(Boolean);
             return (<>
               <div style={{ margin: "0 auto 12px", maxWidth: 160 }}>

@@ -56,14 +56,14 @@ function BudgetPlanner() {
   const inputRow = (label, value, onChange) => (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0" }}>
       <span style={{ fontSize: 12, color: c.textSecondary || COLORS.gray, fontFamily: font }}>{label}</span>
-      <div style={{ width: 120 }}><LabeledInput value={value} onChange={onChange} prefix="$" /></div>
+      <div style={{ width: 120 }}><LabeledInput value={value} onChange={onChange} prefix="$" useCommas /></div>
     </div>
   );
 
   return (
     <div>
       <SectionCard title="Monthly Income">
-        <LabeledInput label="Total Monthly Income (after tax)" value={income} onChange={setIncome} prefix="$" />
+        <LabeledInput label="Total Monthly Income (after tax)" value={income} onChange={setIncome} prefix="$" useCommas />
       </SectionCard>
       <div className="mtk-metrics" style={{ display: "flex", gap: 12, flexWrap: "wrap", margin: "12px 0" }}>
         <MetricCard label="Total Expenses" value={fmt(Math.round(calc.totalExp))} color={COLORS.blue} />

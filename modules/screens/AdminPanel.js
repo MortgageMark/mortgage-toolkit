@@ -99,6 +99,18 @@ function AdminPanel({ currentUser, onClose }) {
                 roster.push(entry);
               }
             });
+            // Deduplicate: if a non-UUID entry shares an NMLS with a UUID entry,
+            // remove the stale local entry (e.g. "Marky Mark" vs "Mark Pfeiffer").
+            const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            const uuidNmls = new Set(
+              roster.filter(function(m) { return uuidRe.test(m.id) && m.nmls; })
+                    .map(function(m) { return m.nmls; })
+            );
+            roster = roster.filter(function(m) {
+              if (uuidRe.test(m.id)) return true;          // keep all UUID entries
+              if (m.nmls && uuidNmls.has(m.nmls)) return false; // drop stale duplicate
+              return true;                                  // keep non-duplicate locals
+            });
             localStorage.setItem("mtk_roster", JSON.stringify(roster));
             window.dispatchEvent(new Event("storage"));
           } catch(e) {}
@@ -116,6 +128,7 @@ function AdminPanel({ currentUser, onClose }) {
       companyNMLS: "",
       phone: "",
       email: "",
+      email_display: "",
       nmls: "",
       branchNmls: "",
       cell: "",
@@ -188,6 +201,7 @@ function AdminPanel({ currentUser, onClose }) {
             city:          formData.city              || null,
             state:         formData.state             || null,
             zip:           formData.zip               || null,
+            email_display: formData.email_display     || null,
           }).eq("id", editingMember.id)
             .then(function(res) {
               if (res.error) console.warn("Profile cloud save failed:", res.error.message);
@@ -312,7 +326,7 @@ function AdminPanel({ currentUser, onClose }) {
     };
 
     // ── Borrower Tab Access helpers ──
-    const BASE_TABS = ["about", "payment", "refi", "fees", "compare", "breakeven"];
+    const BASE_TABS = ["about", "payment", "refi", "fees", "breakeven"];
     const GRANTABLE = MODULE_DEFS ? MODULE_DEFS.filter(function(m) { return !BASE_TABS.includes(m.id); }) : [];
 
     const togglePerm = function(userId, tabId) {
@@ -559,6 +573,7 @@ function AdminPanel({ currentUser, onClose }) {
             fieldRow("Company NMLS #", "companyNMLS", ""),
             fieldRow("Phone", "phone", "(555) 123-4567", "tel", phoneBlur("phone")),
             fieldRow("Email", "email", "jane@example.com", "email"),
+            fieldRow("Display Email", "email_display", "jane@example.com", "email"),
             fieldRow("NMLS #", "nmls", "123456"),
             fieldRow("Branch NMLS", "branchNmls", ""),
             fieldRow("Cell Phone", "cell", "(555) 123-4567", "tel", phoneBlur("cell")),

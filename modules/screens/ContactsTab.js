@@ -6,6 +6,8 @@ const saveContactToSupabase             = window.saveContactToSupabase;
 const archiveContactInSupabase          = window.archiveContactInSupabase;
 const deleteContactFromSupabase         = window.deleteContactFromSupabase;
 const ContactDetail                     = window.ContactDetail;
+const AppHeader                         = window.AppHeader;
+const useLocalStorage                   = window.useLocalStorage;
 
 const TYPE_TABS_CT = [
   { key: "all",      label: "All"      },
@@ -63,14 +65,16 @@ function ReferralPickerCT(props) {
   var onChange  = props.onChange;
   var allCtacts = props.contacts || [];
   var excludeId = props.excludeId;
+  var onAddNew  = props.onAddNew; // optional: function(nameStr) => Promise
 
   var _s = useState(""); var search = _s[0]; var setSearch = _s[1];
   var _f = useState(false); var focused = _f[0]; var setFocused = _f[1];
+  var _a = useState(false); var adding = _a[0]; var setAdding = _a[1];
 
   var stl = {
     width: "100%", padding: "8px 12px", borderRadius: "8px",
-    border: "1px solid rgba(255,255,255,0.15)",
-    background: "rgba(255,255,255,0.07)", color: "#f8fafc",
+    border: "1.5px solid #e2e8f0",
+    background: "#fff", color: "#1e293b",
     fontSize: "14px", outline: "none", boxSizing: "border-box",
   };
 
@@ -86,8 +90,8 @@ function ReferralPickerCT(props) {
         type: "button",
         onClick: function() { onChange(null); },
         style: {
-          background: "rgba(239,68,68,0.15)", color: "#fca5a5",
-          border: "1px solid rgba(239,68,68,0.3)", borderRadius: "6px",
+          background: "#fee2e2", color: "#dc2626",
+          border: "1px solid #fecaca", borderRadius: "6px",
           padding: "6px 10px", cursor: "pointer", fontSize: "12px", flexShrink: 0,
         },
       }, "✕")
@@ -104,19 +108,34 @@ function ReferralPickerCT(props) {
     : filtered
   ).slice(0, 8);
 
+  var showDropdown = focused && (candidates.length > 0 || (onAddNew && search.trim()));
+
+  function handleAddNew() {
+    if (!onAddNew || !search.trim() || adding) return;
+    setAdding(true);
+    Promise.resolve(onAddNew(search.trim())).then(function() {
+      setAdding(false);
+      setSearch("");
+      setFocused(false);
+    }).catch(function() { setAdding(false); });
+  }
+
   return React.createElement("div", { style: { position: "relative" } },
     React.createElement("input", {
-      type: "text", placeholder: "Click to browse or type to search…",
-      style: stl, value: search,
+      type: "text",
+      placeholder: adding ? "Creating contact…" : "Click to browse or type to search…",
+      style: Object.assign({}, stl, adding ? { color: "#94a3b8" } : {}),
+      value: adding ? "" : search,
+      disabled: adding,
       onChange: function(e) { setSearch(e.target.value); },
       onFocus:  function()  { setFocused(true); },
-      onBlur:   function()  { setTimeout(function() { setFocused(false); setSearch(""); }, 160); },
+      onBlur:   function()  { setTimeout(function() { setFocused(false); setSearch(""); }, 200); },
     }),
-    focused && candidates.length > 0 && React.createElement("div", {
+    showDropdown && React.createElement("div", {
       style: {
         position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 200,
-        background: "#1e3a5f", border: "1px solid rgba(255,255,255,0.18)",
-        borderRadius: "8px", overflow: "hidden", boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+        background: "#fff", border: "1px solid #e2e8f0",
+        borderRadius: "8px", overflow: "hidden", boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
       },
     },
       candidates.map(function(c) {
@@ -125,15 +144,31 @@ function ReferralPickerCT(props) {
         return React.createElement("div", {
           key: c.id,
           onMouseDown: function() { onChange(c.id); setSearch(""); },
-          style: { padding: "9px 12px", cursor: "pointer", color: "#f8fafc",
-            borderBottom: "1px solid rgba(255,255,255,0.07)" },
-          onMouseEnter: function(e) { e.currentTarget.style.background = "rgba(255,255,255,0.1)"; },
+          style: { padding: "9px 12px", cursor: "pointer", color: "#1e293b",
+            borderBottom: "1px solid #f1f5f9" },
+          onMouseEnter: function(e) { e.currentTarget.style.background = "#f8fafc"; },
           onMouseLeave: function(e) { e.currentTarget.style.background = ""; },
         },
           React.createElement("span", { style: { fontWeight: "600", fontSize: "13px" } }, nm),
-          cat && React.createElement("span", { style: { fontSize: "11px", color: "#94a3b8", marginLeft: "8px" } }, cat)
+          cat && React.createElement("span", { style: { fontSize: "11px", color: "#64748b", marginLeft: "8px" } }, cat)
         );
-      })
+      }),
+      // "+ Add new contact" row — shown when there's a search term
+      onAddNew && search.trim() && React.createElement("div", {
+        onMouseDown: handleAddNew,
+        style: {
+          padding: "9px 12px", cursor: "pointer",
+          color: "#2563eb", fontWeight: 600, fontSize: "13px",
+          borderTop: candidates.length > 0 ? "1px solid #e2e8f0" : "none",
+          display: "flex", alignItems: "center", gap: "6px",
+          background: "#f8faff",
+        },
+        onMouseEnter: function(e) { e.currentTarget.style.background = "#eff6ff"; },
+        onMouseLeave: function(e) { e.currentTarget.style.background = "#f8faff"; },
+      },
+        React.createElement("span", { style: { fontSize: "15px" } }, "+"),
+        "Add \"" + search.trim() + "\" as a new contact"
+      )
     )
   );
 }
@@ -192,9 +227,12 @@ function exportContactsToCSV(contacts) {
   URL.revokeObjectURL(url);
 }
 
-function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactId, onUsers }) {
+function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactId, onUsers, onTasksScenarios, onTasksContacts, activeView, onSetView, onContactSelected, pageTitle }) {
   const isInternal  = !!(user && user.isInternal);
+  const isPartner   = !!(user && (user.role === "realtor" || user.role === "builder"));
   const isCloudUser = !!(user && user.supabaseUser && supabase);
+  const isAdmin     = !!(user && user.role === "admin");
+  const [darkMode, setDarkMode] = useLocalStorage("app_dark", false);
 
   const [contacts,        setContacts]        = useState([]);
   const [cloudLoading,    setCloudLoading]    = useState(false);
@@ -204,6 +242,19 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
   const [statusFilter,    setStatusFilter]    = useState("active");
   const [searchTerm,      setSearchTerm]      = useState("");
   const [selectedContact, setSelectedContact] = useState(null);
+
+  // Notify parent when the selected contact changes (for sidebar name display)
+  useEffect(function() {
+    if (!onContactSelected) return;
+    if (selectedContact) {
+      var nm = ((selectedContact.first_name || "") + " " + (selectedContact.last_name || "")).trim();
+      var badge = selectedContact.contact_category || selectedContact.contact_type || "";
+      onContactSelected({ name: nm || "Contact", badge: badge });
+    } else {
+      onContactSelected(null);
+    }
+  }, [selectedContact]);
+
   const [showAddForm,     setShowAddForm]     = useState(false);
   const [addForm,         setAddForm]         = useState(EMPTY_FORM_CT);
   const [addSaving,       setAddSaving]       = useState(false);
@@ -296,9 +347,36 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
 
   // ── Delete handler (admin only) ───────────────────────────────────────
   async function handleDeleteContact(contact) {
-    if (!window.confirm("Permanently delete " + ((contact.first_name || "") + " " + (contact.last_name || "")).trim() + "? This cannot be undone.")) return;
+    const fullName = ((contact.first_name || "") + " " + (contact.last_name || "")).trim() || "this contact";
+
+    // Count linked scenarios before confirming
+    const { data: linkedScs } = await supabase
+      .from("scenarios")
+      .select("id")
+      .eq("contact_id", contact.id);
+    const scCount = (linkedScs || []).length;
+
+    const warningLines = [
+      "Permanently delete " + fullName + "?",
+      "",
+      scCount > 0
+        ? "⚠️ This will also permanently delete " + scCount + " linked scenario" + (scCount === 1 ? "" : "s") + "."
+        : "No linked scenarios will be affected.",
+      "",
+      "This cannot be undone.",
+    ];
+    if (!window.confirm(warningLines.join("\n"))) return;
+
     setDeletingId(contact.id);
     try {
+      // Delete linked scenarios first
+      if (scCount > 0) {
+        const { error: scErr } = await supabase
+          .from("scenarios")
+          .delete()
+          .eq("contact_id", contact.id);
+        if (scErr) { alert("Could not delete linked scenarios: " + scErr.message); return; }
+      }
       const { error } = await deleteContactFromSupabase(contact.id);
       if (error) { alert("Could not delete contact: " + error.message); return; }
       setContacts(function(prev) { return prev.filter(function(c) { return c.id !== contact.id; }); });
@@ -434,7 +512,13 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
     setAddSaving(true);
     setAddError(null);
 
-    saveContactToSupabase(addForm).then(function(result) {
+    // Trim + lowercase all email fields before saving
+    var cleanedForm = Object.assign({}, addForm, {
+      email_personal: (addForm.email_personal || "").trim().toLowerCase(),
+      email_work:     (addForm.email_work     || "").trim().toLowerCase(),
+      email_other:    (addForm.email_other    || "").trim().toLowerCase(),
+    });
+    saveContactToSupabase(cleanedForm).then(function(result) {
       setAddSaving(false);
       if (result.error) { setAddError(result.error.message || "Failed to save contact."); return; }
       setContacts(function(prev) { return [result.data, ...prev]; });
@@ -459,6 +543,11 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
       onSelectScenario:  onSelectScenario,
       contacts:          contacts,
       onSelectContact:   function(c) { setSelectedContact(c); },
+      onScenarios:       onBack,
+      onTasksScenarios:  onTasksScenarios || null,
+      onTasksContacts:   onTasksContacts  || null,
+      activeView:        activeView       || "internal",
+      onSetView:         onSetView        || null,
     });
   }
 
@@ -622,16 +711,26 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
     React.createElement("div", { style: S.header },
       React.createElement("div", { style: S.headerLeft },
         React.createElement("div", null,
-          React.createElement("h1", { style: Object.assign({}, S.title, { marginBottom: 0 }) }, "Contacts"),
+          React.createElement("h1", { style: Object.assign({}, S.title, { marginBottom: 0 }) }, pageTitle || "Contacts"),
           user && React.createElement("div", {
             style: { fontSize: "12px", color: "#94a3b8", marginTop: "2px" }
           }, user.name || user.email || "")
         )
       ),
       React.createElement("div", { style: { display: "flex", alignItems: "center", gap: "12px" } },
-        onUsers && React.createElement("button", { onClick: onUsers, style: S.backBtn }, "👥 Team"),
-        React.createElement("button", { onClick: onBack, style: S.backBtn }, "Scenarios"),
-        React.createElement("button", { onClick: onLogout, style: S.logoutBtn }, "Logout")
+        AppHeader && React.createElement(AppHeader, {
+          user: user,
+          darkMode: darkMode,
+          setDarkMode: setDarkMode,
+          onContacts: null,
+          onScenarios: onBack,
+          onMyProfile: null,
+          onTeam: onUsers || null,
+          onTemplates: null,
+          onLogout: onLogout,
+          isInternal: isInternal,
+          isAdmin: isAdmin,
+        })
       )
     ),
 
@@ -695,147 +794,169 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
           React.createElement(StatusTab, { val: "archived",  label: "Archived"  }),
           React.createElement(StatusTab, { val: "converted", label: "Converted" })
         ),
-        isInternal && React.createElement("button", {
+        (isInternal || isPartner) && React.createElement("button", {
           onClick: function() { setShowAddForm(function(v) { return !v; }); setAddError(null); },
           style: S.addBtn,
         }, showAddForm ? "✕ Cancel" : "+ Add Contact")
       ),
 
-      // ── Add Contact form ──────────────────────────────────────────────
-      showAddForm && isInternal && React.createElement("div", {
+      // ── Add Contact modal ─────────────────────────────────────────────
+      showAddForm && (isInternal || isPartner) && React.createElement("div", {
         style: {
-          background: "rgba(255,255,255,0.05)",
-          border: "1px solid rgba(255,255,255,0.12)",
-          borderRadius: "12px",
+          position: "fixed", inset: 0, zIndex: 9999,
+          background: "rgba(0,0,0,0.6)",
+          display: "flex", alignItems: "center", justifyContent: "center",
           padding: "20px",
-          marginBottom: "20px",
+        },
+        onClick: function(e) {
+          if (e.target === e.currentTarget) { setShowAddForm(false); setAddForm(EMPTY_FORM_CT); setAddError(null); }
         }
       },
-        React.createElement("h3", {
-          style: { margin: "0 0 16px", fontSize: "15px", fontWeight: "600", color: "#f8fafc" }
-        }, "New Contact"),
-        React.createElement("form", { onSubmit: handleAddSubmit },
-          // Row 1: First + Last name
-          React.createElement("div", { style: rowStyle },
-            React.createElement("div", null,
-              React.createElement("label", { style: labelStyle }, "First Name"),
-              React.createElement("input", {
-                style: inputStyle, value: addForm.first_name,
-                onChange: function(e) { setAddField("first_name", e.target.value); }
-              })
-            ),
-            React.createElement("div", null,
-              React.createElement("label", { style: labelStyle }, "Last Name *"),
-              React.createElement("input", {
-                style: inputStyle, value: addForm.last_name, required: true,
-                onChange: function(e) { setAddField("last_name", e.target.value); }
-              })
-            )
+        React.createElement("div", {
+          style: {
+            background: "#fff", borderRadius: "16px",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
+            padding: "32px", width: "100%", maxWidth: "480px",
+            fontFamily: "'Inter', system-ui, sans-serif",
+          }
+        },
+          // Header
+          React.createElement("div", { style: { marginBottom: "24px" } },
+            React.createElement("h3", {
+              style: { margin: "0 0 4px", fontSize: "18px", fontWeight: 800, color: "#1e3a5f" }
+            }, "New Contact"),
+            React.createElement("p", {
+              style: { margin: 0, fontSize: "13px", color: "#64748b" }
+            }, "Fill in the basics — you can add more details from the contact record.")
           ),
-          // Row 2: Email + Phone
-          React.createElement("div", { style: rowStyle },
-            React.createElement("div", null,
-              React.createElement("label", { style: labelStyle }, "Email"),
-              React.createElement("input", {
-                type: "email", style: inputStyle, value: addForm.email,
-                onChange: function(e) { setAddField("email", e.target.value); }
-              })
+          React.createElement("form", { onSubmit: handleAddSubmit },
+            // Row 1: First + Last name
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" } },
+              React.createElement("div", null,
+                React.createElement("label", { style: { display: "block", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#64748b", marginBottom: "5px" } }, "First Name"),
+                React.createElement("input", {
+                  style: { width: "100%", padding: "10px 12px", border: "1.5px solid #e2e8f0", borderRadius: "8px", fontSize: "14px", color: "#1e293b", outline: "none", boxSizing: "border-box" },
+                  value: addForm.first_name,
+                  placeholder: "Joe",
+                  onChange: function(e) { setAddField("first_name", e.target.value); }
+                })
+              ),
+              React.createElement("div", null,
+                React.createElement("label", { style: { display: "block", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#64748b", marginBottom: "5px" } }, "Last Name *"),
+                React.createElement("input", {
+                  style: { width: "100%", padding: "10px 12px", border: "1.5px solid #e2e8f0", borderRadius: "8px", fontSize: "14px", color: "#1e293b", outline: "none", boxSizing: "border-box" },
+                  value: addForm.last_name, required: true,
+                  placeholder: "Smith",
+                  onChange: function(e) { setAddField("last_name", e.target.value); }
+                })
+              )
             ),
-            React.createElement("div", null,
-              React.createElement("label", { style: labelStyle }, "Phone"),
-              React.createElement("input", {
-                style: inputStyle, value: addForm.phone,
-                onChange: function(e) { setAddField("phone", e.target.value); }
-              })
-            )
-          ),
-          // Row 3: City + State
-          React.createElement("div", { style: rowStyle },
-            React.createElement("div", null,
-              React.createElement("label", { style: labelStyle }, "City"),
-              React.createElement("input", {
-                style: inputStyle, value: addForm.city,
-                onChange: function(e) { setAddField("city", e.target.value); }
-              })
+            // Row 2: Email + Phone
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" } },
+              React.createElement("div", null,
+                React.createElement("label", { style: { display: "block", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#64748b", marginBottom: "5px" } }, "Email"),
+                React.createElement("input", {
+                  type: "email",
+                  style: { width: "100%", padding: "10px 12px", border: "1.5px solid #e2e8f0", borderRadius: "8px", fontSize: "14px", color: "#1e293b", outline: "none", boxSizing: "border-box" },
+                  value: addForm.email_personal,
+                  placeholder: "joe@email.com",
+                  onChange: function(e) { setAddField("email_personal", e.target.value); }
+                })
+              ),
+              React.createElement("div", null,
+                React.createElement("label", { style: { display: "block", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#64748b", marginBottom: "5px" } }, "Phone"),
+                React.createElement("input", {
+                  type: "tel",
+                  style: { width: "100%", padding: "10px 12px", border: "1.5px solid #e2e8f0", borderRadius: "8px", fontSize: "14px", color: "#1e293b", outline: "none", boxSizing: "border-box" },
+                  value: addForm.phone,
+                  placeholder: "(555) 555-5555",
+                  onChange: function(e) { setAddField("phone", e.target.value); }
+                })
+              )
             ),
-            React.createElement("div", null,
-              React.createElement("label", { style: labelStyle }, "State"),
-              React.createElement("input", {
-                style: inputStyle, value: addForm.state,
-                placeholder: "TX", maxLength: 2,
-                onChange: function(e) { setAddField("state", e.target.value.toUpperCase()); }
-              })
-            )
-          ),
-          // Contact type + category
-          React.createElement("div", { style: rowStyle },
-            React.createElement("div", null,
-              React.createElement("label", { style: labelStyle }, "Type"),
-              React.createElement("select", {
-                style: Object.assign({}, inputStyle, { cursor: "pointer" }),
-                value: addForm.contact_type,
-                onChange: function(e) {
-                  var newType    = e.target.value;
-                  var defaultCat = newType === "business" ? "Other" : "Client";
-                  setAddForm(function(p) {
-                    return Object.assign({}, p, { contact_type: newType, contact_category: defaultCat });
+            // Row 3: Type + Category
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" } },
+              React.createElement("div", null,
+                React.createElement("label", { style: { display: "block", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#64748b", marginBottom: "5px" } }, "Type"),
+                React.createElement("select", {
+                  style: { width: "100%", padding: "10px 12px", border: "1.5px solid #e2e8f0", borderRadius: "8px", fontSize: "14px", color: "#1e293b", outline: "none", boxSizing: "border-box", background: "#fff", cursor: "pointer" },
+                  value: addForm.contact_type,
+                  onChange: function(e) {
+                    var newType = e.target.value;
+                    var defaultCat = newType === "business" ? "Other" : "Client";
+                    setAddForm(function(p) { return Object.assign({}, p, { contact_type: newType, contact_category: defaultCat }); });
+                  }
+                },
+                  React.createElement("option", { value: "client" },   "Client"),
+                  React.createElement("option", { value: "business" }, "Business")
+                )
+              ),
+              React.createElement("div", null,
+                React.createElement("label", { style: { display: "block", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#64748b", marginBottom: "5px" } }, "Category"),
+                React.createElement("select", {
+                  style: { width: "100%", padding: "10px 12px", border: "1.5px solid #e2e8f0", borderRadius: "8px", fontSize: "14px", color: "#1e293b", outline: "none", boxSizing: "border-box", background: "#fff", cursor: "pointer" },
+                  value: addForm.contact_category,
+                  onChange: function(e) { setAddField("contact_category", e.target.value); }
+                },
+                  (addForm.contact_type === "business" ? BUSINESS_CATEGORIES_CT : CLIENT_CATEGORIES_CT)
+                    .map(function(cat) { return React.createElement("option", { key: cat, value: cat }, cat); })
+                )
+              )
+            ),
+            // Referred By
+            React.createElement("div", { style: { marginBottom: "20px" } },
+              React.createElement("label", { style: { display: "block", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#64748b", marginBottom: "5px" } }, "Referred By"),
+              React.createElement(ReferralPickerCT, {
+                value:     addForm.referred_by_contact_id,
+                onChange:  function(id) { setAddField("referred_by_contact_id", id); },
+                contacts:  contacts,
+                excludeId: null,
+                onAddNew:  function(nameStr) {
+                  var parts = nameStr.trim().split(/\s+/);
+                  var firstName = parts.length > 1 ? parts.slice(0, -1).join(" ") : "";
+                  var lastName  = parts[parts.length - 1] || nameStr.trim();
+                  return saveContactToSupabase({
+                    first_name: firstName, last_name: lastName,
+                    contact_type: "client", contact_category: null,
+                    email_personal: "", email_work: "", email_other: "",
+                    phone_cell: "", phone_work: "", phone_fax: "",
+                    address: "", city: "", state: "", zip: "",
+                    referred_by_contact_id: null, status: "active", tags: [],
+                  }).then(function(result) {
+                    if (result.error || !result.data) return;
+                    setContacts(function(prev) { return [result.data, ...prev]; });
+                    setAddField("referred_by_contact_id", result.data.id);
                   });
-                }
-              },
-                React.createElement("option", { value: "client",   style: optionStyle }, "Client"),
-                React.createElement("option", { value: "business", style: optionStyle }, "Business")
-              )
+                },
+              })
             ),
-            React.createElement("div", null,
-              React.createElement("label", { style: labelStyle }, "Category"),
-              React.createElement("select", {
-                style: Object.assign({}, inputStyle, { cursor: "pointer" }),
-                value: addForm.contact_category,
-                onChange: function(e) { setAddField("contact_category", e.target.value); }
-              },
-                (addForm.contact_type === "business" ? BUSINESS_CATEGORIES_CT : CLIENT_CATEGORIES_CT)
-                  .map(function(cat) {
-                    return React.createElement("option", { key: cat, value: cat, style: optionStyle }, cat);
-                  })
-              )
+            // Error
+            addError && React.createElement("p", {
+              style: { color: "#dc2626", fontSize: "13px", margin: "0 0 14px", background: "#fef2f2", padding: "8px 12px", borderRadius: "6px", border: "1px solid #fecaca" }
+            }, addError),
+            // Buttons
+            React.createElement("div", { style: { display: "flex", gap: "10px" } },
+              React.createElement("button", {
+                type: "submit",
+                disabled: addSaving,
+                style: {
+                  flex: 1, padding: "11px 0",
+                  background: addSaving ? "#94a3b8" : "linear-gradient(135deg, #1e3a5f, #2d5a8e)",
+                  color: "#fff", border: "none", borderRadius: "8px",
+                  fontSize: "14px", fontWeight: 700,
+                  cursor: addSaving ? "wait" : "pointer",
+                }
+              }, addSaving ? "Saving…" : "Save Contact"),
+              React.createElement("button", {
+                type: "button",
+                onClick: function() { setShowAddForm(false); setAddForm(EMPTY_FORM_CT); setAddError(null); },
+                style: {
+                  padding: "11px 20px", background: "#f1f5f9", color: "#475569",
+                  border: "1px solid #e2e8f0", borderRadius: "8px",
+                  fontSize: "14px", cursor: "pointer",
+                }
+              }, "Cancel")
             )
-          ),
-          // Referred By
-          React.createElement("div", { style: { marginBottom: "12px" } },
-            React.createElement("label", { style: labelStyle }, "Referred By"),
-            React.createElement(ReferralPickerCT, {
-              value:     addForm.referred_by_contact_id,
-              onChange:  function(id) { setAddField("referred_by_contact_id", id); },
-              contacts:  contacts,
-              excludeId: null,
-            })
-          ),
-          // Error + buttons
-          addError && React.createElement("p", {
-            style: { color: "#f87171", fontSize: "13px", margin: "0 0 10px" }
-          }, addError),
-          React.createElement("div", { style: { display: "flex", gap: "10px" } },
-            React.createElement("button", {
-              type: "submit",
-              disabled: addSaving,
-              style: {
-                background: "#2563eb", color: "#fff", border: "none",
-                borderRadius: "8px", padding: "8px 18px",
-                cursor: addSaving ? "not-allowed" : "pointer",
-                fontSize: "14px", fontWeight: "600",
-                opacity: addSaving ? 0.65 : 1,
-              }
-            }, addSaving ? "Saving…" : "Save Contact"),
-            React.createElement("button", {
-              type: "button",
-              onClick: function() { setShowAddForm(false); setAddForm(EMPTY_FORM_CT); setAddError(null); },
-              style: {
-                background: "rgba(255,255,255,0.08)", color: "#94a3b8",
-                border: "1px solid rgba(255,255,255,0.15)",
-                borderRadius: "8px", padding: "8px 16px",
-                cursor: "pointer", fontSize: "14px",
-              }
-            }, "Cancel")
           )
         )
       ),
@@ -920,63 +1041,8 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
                       onClick: function() { handleSort("email"); } },
                       React.createElement("span", null, "Email"), arrow("email")
                     ),
-                    // FU Next — sortable + date-window filter
-                    React.createElement("th", { key: "fudate", style: Object.assign({}, clkTh, { width: "115px" }) },
-                      React.createElement("div", { onClick: function() { handleSort("fu_date"); }, style: { display: "inline-block" } },
-                        React.createElement("span", null, "FU Next"), arrow("fu_date")
-                      ),
-                      React.createElement("select", {
-                        value: fuDateFilter,
-                        onChange: function(e) { e.stopPropagation(); setFuDateFilter(e.target.value); },
-                        onClick:  function(e) { e.stopPropagation(); },
-                        style: fltSel,
-                      },
-                        React.createElement("option", { value: "",           style: { background: "#1e3a5f" } }, "All"),
-                        React.createElement("option", { value: "overdue",    style: { background: "#1e3a5f" } }, "Overdue"),
-                        React.createElement("option", { value: "today",      style: { background: "#1e3a5f" } }, "Today"),
-                        React.createElement("option", { value: "this_week",  style: { background: "#1e3a5f" } }, "This Week"),
-                        React.createElement("option", { value: "this_month", style: { background: "#1e3a5f" } }, "This Month"),
-                        React.createElement("option", { value: "none",       style: { background: "#1e3a5f" } }, "— none")
-                      )
-                    ),
-                    // FU Who — sortable + distinct-value filter
-                    React.createElement("th", { key: "fuwho", style: Object.assign({}, clkTh, { width: "100px" }) },
-                      React.createElement("div", { onClick: function() { handleSort("fu_who"); }, style: { display: "inline-block" } },
-                        React.createElement("span", null, "FU Who"), arrow("fu_who")
-                      ),
-                      React.createElement("select", {
-                        value: fuWhoFilter,
-                        onChange: function(e) { e.stopPropagation(); setFuWhoFilter(e.target.value); },
-                        onClick:  function(e) { e.stopPropagation(); },
-                        style: fltSel,
-                      },
-                        React.createElement("option", { value: "", style: { background: "#1e3a5f" } }, "All"),
-                        fuWhoOptions.map(function(who) {
-                          return React.createElement("option", { key: who, value: who, style: { background: "#1e3a5f" } }, who);
-                        }),
-                        React.createElement("option", { value: "_none", style: { background: "#1e3a5f" } }, "— none")
-                      )
-                    ),
-                    // FU Priority — sortable + filter
-                    React.createElement("th", { key: "fupri", style: Object.assign({}, clkTh, { width: "110px" }) },
-                      React.createElement("div", { onClick: function() { handleSort("fu_priority"); }, style: { display: "inline-block" } },
-                        React.createElement("span", null, "FU Priority"), arrow("fu_priority")
-                      ),
-                      React.createElement("select", {
-                        value: fuPriorityFilter,
-                        onChange: function(e) { e.stopPropagation(); setFuPriorityFilter(e.target.value); },
-                        onClick:  function(e) { e.stopPropagation(); },
-                        style: fltSel,
-                      },
-                        React.createElement("option", { value: "",      style: { background: "#1e3a5f" } }, "All"),
-                        React.createElement("option", { value: "High",  style: { background: "#1e3a5f" } }, "🔴 High"),
-                        React.createElement("option", { value: "Medium",style: { background: "#1e3a5f" } }, "🟡 Medium"),
-                        React.createElement("option", { value: "Low",   style: { background: "#1e3a5f" } }, "⚪ Low"),
-                        React.createElement("option", { value: "_none", style: { background: "#1e3a5f" } }, "— none")
-                      )
-                    ),
-                    // Note: Quick — not sortable
-                    React.createElement("th", { key: "note", style: thStyle }, "Note: Quick"),
+                    // Contact 2 — not sortable
+                    React.createElement("th", { key: "contact2", style: thStyle }, "Contact 2"),
                     // Created — sortable
                     React.createElement("th", { key: "created", style: Object.assign({}, clkTh, { width: "95px" }),
                       onClick: function() { handleSort("created_at"); } },
@@ -998,20 +1064,14 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
                 var subLine   = phone || email || "";
                 var scCount   = scenarioCounts[contact.id] || 0;
 
-                // FU fields (available once supabase-contact-notes-fields-migration is deployed)
-                var fuDate    = contact.fu_date
-                  ? new Date(contact.fu_date + "T00:00:00").toLocaleDateString("en-US", { month: "2-digit", day: "2-digit" })
-                  : null;
-                var fuWho     = contact.fu_who     || null;
-                var fuPri     = contact.fu_priority || null;
-                var noteQuick = contact.note_quick  || null;
                 var created   = contact.created_at
                   ? new Date(contact.created_at).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit" })
                   : "—";
 
-                // Priority badge colors
-                var priBg    = fuPri === "High" ? "rgba(239,68,68,0.2)"    : "rgba(100,116,139,0.2)";
-                var priColor = fuPri === "High" ? "#f87171"                 : "#94a3b8";
+                // Contact 2 fields
+                var name2   = ((contact.first_name2 || "") + " " + (contact.last_name2 || "")).trim() || null;
+                var phone2  = ctFormatPhone(contact.phone2 || contact.phone2_cell || contact.phone2_work || "");
+                var email2  = contact.email2 || contact.email2_personal || contact.email2_work || null;
 
                 return React.createElement("tr", {
                   key: contact.id,
@@ -1065,43 +1125,17 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
                       : React.createElement("span", { style: { color: "#334155" } }, "—")
                   ),
 
-                  // FU Next
-                  React.createElement("td", { style: tdStyle },
-                    fuDate
-                      ? React.createElement("span", { style: { color: "#fbbf24", fontWeight: "600" } }, fuDate)
-                      : React.createElement("span", { style: { color: "#334155" } }, "—")
-                  ),
-
-                  // FU Who
-                  React.createElement("td", { style: tdStyle },
-                    fuWho
-                      ? React.createElement("span", { style: { fontWeight: "700", color: "#f8fafc" } }, fuWho)
-                      : React.createElement("span", { style: { color: "#334155" } }, "—")
-                  ),
-
-                  // FU Priority
-                  React.createElement("td", { style: tdStyle },
-                    fuPri
-                      ? React.createElement("span", {
-                          style: {
-                            display: "inline-block",
-                            background: priBg, color: priColor,
-                            borderRadius: "5px", padding: "2px 8px",
-                            fontSize: "11px", fontWeight: "700",
-                          }
-                        }, fuPri)
-                      : React.createElement("span", { style: { color: "#334155" } }, "—")
-                  ),
-
-                  // Note: Quick
-                  React.createElement("td", {
-                    style: Object.assign({}, tdStyle, { color: "#94a3b8", overflow: "hidden" }),
-                  },
-                    noteQuick
-                      ? React.createElement("span", {
-                          title: noteQuick,
-                          style: { display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-                        }, noteQuick.length > 55 ? noteQuick.substring(0, 55) + "…" : noteQuick)
+                  // Contact 2
+                  React.createElement("td", { style: Object.assign({}, tdStyle, { color: "#94a3b8" }) },
+                    (name2 || phone2 || email2)
+                      ? React.createElement("div", null,
+                          name2 && React.createElement("div", { style: { fontWeight: "600", color: "#f8fafc", whiteSpace: "nowrap" } }, name2),
+                          phone2 && React.createElement("div", { style: { fontSize: "11px", whiteSpace: "nowrap" } }, phone2),
+                          email2 && React.createElement("div", {
+                            title: email2,
+                            style: { fontSize: "11px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "160px" },
+                          }, email2)
+                        )
                       : React.createElement("span", { style: { color: "#334155" } }, "—")
                   ),
 

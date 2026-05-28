@@ -1,0 +1,13 @@
+{
+  "name": "mortgage-toolkit",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "node build.js"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.23.9",
+    "@babel/preset-react": "^7.23.3",
+    "terser": "^5.26.0"
+  }
+}

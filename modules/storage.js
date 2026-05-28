@@ -37,6 +37,11 @@ function snapshotCalculatorData() {
       try { data[shortKey] = JSON.parse(localStorage.getItem(k)); } catch {}
     }
   }
+  // Explicitly include lo_selected — not in CALC_KEY_PREFIXES but must travel with the scenario
+  try {
+    const loSel = localStorage.getItem("mtk_lo_selected");
+    if (loSel !== null) data["lo_selected"] = JSON.parse(loSel);
+  } catch {}
   return data;
 }
 
@@ -103,6 +108,10 @@ function restoreCalculatorData(data) {
     Object.entries(data).forEach(([shortKey, val]) => {
       try { localStorage.setItem("mtk_" + shortKey, JSON.stringify(val)); } catch {}
     });
+    // Restore lo_selected explicitly (stored under "lo_selected" in snapshot, key is "mtk_lo_selected")
+    if (data["lo_selected"] !== undefined) {
+      try { localStorage.setItem("mtk_lo_selected", JSON.stringify(data["lo_selected"])); } catch {}
+    }
   } else {
     // New / blank scenario — preserve uid if present; blank all financial fields
     if (data && data.uid) {
@@ -110,6 +119,23 @@ function restoreCalculatorData(data) {
     }
     BLANK_SCENARIO_FIELDS.forEach(function(k) {
       try { localStorage.setItem("mtk_" + k, JSON.stringify("")); } catch {}
+    });
+    // Explicit non-blank defaults for new scenarios
+    // VA: always start as Active Duty/Veteran, First Use, not rated/exempt
+    // 2nd Lien: always start disabled with all fields blank
+    var NEW_SCENARIO_DEFAULTS = {
+      "pc_va_svc":      "active",  // Active Duty / Veteran
+      "pc_va_first":    "true",    // First use
+      "pc_va_exempt":   "false",   // Not exempt (not disability-rated)
+      "pc_va_dis":      "0",       // 0% disability rating
+      "pc_2nd_enabled": "false",   // 2nd lien off
+      "pc_2nd_rate":    "",
+      "pc_2nd_term":    "",
+      "pc_2nd_amt":     "",
+      "pc_2nd_mode":    "pct",
+    };
+    Object.keys(NEW_SCENARIO_DEFAULTS).forEach(function(k) {
+      try { localStorage.setItem("mtk_" + k, JSON.stringify(NEW_SCENARIO_DEFAULTS[k])); } catch {}
     });
   }
 }
@@ -148,7 +174,7 @@ function saveScenarioData(scenarioId) {
 
 // --- saveScenarioToSupabase (original line 228) ---
 async function saveScenarioToSupabase({
-  scenarioId, uid, name, notes, status, calculationData, contact_id,
+  scenarioId, uid, name, notes, status, calculationData, contact_id, co_borrower_contact_id,
   lead_status, loan_purpose, property_address, lead_source,
   target_close_date, actual_close_date
 } = {}) {
@@ -162,7 +188,8 @@ async function saveScenarioToSupabase({
     calculation_data: calculationData !== undefined ? calculationData : snapshotCalculatorData(),
   };
   if (uid              !== undefined && uid) payload.scenario_id = uid;
-  if (contact_id       !== undefined) payload.contact_id       = contact_id;
+  if (contact_id            !== undefined) payload.contact_id            = contact_id;
+  if (co_borrower_contact_id !== undefined) payload.co_borrower_contact_id = co_borrower_contact_id || null;
   if (lead_status      !== undefined) payload.lead_status      = lead_status;
   if (loan_purpose     !== undefined) payload.loan_purpose     = loan_purpose;
   if (property_address !== undefined) payload.property_address = property_address || null;
@@ -582,6 +609,23 @@ async function claimScenarioInSupabase(scenarioId) {
   return { data, error };
 }
 
+// --- fetchCoborrowerScenariosForBorrower ---
+// Returns scenarios where the authenticated user's email matches the
+// co_borrower_contact's email but the user does not own the scenario.
+// Requires the RLS policy from supabase-scenario-coborrower-migration.sql.
+// Co-borrowers are read-only — there is no claim path.
+async function fetchCoborrowerScenariosForBorrower() {
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr || !user) return { data: [], error: authErr || new Error("Not logged in") };
+  const { data, error } = await supabase
+    .from("scenarios")
+    .select("id, name, notes, status, lead_status, loan_purpose, property_address, created_at, updated_at, calculation_data, co_borrower_contact_id")
+    .not("co_borrower_contact_id", "is", null)
+    .neq("user_id", user.id)
+    .order("updated_at", { ascending: false });
+  return { data: data || [], error };
+}
+
 // --- fetchTemplatesFromSupabase ---
 async function fetchTemplatesFromSupabase() {
   const { data: { user }, error: authErr } = await supabase.auth.getUser();
@@ -632,6 +676,191 @@ async function setDefaultTemplateInSupabase(templateId) {
   return { error };
 }
 
+// ── Scenario Sharing ──────────────────────────────────────────────────────
+
+// Share a specific scenario with a partner user (LO → Realtor/Builder)
+async function shareScenarioWithPartner({ scenarioId, partnerUserId, permission = "view", note = "" } = {}) {
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr || !user) return { data: null, error: authErr || new Error("Not logged in") };
+  const payload = {
+    scenario_id:         scenarioId,
+    shared_by_user_id:   user.id,
+    shared_with_user_id: partnerUserId,
+    share_type:          "share",
+    permission:          permission,
+    note:                note || "",
+  };
+  const { data, error } = await supabase.from("scenario_shares").insert(payload).select().single();
+  return { data, error };
+}
+
+// Refer a scenario to the LO team (Realtor/Builder → LO)
+// shared_with_user_id is NULL = team-wide referral
+async function referScenarioToLO({ scenarioId, note = "" } = {}) {
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr || !user) return { data: null, error: authErr || new Error("Not logged in") };
+  const payload = {
+    scenario_id:         scenarioId,
+    shared_by_user_id:   user.id,
+    shared_with_user_id: null,    // null = whole team
+    share_type:          "referral",
+    permission:          "view",
+    note:                note || "",
+  };
+  const { data, error } = await supabase.from("scenario_shares").insert(payload).select().single();
+  return { data, error };
+}
+
+// Fetch shares for a specific scenario (to show who it's been shared with)
+async function fetchScenarioShares(scenarioId) {
+  if (!scenarioId) return { data: [], error: null };
+  const { data, error } = await supabase
+    .from("scenario_shares")
+    .select("id, share_type, permission, note, created_at, shared_by_user_id, shared_with_user_id")
+    .eq("scenario_id", scenarioId)
+    .order("created_at", { ascending: false });
+  return { data: data || [], error };
+}
+
+// Fetch scenarios shared with the current user (for partner dashboards)
+async function fetchSharedScenariosFromSupabase() {
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr || !user) return { data: [], error: authErr || new Error("Not logged in") };
+  // Get share records where this user is the recipient
+  const { data: shares, error: sharesErr } = await supabase
+    .from("scenario_shares")
+    .select("scenario_id, share_type, permission, note, created_at, shared_by_user_id")
+    .eq("shared_with_user_id", user.id)
+    .order("created_at", { ascending: false });
+  if (sharesErr || !shares || shares.length === 0) return { data: [], error: sharesErr };
+  const scenarioIds = [...new Set(shares.map(s => s.scenario_id))];
+  const { data: rows, error: rowsErr } = await supabase
+    .from("scenarios")
+    .select("*")
+    .in("id", scenarioIds);
+  if (rowsErr) return { data: [], error: rowsErr };
+  // Enrich with share metadata
+  const shareMap = {};
+  shares.forEach(s => { if (!shareMap[s.scenario_id]) shareMap[s.scenario_id] = s; });
+  // Look up who shared it
+  const byIds = [...new Set(shares.map(s => s.shared_by_user_id))];
+  const { data: byProfiles } = await supabase
+    .from("profiles").select("id, display_name").in("id", byIds);
+  const byNameMap = {};
+  if (byProfiles) byProfiles.forEach(p => { byNameMap[p.id] = p.display_name; });
+  const enriched = (rows || []).map(row => ({
+    ...row,
+    _share: shareMap[row.id] || null,
+    _shared_by_name: byNameMap[(shareMap[row.id] || {}).shared_by_user_id] || "",
+  }));
+  return { data: enriched, error: null };
+}
+
+// Fetch partner profiles (realtors and builders) in this tenant — for the LO share picker
+async function fetchPartnerProfiles() {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, display_name, email, role")
+    .in("role", ["realtor", "builder"])
+    .order("display_name", { ascending: true });
+  return { data: data || [], error };
+}
+
+// Share a scenario with a partner who doesn't have an account yet (pending invite)
+async function shareScenarioByInvite({ scenarioId, email, role, permission = "view", note = "" } = {}) {
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr || !user) return { data: null, error: authErr || new Error("Not logged in") };
+  const payload = {
+    scenario_id:          scenarioId,
+    shared_by_user_id:    user.id,
+    shared_with_user_id:  null,
+    shared_with_email:    email.toLowerCase().trim(),
+    invited_role:         role,
+    share_type:           "share",
+    permission:           permission,
+    note:                 note || "",
+  };
+  const { data, error } = await supabase.from("scenario_shares").insert(payload).select().single();
+  return { data, error };
+}
+
+// Called after a new partner signs up — fills in shared_with_user_id on any
+// pending shares addressed to their email, making them live immediately.
+async function resolvePendingSharesForUser(email, userId) {
+  if (!supabase || !email || !userId) return;
+  try {
+    await supabase
+      .from("scenario_shares")
+      .update({ shared_with_user_id: userId })
+      .eq("shared_with_email", email.toLowerCase().trim())
+      .is("shared_with_user_id", null);
+  } catch (err) {
+    console.warn("[resolvePendingSharesForUser]", err);
+  }
+}
+
+// --- fetchGlobalRateConfig ---
+// Reads the single tenant-level interest rate config from Supabase.
+// Returns null if none exists yet.
+async function fetchGlobalRateConfig() {
+  if (!supabase) return { data: null, error: null };
+  const { data, error } = await supabase
+    .from("global_rate_config")
+    .select("market_rate, floor_rate, rate_date, step_costs, updated_at")
+    .maybeSingle();
+  if (error) console.error("[fetchGlobalRateConfig]", error);
+  return { data: data || null, error };
+}
+
+// --- saveGlobalRateConfig ---
+// Upserts the global interest rate config for the current tenant.
+// Only internal users can call this (enforced by RLS).
+// tenant_id is fetched via RPC so the upsert conflict detection works correctly.
+async function saveGlobalRateConfig({ market, floor, rateDate, stepCosts }) {
+  if (!supabase) return { error: new Error("No Supabase") };
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr || !user) return { error: authErr || new Error("Not logged in") };
+  // Must include tenant_id explicitly so Supabase can detect the UNIQUE conflict
+  const { data: tenantId, error: tenantErr } = await supabase.rpc("get_my_tenant_id");
+  if (tenantErr || !tenantId) return { error: tenantErr || new Error("Could not determine tenant") };
+  const { error } = await supabase
+    .from("global_rate_config")
+    .upsert({
+      tenant_id:   tenantId,
+      market_rate: market,
+      floor_rate:  floor,
+      rate_date:   rateDate || "",
+      step_costs:  stepCosts || {},
+      updated_by:  user.id,
+      updated_at:  new Date().toISOString(),
+    }, { onConflict: "tenant_id" });
+  if (error) console.error("[saveGlobalRateConfig]", error);
+  return { error };
+}
+
+// --- grantLiveScenarioAccess ---
+// Inserts a scenario_shares record with shared_with_email so a borrower can
+// read the scenario by email match after logging in, even without contact_id.
+// Called by NotifyClientButton when the LO sends a live session link.
+async function grantLiveScenarioAccess(scenarioId, clientEmail) {
+  if (!supabase || !scenarioId || !clientEmail) return { error: new Error("Missing params") };
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr || !user) return { error: authErr || new Error("Not logged in") };
+  const { data, error } = await supabase
+    .from("scenario_shares")
+    .insert({
+      scenario_id:        scenarioId,
+      shared_with_email:  clientEmail.toLowerCase().trim(),
+      share_type:         "share",
+      permission:         "view",
+      note:               "live_session_invite",
+    })
+    .select("id")
+    .single();
+  if (error) console.warn("[grantLiveScenarioAccess]", error.message);
+  return { data, error };
+}
+
 // --- Expose on window ---
 window.CALC_SECTION_NAMES         = CALC_SECTION_NAMES;
 window.snapshotCalculatorData     = snapshotCalculatorData;
@@ -651,8 +880,9 @@ window.savePQSnapshot             = savePQSnapshot;
 window.fetchPQSnapshots           = fetchPQSnapshots;
 window.sharePQLetter              = sharePQLetter;
 window.fetchPQShares              = fetchPQShares;
-window.fetchClaimableScenariosForBorrower = fetchClaimableScenariosForBorrower;
-window.claimScenarioInSupabase            = claimScenarioInSupabase;
+window.fetchClaimableScenariosForBorrower    = fetchClaimableScenariosForBorrower;
+window.claimScenarioInSupabase               = claimScenarioInSupabase;
+window.fetchCoborrowerScenariosForBorrower   = fetchCoborrowerScenariosForBorrower;
 window.fetchContactsFromSupabase     = fetchContactsFromSupabase;
 window.saveContactToSupabase         = saveContactToSupabase;
 window.archiveContactInSupabase      = archiveContactInSupabase;
@@ -664,3 +894,61 @@ window.fetchTemplatesFromSupabase    = fetchTemplatesFromSupabase;
 window.saveTemplateToSupabase        = saveTemplateToSupabase;
 window.deleteTemplateFromSupabase    = deleteTemplateFromSupabase;
 window.setDefaultTemplateInSupabase  = setDefaultTemplateInSupabase;
+window.shareScenarioWithPartner         = shareScenarioWithPartner;
+window.shareScenarioByInvite            = shareScenarioByInvite;
+window.resolvePendingSharesForUser      = resolvePendingSharesForUser;
+window.referScenarioToLO               = referScenarioToLO;
+window.fetchScenarioShares             = fetchScenarioShares;
+window.fetchSharedScenariosFromSupabase = fetchSharedScenariosFromSupabase;
+window.fetchPartnerProfiles            = fetchPartnerProfiles;
+window.fetchGlobalRateConfig           = fetchGlobalRateConfig;
+window.saveGlobalRateConfig            = saveGlobalRateConfig;
+window.grantLiveScenarioAccess         = grantLiveScenarioAccess;
+
+// ── Custom Warning Rules ─────────────────────────────────────────────────────
+
+async function fetchWarningRules() {
+  if (!supabase) return { data: [], error: null };
+  const { data, error } = await supabase
+    .from("warning_rules")
+    .select("*")
+    .order("created_at", { ascending: true });
+  return { data: data || [], error };
+}
+
+async function saveWarningRule(rule) {
+  if (!supabase) return { data: null, error: "No Supabase client" };
+  const payload = {
+    label:      rule.label,
+    message:    rule.message,
+    severity:   rule.severity || "warning",
+    conditions: rule.conditions || [],
+    enabled:    rule.enabled !== false,
+  };
+  if (rule.id) {
+    const { data, error } = await supabase
+      .from("warning_rules")
+      .update(payload)
+      .eq("id", rule.id)
+      .select()
+      .single();
+    return { data, error };
+  } else {
+    const { data, error } = await supabase
+      .from("warning_rules")
+      .insert(payload)
+      .select()
+      .single();
+    return { data, error };
+  }
+}
+
+async function deleteWarningRule(id) {
+  if (!supabase) return { error: "No Supabase client" };
+  const { error } = await supabase.from("warning_rules").delete().eq("id", id);
+  return { error };
+}
+
+window.fetchWarningRules  = fetchWarningRules;
+window.saveWarningRule    = saveWarningRule;
+window.deleteWarningRule  = deleteWarningRule;

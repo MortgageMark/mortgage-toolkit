@@ -50,9 +50,9 @@ function HELOCCalculator() {
     <div>
       <SectionCard title="Home Equity Position" subtitle="Your current equity and borrowing power">
         <div className="mtk-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <LabeledInput label="Home Value" value={homeValue} onChange={setHomeValue} prefix="$" />
-          <LabeledInput label="Mortgage Balance" value={mortBal} onChange={setMortBal} prefix="$" />
-          <LabeledInput label="Current Mortgage Payment" value={mortPayment} onChange={setMortPayment} prefix="$" />
+          <LabeledInput label="Home Value" value={homeValue} onChange={setHomeValue} prefix="$" useCommas />
+          <LabeledInput label="Mortgage Balance" value={mortBal} onChange={setMortBal} prefix="$" useCommas />
+          <LabeledInput label="Current Mortgage Payment" value={mortPayment} onChange={setMortPayment} prefix="$" useCommas />
           <LabeledInput label="Current Mortgage Rate" value={mortRate} onChange={setMortRate} suffix="%" step="0.125" />
         </div>
       </SectionCard>
@@ -64,7 +64,7 @@ function HELOCCalculator() {
       </div>
       <SectionCard title="HELOC / Home Equity Loan" subtitle="Calculate payments on equity borrowing">
         <div className="mtk-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <LabeledInput label="HELOC Amount" value={helocAmt} onChange={setHelocAmt} prefix="$" />
+          <LabeledInput label="HELOC Amount" value={helocAmt} onChange={setHelocAmt} prefix="$" useCommas />
           <LabeledInput label="HELOC Rate" value={helocRate} onChange={setHelocRate} suffix="%" step="0.25" />
           <LabeledInput label="Repayment Term (years)" value={helocTerm} onChange={setHelocTerm} suffix="yr" />
           <LabeledInput label="Max CLTV Allowed" value={maxLTV} onChange={setMaxLTV} suffix="%" />

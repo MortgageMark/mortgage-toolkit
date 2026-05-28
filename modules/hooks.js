@@ -31,3 +31,43 @@ function useThemeColors() {
   return (ctx && ctx.colors) ? ctx.colors : (window.COLORS || {});
 }
 window.useThemeColors = useThemeColors;
+
+// Evaluates a structured conditions array (from Supabase) against calculator state.
+// All conditions are AND-ed. Operators: is, is_not (strings); gt, gte, lt, lte, eq (numbers).
+function evaluateCustomRule(conditions, state) {
+  if (!conditions || conditions.length === 0) return false;
+  return conditions.every(cond => {
+    const val = state[cond.field];
+    const cv  = cond.value;
+    switch (cond.op) {
+      case "is":     return String(val) === String(cv);
+      case "is_not": return String(val) !== String(cv);
+      case "gt":     return parseFloat(val) > parseFloat(cv);
+      case "gte":    return parseFloat(val) >= parseFloat(cv);
+      case "lt":     return parseFloat(val) < parseFloat(cv);
+      case "lte":    return parseFloat(val) <= parseFloat(cv);
+      case "eq":     return parseFloat(val) === parseFloat(cv);
+      default:       return false;
+    }
+  });
+}
+window.evaluateCustomRule = evaluateCustomRule;
+
+// Merges hardcoded WARNING_RULES with tenant custom rules from Supabase.
+// suppressions: array of hardcoded rule IDs to skip.
+// customRules: array of rule objects fetched from Supabase (already filtered for enabled).
+function useWarnings(state, suppressions, customRules) {
+  const sup    = suppressions || [];
+  const custom = customRules  || [];
+  return React.useMemo(() => {
+    const hardcoded = (window.WARNING_RULES || [])
+      .filter(r => !sup.includes(r.id))
+      .filter(r => { try { return r.condition(state); } catch(e) { return false; } });
+    const tenant = custom
+      .filter(r => r.enabled !== false)
+      .filter(r => { try { return evaluateCustomRule(r.conditions, state); } catch(e) { return false; } });
+    return [...hardcoded, ...tenant];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(state), JSON.stringify(sup), JSON.stringify(custom)]);
+}
+window.useWarnings = useWarnings;

@@ -2,8 +2,9 @@
 const { useState } = React;
 const useThemeColors = window.useThemeColors;
 const supabase = window._supabaseClient;
+const resolvePendingSharesForUser = window.resolvePendingSharesForUser;
 
-function LoginScreen({ onLogin, viewPrefill }) {
+function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
   const c = useThemeColors();
   const font = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
   // If arriving from a magic link, default to signup so new clients can create an account
@@ -72,6 +73,61 @@ function LoginScreen({ onLogin, viewPrefill }) {
       // Also sync profile data into the legacy roster for admin panel compatibility
       syncProfileToRoster(user.id, displayName, role, profile);
 
+      // For admin/internal users: sync the full team roster from Supabase so all
+      // LOs appear in the LOSelector without needing to open the Admin Panel.
+      if (isInternal) {
+        supabase.from("profiles")
+          .select("id, display_name, email, email_display, role, nmls, phone, cell_phone, fax, title, company, company_nmls, branch_nmls, website, address, city, state, zip")
+          .in("role", ["admin", "internal"])
+          .then(function(res) {
+            if (res.error || !res.data) return;
+            var uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            try {
+              var roster = [];
+              try { roster = JSON.parse(localStorage.getItem("mtk_roster") || "[]"); } catch(e) {}
+              res.data.forEach(function(p) {
+                var idx = roster.findIndex(function(m) { return m.id === p.id; });
+                var entry = {
+                  id: p.id,
+                  name: p.display_name || p.email || "",
+                  email: p.email || "",
+                  email_display: p.email_display || "",
+                  role: p.role,
+                  nmls: p.nmls || "",
+                  phone: p.phone || "",
+                  cell: p.cell_phone || "",
+                  fax: p.fax || "",
+                  title: p.title || "",
+                  company: p.company || "",
+                  companyNMLS: p.company_nmls || "",
+                  branchNmls: p.branch_nmls || "",
+                  website: p.website || "",
+                  address: p.address || "",
+                  city: p.city || "",
+                  state: p.state || "",
+                  zip: p.zip || "",
+                  active: true,
+                  passwordHash: "supabase-managed",
+                };
+                if (idx >= 0) { roster[idx] = Object.assign({}, roster[idx], entry); }
+                else { roster.push(entry); }
+              });
+              // Remove stale non-UUID entries whose NMLS duplicates a real Supabase entry
+              var uuidNmls = new Set(
+                roster.filter(function(m) { return uuidRe.test(m.id) && m.nmls; })
+                      .map(function(m) { return m.nmls; })
+              );
+              roster = roster.filter(function(m) {
+                if (uuidRe.test(m.id)) return true;
+                if (m.nmls && uuidNmls.has(m.nmls)) return false;
+                return true;
+              });
+              localStorage.setItem("mtk_roster", JSON.stringify(roster));
+              window.dispatchEvent(new Event("storage"));
+            } catch(e) {}
+          });
+      }
+
       // Ensure a contact record exists; returns new contact ID only for first-time users
       const newContactId = await ensureContactForNewUser(displayName, user.email, role);
 
@@ -84,6 +140,7 @@ function LoginScreen({ onLogin, viewPrefill }) {
         supabaseUser: true,
         borrowerPermissions: profile.borrower_permissions || [],
         newContactId: newContactId || null,
+        mustChangePassword: !!(profile && profile.must_change_password),
       });
     } catch (err) {
       setError("An unexpected error occurred.");
@@ -141,6 +198,11 @@ function LoginScreen({ onLogin, viewPrefill }) {
 
         // Ensure a contact record exists; returns new contact ID for brand-new users
         const newContactId = await ensureContactForNewUser(displayName, user.email, role, suPhone.trim(), suFirstName.trim(), suLastName.trim());
+
+        // Resolve any pending scenario shares addressed to this email
+        if (resolvePendingSharesForUser) {
+          await resolvePendingSharesForUser(user.email, user.id);
+        }
 
         onLogin({
           id: user.id,
@@ -258,6 +320,19 @@ function LoginScreen({ onLogin, viewPrefill }) {
     } else {
       roster.push(memberData);
     }
+    // Remove stale non-UUID entries that share the same NMLS as a UUID-based entry.
+    // This cleans up manually-created legacy entries (e.g. "Marky Mark") that duplicate
+    // a real Supabase profile entry with the same NMLS number.
+    var uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    var uuidNmls = new Set(
+      roster.filter(function(m) { return uuidRe.test(m.id) && m.nmls; })
+            .map(function(m) { return m.nmls; })
+    );
+    roster = roster.filter(function(m) {
+      if (uuidRe.test(m.id)) return true;
+      if (m.nmls && uuidNmls.has(m.nmls)) return false;
+      return true;
+    });
     localStorage.setItem("mtk_roster", JSON.stringify(roster));
     window.dispatchEvent(new Event("storage"));
   }
@@ -346,10 +421,28 @@ function LoginScreen({ onLogin, viewPrefill }) {
       React.createElement("div", { style: { textAlign: "center", marginBottom: 24 } },
         React.createElement("h1", {
           style: { fontSize: 22, fontWeight: 800, color: "#0C4160", margin: "0 0 4px 0", fontFamily: font, letterSpacing: "-0.01em" }
-        }, "Mortgage Toolkit"),
+        }, "Home Loan Toolkit"),
         React.createElement("p", {
           style: { fontSize: 11, color: "#6B7D8A", textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 600, fontFamily: font, margin: 0 }
         }, "MORTGAGE MARK \u00B7 CMG HOME LOANS")
+      ),
+
+      // Live session invite banner
+      pendingLive && React.createElement("div", {
+        style: {
+          background: "#EBF8FF", border: "1.5px solid #3B82F6",
+          borderRadius: 10, padding: "14px 16px", marginBottom: 20,
+          textAlign: "center", fontFamily: font
+        }
+      },
+        React.createElement("div", { style: { fontSize: 13, color: "#1D4ED8", fontWeight: 700, marginBottom: 4 } },
+          "📡 You've been invited to a Live Session"
+        ),
+        React.createElement("div", { style: { fontSize: 12, color: "#374151", lineHeight: 1.5 } },
+          "Your loan officer is ready to walk through your numbers with you.",
+          React.createElement("br"),
+          "Sign in or create a free account to join."
+        )
       ),
 
       // Magic link welcome banner
@@ -515,6 +608,19 @@ function LoginScreen({ onLogin, viewPrefill }) {
           })
         ),
         React.createElement("div", { style: { marginBottom: 14 } },
+          React.createElement("label", { style: labelStyle }, "I AM A"),
+          React.createElement("select", {
+            value: suRole,
+            onChange: function(e) { setSuRole(e.target.value); },
+            style: inputStyle
+          },
+            React.createElement("option", { value: "borrower" }, "Client / Borrower"),
+            React.createElement("option", { value: "realtor" }, "Realtor"),
+            React.createElement("option", { value: "builder" }, "Builder"),
+            React.createElement("option", { value: "internal" }, "Loan Officer")
+          )
+        ),
+        React.createElement("div", { style: { marginBottom: 14 } },
           React.createElement("label", { style: labelStyle }, "PASSWORD"),
           React.createElement("input", {
             type: "password",
@@ -564,7 +670,10 @@ function LoginScreen({ onLogin, viewPrefill }) {
       // Footer
       React.createElement("div", {
         style: { textAlign: "center", marginTop: 20, fontSize: 11, color: "#94A3B0", fontFamily: font }
-      }, "\u00A9 " + new Date().getFullYear() + " Mortgage Mark \u00B7 NMLS #729612")
+      }, "\u00A9 " + new Date().getFullYear() + " Mortgage Mark \u00B7 NMLS #729612"),
+      React.createElement("div", {
+        style: { textAlign: "center", marginTop: 6, fontSize: 10, color: "#C0CDD6", fontFamily: font, letterSpacing: "0.05em" }
+      }, "v20260325-1")
     )
   );
 }

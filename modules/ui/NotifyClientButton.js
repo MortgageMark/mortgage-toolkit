@@ -18,9 +18,12 @@ const MODULE_TO_DEST = {
 };
 
 function NotifyClientButton({ scenario, contact, activeModule, user }) {
-  const [sending,   setSending]   = useState(false);
-  const [modal,     setModal]     = useState(null); // null | { url, isExisting, error, clientName }
-  const [copied,    setCopied]    = useState(false);
+  const [sending,     setSending]     = useState(false);
+  const [modal,       setModal]       = useState(null); // null | { url, isExisting, error, clientName }
+  const [copied,      setCopied]      = useState(false);
+  const [sendingLive, setSendingLive] = useState(false);
+  const [liveModal,   setLiveModal]   = useState(null); // null | { url, error, clientName }
+  const [liveCopied,  setLiveCopied]  = useState(false);
 
   // Derive contact fields
   const clientEmail = (contact && (contact.email_personal || contact.email_work || "").trim()) || "";
@@ -36,6 +39,51 @@ function NotifyClientButton({ scenario, contact, activeModule, user }) {
 
   const destination = MODULE_TO_DEST[activeModule] || "full_scenario";
   const destLabel   = (window.TOKEN_DESTINATIONS && window.TOKEN_DESTINATIONS[destination]) || "Scenario";
+
+  const handleSendLive = useCallback(async function() {
+    setSendingLive(true);
+    setLiveModal(null);
+    const liveUrl = (window.location.href.split("?")[0]) + "?live=" + scenario.id;
+
+    // Grant email-based read access so the borrower can load the scenario after
+    // logging in, even if the scenario has no contact_id linking their email.
+    if (window.grantLiveScenarioAccess && clientEmail) {
+      await window.grantLiveScenarioAccess(scenario.id, clientEmail).catch(function() {});
+    }
+
+    const SUPABASE_URL = window._supabaseClient && window._supabaseClient.supabaseUrl;
+    const EDGE_FN_URL  = SUPABASE_URL ? SUPABASE_URL + "/functions/v1/send-scenario-link" : null;
+    var emailError = null;
+    if (EDGE_FN_URL) {
+      try {
+        const { data: { session } } = await window._supabaseClient.auth.getSession();
+        const resp = await fetch(EDGE_FN_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + (session && session.access_token ? session.access_token : ""),
+          },
+          body: JSON.stringify({
+            clientEmail,
+            clientName,
+            scenarioName:     scenario.name || "Your Mortgage Scenario",
+            destination:      "live_session",
+            destinationLabel: "Live Session",
+            tokenUrl:         liveUrl,
+            createdByName:    user.name || "Your Loan Officer",
+            isLiveSession:    true,
+          }),
+        });
+        if (!resp.ok) emailError = new Error("Email send failed — link was still created.");
+      } catch (e) {
+        emailError = new Error("Email send failed — link was still created.");
+      }
+    } else {
+      emailError = new Error("Email service unavailable.");
+    }
+    setSendingLive(false);
+    setLiveModal({ url: liveUrl, error: emailError ? emailError.message : null, clientName });
+  }, [clientEmail, clientName, scenario, user]);
 
   const handleSend = useCallback(async function() {
     setSending(true);
@@ -83,6 +131,35 @@ function NotifyClientButton({ scenario, contact, activeModule, user }) {
 
   return (
     <React.Fragment>
+      {/* ── Live Session invite button ── */}
+      <button
+        onClick={handleSendLive}
+        disabled={sendingLive}
+        title={"Email live session link to " + clientName}
+        style={{
+          display:     "flex",
+          alignItems:  "center",
+          gap:         6,
+          padding:     "7px 14px",
+          borderRadius: 8,
+          border:      "none",
+          background:  sendingLive ? "rgba(255,255,255,0.12)" : "rgba(52,211,153,0.85)",
+          color:       sendingLive ? "#fff" : "#064E3B",
+          fontSize:    12,
+          fontWeight:  700,
+          fontFamily:  _font,
+          cursor:      sendingLive ? "wait" : "pointer",
+          whiteSpace:  "nowrap",
+          transition:  "background 0.2s",
+          flexShrink:  0,
+        }}
+      >
+        {sendingLive
+          ? <React.Fragment><span style={{ fontSize: 14 }}>⏳</span> Sending…</React.Fragment>
+          : <React.Fragment><span style={{ fontSize: 14 }}>📡</span> Live Session</React.Fragment>
+        }
+      </button>
+
       {/* ── Trigger button ── */}
       <button
         onClick={handleSend}
@@ -111,6 +188,43 @@ function NotifyClientButton({ scenario, contact, activeModule, user }) {
           : <React.Fragment><span style={{ fontSize: 14 }}>📧</span> Notify Client</React.Fragment>
         }
       </button>
+
+      {/* ── Live Session result modal ── */}
+      {liveModal && (
+        <div
+          onClick={function(e) { if (e.target === e.currentTarget) setLiveModal(null); }}
+          style={{ position: "fixed", inset: 0, zIndex: 99999, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+        >
+          <div style={{ background: "#fff", borderRadius: 14, boxShadow: "0 8px 40px rgba(0,0,0,0.22)", padding: "32px 28px 24px", maxWidth: 480, width: "100%", fontFamily: _font }}>
+            {liveModal.error
+              ? <React.Fragment>
+                  <div style={{ fontSize: 28, textAlign: "center", marginBottom: 10 }}>⚠️</div>
+                  <h3 style={{ fontSize: 16, fontWeight: 700, color: "#064E3B", textAlign: "center", margin: "0 0 8px" }}>Link ready — email may not have sent</h3>
+                  <p style={{ fontSize: 13, color: "#6B7280", textAlign: "center", margin: "0 0 16px", lineHeight: 1.5 }}>{liveModal.error}</p>
+                </React.Fragment>
+              : <React.Fragment>
+                  <div style={{ fontSize: 28, textAlign: "center", marginBottom: 10 }}>📡</div>
+                  <h3 style={{ fontSize: 16, fontWeight: 700, color: "#064E3B", textAlign: "center", margin: "0 0 4px" }}>Live Session invite sent!</h3>
+                  <p style={{ fontSize: 13, color: "#6B7280", textAlign: "center", margin: "0 0 16px", lineHeight: 1.5 }}>
+                    Email sent to <strong style={{ color: "#064E3B" }}>{liveModal.clientName}</strong>. When they open the link and load their scenario, you'll both be connected automatically.
+                  </p>
+                </React.Fragment>
+            }
+            {liveModal.url && (
+              <div style={{ background: "#F0FDF4", border: "1.5px solid #86EFAC", borderRadius: 8, padding: "10px 12px", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ flex: 1, fontSize: 11, color: "#374151", wordBreak: "break-all", lineHeight: 1.4, fontFamily: "monospace" }}>{liveModal.url}</span>
+                <button
+                  onClick={function() {
+                    navigator.clipboard.writeText(liveModal.url).then(function() { setLiveCopied(true); setTimeout(function() { setLiveCopied(false); }, 2000); }).catch(function() {});
+                  }}
+                  style={{ flexShrink: 0, padding: "6px 12px", borderRadius: 6, border: "none", background: liveCopied ? "#22c55e" : "#064E3B", color: "#fff", fontSize: 11, fontWeight: 700, fontFamily: _font, cursor: "pointer", transition: "background 0.2s" }}
+                >{liveCopied ? "Copied ✓" : "Copy"}</button>
+              </div>
+            )}
+            <button onClick={function() { setLiveModal(null); }} style={{ display: "block", width: "100%", padding: "11px 16px", borderRadius: 8, border: "1.5px solid #D1D9E0", background: "#fff", color: "#374151", fontSize: 13, fontWeight: 600, fontFamily: _font, cursor: "pointer" }}>Close</button>
+          </div>
+        </div>
+      )}
 
       {/* ── Result modal ── */}
       {modal && (

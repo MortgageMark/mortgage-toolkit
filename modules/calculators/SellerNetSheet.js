@@ -73,6 +73,14 @@ function getSNSFees(abbr) {
   return SNS_STATE_FEES[abbr] || SNS_STATE_FEES["TX"];
 }
 
+function addCommasLocal(v) {
+  const s = String(v).replace(/[^0-9.]/g, "");
+  const [int, dec] = s.split(".");
+  const formatted = (int || "").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return dec !== undefined ? formatted + "." + dec : formatted;
+}
+function stripCommasLocal(v) { return String(v).replace(/,/g, ""); }
+
 function dayOfYear(dateStr) {
   if (!dateStr) return 0;
   const parts = dateStr.split("-");
@@ -95,7 +103,6 @@ function SellerNetSheet({ isInternal = false, user = null }) {
   // Mortgage payoffs
   const [mort1, setMort1]         = useLocalStorage("sns_mort1", "280000");
   const [mort2, setMort2]         = useLocalStorage("sns_mort2", "");
-  const [perDiem, setPerDiem]     = useLocalStorage("sns_perdiem", "");
   const [escrowBal, setEscrowBal] = useLocalStorage("sns_escrow_bal", "");
 
   // Commission & credits
@@ -128,6 +135,14 @@ function SellerNetSheet({ isInternal = false, user = null }) {
   const [ovAttorney, setOvAttorney]     = useLocalStorage("sns_ov_attorney", "");
   const [ovGuaranty, setOvGuaranty]     = useLocalStorage("sns_ov_guaranty", "");
 
+  // Other Expenses (3 custom line items)
+  const [otherLabel1, setOtherLabel1] = useLocalStorage("sns_oth_lbl1", "");
+  const [otherAmt1,   setOtherAmt1]   = useLocalStorage("sns_oth_amt1", "");
+  const [otherLabel2, setOtherLabel2] = useLocalStorage("sns_oth_lbl2", "");
+  const [otherAmt2,   setOtherAmt2]   = useLocalStorage("sns_oth_amt2", "");
+  const [otherLabel3, setOtherLabel3] = useLocalStorage("sns_oth_lbl3", "");
+  const [otherAmt3,   setOtherAmt3]   = useLocalStorage("sns_oth_amt3", "");
+
   // Reset seller-pays-title to state default when state changes
   useEffect(() => {
     const stF = getSNSFees(selectedState);
@@ -147,9 +162,8 @@ function SellerNetSheet({ isInternal = false, user = null }) {
     const sp  = parseFloat(salePrice) || 0;
     const m1  = parseFloat(mort1) || 0;
     const m2  = parseFloat(mort2) || 0;
-    const pd  = parseFloat(perDiem) || 0;
     const esc = parseFloat(escrowBal) || 0;
-    const totalMortPayoffs = m1 + m2 + pd;
+    const totalMortPayoffs = m1 + m2;
 
     const commPct    = parseFloat(commissionPct) || 0;
     const commission = Math.round(sp * commPct / 100);
@@ -164,9 +178,12 @@ function SellerNetSheet({ isInternal = false, user = null }) {
     const totalPropAdj = taxProrate + hoaTrans + repair;
 
     const conc       = parseFloat(sellerConc) || 0;
-    const titleAmt   = sellerPaysTitle ? Math.round(stT.basicRate(sp)) : 0;
-    const hwAmount   = includeHW ? (parseFloat(hwAmt) || stT.homeWarranty || 550) : 0;
-    const survAmount = includeSurvey ? (parseFloat(surveyAmt) || stT.surveyFee || 450) : 0;
+    const titleAmt     = sellerPaysTitle ? Math.round(stT.basicRate(sp)) : 0;
+    const titleAmtFull = Math.round(stT.basicRate(sp));
+    const hwAmount     = includeHW ? (parseFloat(hwAmt) || stT.homeWarranty || 550) : 0;
+    const hwAmtFull    = parseFloat(hwAmt) || stT.homeWarranty || 550;
+    const survAmount   = includeSurvey ? (parseFloat(surveyAmt) || stT.surveyFee || 450) : 0;
+    const survAmtFull  = parseFloat(surveyAmt) || stT.surveyFee || 450;
     const totalBuyerCosts = conc + titleAmt + hwAmount + survAmount;
 
     const calcTransferDefault = sp > 0 ? Math.round(sp * stF.transferTaxRate / 1000) : 0;
@@ -180,7 +197,12 @@ function SellerNetSheet({ isInternal = false, user = null }) {
     const attorney    = ov(ovAttorney, stT.attorneyRequired ? (stT.attorneyFee || 0) : 0);
     const totalSellerFees = settlement + docPrep + courier + taxCert + recording + transferTax + guaranty + attorney;
 
-    const totalDeductions = totalMortPayoffs + commission + totalBuyerCosts + totalPropAdj + totalSellerFees;
+    const oth1 = parseFloat(otherAmt1) || 0;
+    const oth2 = parseFloat(otherAmt2) || 0;
+    const oth3 = parseFloat(otherAmt3) || 0;
+    const totalOtherExpenses = oth1 + oth2 + oth3;
+
+    const totalDeductions = totalMortPayoffs + commission + totalBuyerCosts + totalPropAdj + totalSellerFees + totalOtherExpenses;
 
     const realtorCred    = parseFloat(realtorCredit) || 0;
     const prepaidHOAAmt  = parseFloat(prepaidHOA) || 0;
@@ -189,11 +211,12 @@ function SellerNetSheet({ isInternal = false, user = null }) {
     const netProceeds = sp - totalDeductions + totalAddBacks;
 
     return {
-      sp, m1, m2, pd, esc, totalMortPayoffs,
+      sp, m1, m2, esc, totalMortPayoffs,
       commission, commPct,
       taxProrate, hoaTrans, repair, totalPropAdj,
-      conc, titleAmt, hwAmount, survAmount, totalBuyerCosts,
+      conc, titleAmt, titleAmtFull, hwAmount, hwAmtFull, survAmount, survAmtFull, totalBuyerCosts,
       settlement, docPrep, courier, taxCert, recording, transferTax, guaranty, attorney, totalSellerFees,
+      oth1, oth2, oth3, totalOtherExpenses,
       totalDeductions,
       realtorCred, prepaidHOAAmt, escRefund: esc, totalAddBacks,
       netProceeds,
@@ -211,11 +234,12 @@ function SellerNetSheet({ isInternal = false, user = null }) {
         attorney: stT.attorneyRequired ? (stT.attorneyFee || 0) : 0,
       },
     };
-  }, [selectedState, salePrice, closingDate, mort1, mort2, perDiem, escrowBal,
+  }, [selectedState, salePrice, closingDate, mort1, mort2, escrowBal,
       commissionPct, sellerConc, repairCredits, realtorCredit,
       annualTax, taxMode, taxManual, hoaTransfer, prepaidHOA,
       sellerPaysTitle, includeHW, hwAmt, includeSurvey, surveyAmt,
-      ovSettlement, ovDocPrep, ovCourier, ovTaxCert, ovRecording, ovTransfer, ovAttorney, ovGuaranty]);
+      ovSettlement, ovDocPrep, ovCourier, ovTaxCert, ovRecording, ovTransfer, ovAttorney, ovGuaranty,
+      otherAmt1, otherAmt2, otherAmt3]);
 
   // ── FeeRow ───────────────────────────────────────────────────────────────
   const FeeRow = ({ label, amount, bold, indent, color, editKey, editValue, onEdit, defaultVal, last }) => (
@@ -267,7 +291,7 @@ function SellerNetSheet({ isInternal = false, user = null }) {
             <LabeledInput label="Sale Price" prefix="$" value={salePrice} onChange={setSalePrice} useCommas />
             <div style={{ marginBottom: 12 }}>
               <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: COLORS.grayLight, marginBottom: 4, fontFamily: font, letterSpacing: "0.04em" }}>
-                Closing Date
+                Closing Date (for the sale of your home)
               </label>
               <input type="date" value={closingDate} onChange={e => setClosingDate(e.target.value)}
                 style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLORS.border}`, borderRadius: 6,
@@ -283,25 +307,27 @@ function SellerNetSheet({ isInternal = false, user = null }) {
           {/* MORTGAGE PAYOFFS */}
           <SectionCard title="MORTGAGE PAYOFFS" accent={COLORS.red}>
             <LabeledInput label="1st Mortgage Payoff" prefix="$" value={mort1} onChange={setMort1} useCommas />
-            <LabeledInput label="2nd Mortgage Payoff" prefix="$" value={mort2} onChange={setMort2} useCommas small />
-            <LabeledInput label="Per Diem Interest (total at closing)" prefix="$" value={perDiem} onChange={setPerDiem} useCommas small />
-            <LabeledInput label="Current Escrow Balance (add-back)" prefix="$" value={escrowBal} onChange={setEscrowBal} useCommas small
+            <LabeledInput label="2nd Mortgage Payoff" prefix="$" value={mort2} onChange={setMort2} useCommas />
+            <div style={{ margin: "2px 0 10px", padding: "9px 12px", borderRadius: 7, background: "#FFF8E7", border: "1px solid #F0D080", borderLeft: "3px solid #E6A817", fontSize: 11, color: "#7A5800", fontFamily: font, lineHeight: 1.6 }}>
+              <span style={{ fontWeight: 700 }}>Your payoff ≠ your balance.</span> Your payoff includes your remaining principal + accrued daily interest through the closing date + any lender payoff processing fees (~$25–$75). Log in to your servicer's portal or call them to request an official payoff quote — it's typically valid for 30 days.
+            </div>
+            <LabeledInput label="Current Escrow Balance (add-back)" prefix="$" value={escrowBal} onChange={setEscrowBal} useCommas
               hint="Returned to seller at closing" />
           </SectionCard>
 
           {/* COMMISSION & CREDITS */}
           <SectionCard title="COMMISSION & CREDITS" accent={COLORS.gold || "#C9A84C"}>
-            <LabeledInput label="Agent Commission" value={commissionPct} onChange={setCommissionPct} suffix="%"
+            <LabeledInput label="Realtor Commission(s)" value={commissionPct} onChange={setCommissionPct} suffix="%"
               hint={salePrice ? fmt(Math.round((parseFloat(salePrice) || 0) * (parseFloat(commissionPct) || 0) / 100)) : ""} />
-            <LabeledInput label="Seller Concessions" prefix="$" value={sellerConc} onChange={setSellerConc} useCommas small />
-            <LabeledInput label="Repair Credits" prefix="$" value={repairCredits} onChange={setRepairCredits} useCommas small />
-            <LabeledInput label="Realtor Credit to Seller (add-back)" prefix="$" value={realtorCredit} onChange={setRealtorCredit} useCommas small
-              hint="Included in add-backs" />
+            <LabeledInput label="Realtor Credit Paid to Seller" prefix="$" value={realtorCredit} onChange={setRealtorCredit} useCommas
+              hint="Add-back — returned to seller" />
+            <LabeledInput label="Seller Concessions Paid to Buyer" prefix="$" value={sellerConc} onChange={setSellerConc} useCommas />
+            <LabeledInput label="Repair Costs" prefix="$" value={repairCredits} onChange={setRepairCredits} useCommas />
           </SectionCard>
 
           {/* PROPERTY & HOA */}
           <SectionCard title="PROPERTY & HOA" accent={COLORS.blue}>
-            <LabeledInput label="Annual Property Taxes" prefix="$" value={annualTax} onChange={setAnnualTax} useCommas small />
+            <LabeledInput label="Annual Property Taxes" prefix="$" value={annualTax} onChange={setAnnualTax} useCommas />
             <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
               <button onClick={() => setTaxMode("auto")} style={{ flex: 1, padding: "6px 10px", borderRadius: 6, border: `1px solid ${taxMode === "auto" ? COLORS.blue : COLORS.border}`, background: taxMode === "auto" ? COLORS.blue : "#fff", color: taxMode === "auto" ? "#fff" : COLORS.navy, fontSize: 11, fontWeight: 600, fontFamily: font, cursor: "pointer" }}>
                 Auto Prorate
@@ -311,59 +337,73 @@ function SellerNetSheet({ isInternal = false, user = null }) {
               </button>
             </div>
             {taxMode === "manual" && (
-              <LabeledInput label="Tax Prorate (manual)" prefix="$" value={taxManual} onChange={setTaxManual} useCommas small />
+              <LabeledInput label="Tax Prorate (manual)" prefix="$" value={taxManual} onChange={setTaxManual} useCommas />
             )}
             {taxMode === "auto" && (
               <div style={{ fontSize: 11, color: COLORS.grayLight, marginBottom: 8, fontFamily: font }}>
                 Auto: days elapsed ÷ 365 × annual taxes
               </div>
             )}
-            <LabeledInput label="HOA Transfer Fee" prefix="$" value={hoaTransfer} onChange={setHoaTransfer} useCommas small />
-            <LabeledInput label="Prepaid HOA Dues (add-back)" prefix="$" value={prepaidHOA} onChange={setPrepaidHOA} useCommas small
+            <LabeledInput label="HOA Transfer Fee" prefix="$" value={hoaTransfer} onChange={setHoaTransfer} useCommas />
+            <LabeledInput label="Prepaid HOA Dues (add-back)" prefix="$" value={prepaidHOA} onChange={setPrepaidHOA} useCommas
               hint="Reimbursed to seller by buyer" />
           </SectionCard>
 
-          {/* OPTIONS */}
-          <SectionCard title="OPTIONS" accent={COLORS.blue}>
-            <Toggle label="Seller Pays Owner's Title Policy" checked={sellerPaysTitle} onChange={setSellerPaysTitle} />
-            {sellerPaysTitle && (
-              <div style={{ fontSize: 11, color: COLORS.grayLight, marginTop: -4, marginBottom: 6, fontFamily: font }}>
-                {fmt(Math.round(calc.titleAmt))} — {calc.stateName} rate
-              </div>
-            )}
-            <Toggle label="Include Home Warranty" checked={includeHW} onChange={setIncludeHW} />
-            {includeHW && <LabeledInput label="Home Warranty Amount" prefix="$" value={hwAmt} onChange={setHwAmt} small />}
-            <Toggle label="Include Survey" checked={includeSurvey} onChange={setIncludeSurvey} />
-            {includeSurvey && <LabeledInput label="Survey Amount" prefix="$" value={surveyAmt} onChange={setSurveyAmt} small />}
+          {/* OPTIONAL: SELLER PAID ITEMS */}
+          <SectionCard title="OPTIONAL: SELLER PAID ITEMS" accent={COLORS.blue}>
+            <Toggle label={"Title Policy (" + fmt(calc.titleAmtFull) + ")"} checked={sellerPaysTitle} onChange={setSellerPaysTitle} />
+            <Toggle label={"Home Warranty (" + fmt(calc.hwAmtFull) + ")"} checked={includeHW} onChange={setIncludeHW} />
+            <Toggle label={"Survey: Pay for New Survey (" + fmt(calc.survAmtFull) + ")"} checked={includeSurvey} onChange={setIncludeSurvey} />
           </SectionCard>
 
-          {/* FEE OVERRIDES — internal only */}
-          {isInternal && (
-            <SectionCard title="FEE OVERRIDES (INTERNAL)" accent={COLORS.red}>
-              <div style={{ fontSize: 11, color: COLORS.grayLight, marginBottom: 8, fontFamily: font }}>
-                Leave blank to use state defaults. Type to override.
+          {/* OTHER EXPENSES */}
+          <SectionCard title="OTHER EXPENSES" accent={COLORS.blue}>
+            <div style={{ fontSize: 11, color: COLORS.grayLight, marginBottom: 8, fontFamily: font }}>
+              Add up to three additional seller expenses.
+            </div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 6, alignItems: "flex-end" }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: COLORS.grayLight, marginBottom: 4, fontFamily: font, letterSpacing: "0.04em" }}>Description</label>
+                <input value={otherLabel1} onChange={e => setOtherLabel1(e.target.value)} placeholder="e.g. Termite Inspection"
+                  style={{ width: "100%", padding: "7px 10px", border: `1px solid ${COLORS.border}`, borderRadius: 6, fontSize: 13, fontFamily: font, color: COLORS.navy, boxSizing: "border-box", outline: "none" }} />
               </div>
-              <LabeledInput label="Settlement / Closing Fee" prefix="$" value={ovSettlement} onChange={setOvSettlement} hint={`Default: ${fmt(calc.defaults.settlement)}`} small />
-              <LabeledInput label="Doc Prep" prefix="$" value={ovDocPrep} onChange={setOvDocPrep} hint={`Default: ${fmt(calc.defaults.docPrep)}`} small />
-              <LabeledInput label="Courier / Copy / Overnight" prefix="$" value={ovCourier} onChange={setOvCourier} hint={`Default: ${fmt(calc.defaults.courier)}`} small />
-              <LabeledInput label="Tax Cert" prefix="$" value={ovTaxCert} onChange={setOvTaxCert} hint={`Default: ${fmt(calc.defaults.taxCert)}`} small />
-              <LabeledInput label="Recording Fee" prefix="$" value={ovRecording} onChange={setOvRecording} hint={`Default: ${fmt(calc.defaults.recording)}`} small />
-              {calc.defaults.transfer > 0 && (
-                <LabeledInput label={calc.transferTaxLabel || "Transfer / Doc Stamp Tax"} prefix="$" value={ovTransfer} onChange={setOvTransfer} hint={`Default: ${fmt(calc.defaults.transfer)}`} small />
-              )}
-              {calc.hasAttorney && (
-                <LabeledInput label="Attorney / Closing Fee" prefix="$" value={ovAttorney} onChange={setOvAttorney} hint={`Default: ${fmt(calc.defaults.attorney)}`} small />
-              )}
-              {calc.defaults.guaranty > 0 && (
-                <LabeledInput label="State Guaranty / Escrow Fund Fee" prefix="$" value={ovGuaranty} onChange={setOvGuaranty} hint={`Default: ${fmt(calc.defaults.guaranty)}`} small />
-              )}
-              <button
-                onClick={() => { setOvSettlement(""); setOvDocPrep(""); setOvCourier(""); setOvTaxCert(""); setOvRecording(""); setOvTransfer(""); setOvAttorney(""); setOvGuaranty(""); }}
-                style={{ marginTop: 8, padding: "6px 14px", background: COLORS.grayLight, color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 600, fontFamily: font }}>
-                Reset All to Defaults
-              </button>
-            </SectionCard>
-          )}
+              <div style={{ width: 100 }}>
+                <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: COLORS.grayLight, marginBottom: 4, fontFamily: font, letterSpacing: "0.04em" }}>Amount</label>
+                <div style={{ display: "flex", alignItems: "center", border: `1px solid ${COLORS.border}`, borderRadius: 6, overflow: "hidden" }}>
+                  <span style={{ padding: "7px 6px", background: "#f5f5f5", fontSize: 13, color: COLORS.grayLight, fontFamily: font }}>$</span>
+                  <input type="text" value={addCommasLocal(otherAmt1)} onChange={e => setOtherAmt1(stripCommasLocal(e.target.value))} placeholder="0"
+                    style={{ flex: 1, padding: "7px 6px", border: "none", fontSize: 13, fontFamily: font, color: COLORS.navy, outline: "none", minWidth: 0 }} />
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 6, alignItems: "flex-end" }}>
+              <div style={{ flex: 1 }}>
+                <input value={otherLabel2} onChange={e => setOtherLabel2(e.target.value)} placeholder="e.g. HOA Docs Fee"
+                  style={{ width: "100%", padding: "7px 10px", border: `1px solid ${COLORS.border}`, borderRadius: 6, fontSize: 13, fontFamily: font, color: COLORS.navy, boxSizing: "border-box", outline: "none" }} />
+              </div>
+              <div style={{ width: 100 }}>
+                <div style={{ display: "flex", alignItems: "center", border: `1px solid ${COLORS.border}`, borderRadius: 6, overflow: "hidden" }}>
+                  <span style={{ padding: "7px 6px", background: "#f5f5f5", fontSize: 13, color: COLORS.grayLight, fontFamily: font }}>$</span>
+                  <input type="text" value={addCommasLocal(otherAmt2)} onChange={e => setOtherAmt2(stripCommasLocal(e.target.value))} placeholder="0"
+                    style={{ flex: 1, padding: "7px 6px", border: "none", fontSize: 13, fontFamily: font, color: COLORS.navy, outline: "none", minWidth: 0 }} />
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+              <div style={{ flex: 1 }}>
+                <input value={otherLabel3} onChange={e => setOtherLabel3(e.target.value)} placeholder="e.g. Lien Release"
+                  style={{ width: "100%", padding: "7px 10px", border: `1px solid ${COLORS.border}`, borderRadius: 6, fontSize: 13, fontFamily: font, color: COLORS.navy, boxSizing: "border-box", outline: "none" }} />
+              </div>
+              <div style={{ width: 100 }}>
+                <div style={{ display: "flex", alignItems: "center", border: `1px solid ${COLORS.border}`, borderRadius: 6, overflow: "hidden" }}>
+                  <span style={{ padding: "7px 6px", background: "#f5f5f5", fontSize: 13, color: COLORS.grayLight, fontFamily: font }}>$</span>
+                  <input type="text" value={addCommasLocal(otherAmt3)} onChange={e => setOtherAmt3(stripCommasLocal(e.target.value))} placeholder="0"
+                    style={{ flex: 1, padding: "7px 6px", border: "none", fontSize: 13, fontFamily: font, color: COLORS.navy, outline: "none", minWidth: 0 }} />
+                </div>
+              </div>
+            </div>
+          </SectionCard>
+
         </div>
 
         {/* ── RIGHT COLUMN ── */}
@@ -390,7 +430,6 @@ function SellerNetSheet({ isInternal = false, user = null }) {
               <GroupHeader label="MORTGAGE PAYOFFS" />
               <FeeRow label="1st Mortgage Payoff" amount={calc.m1} indent color={COLORS.red} />
               {calc.m2 > 0 && <FeeRow label="2nd Mortgage Payoff" amount={calc.m2} indent color={COLORS.red} />}
-              {calc.pd > 0 && <FeeRow label="Per Diem Interest" amount={calc.pd} indent color={COLORS.red} />}
               <FeeRow label="Subtotal — Mortgage Payoffs" amount={calc.totalMortPayoffs} bold color={COLORS.red} />
             </div>
 
@@ -454,6 +493,17 @@ function SellerNetSheet({ isInternal = false, user = null }) {
               </div>
             )}
 
+            {/* OTHER EXPENSES */}
+            {calc.totalOtherExpenses > 0 && (
+              <div style={{ marginBottom: 14 }}>
+                <GroupHeader label="OTHER EXPENSES" />
+                {calc.oth1 > 0 && <FeeRow label={otherLabel1 || "Other Expense 1"} amount={calc.oth1} indent />}
+                {calc.oth2 > 0 && <FeeRow label={otherLabel2 || "Other Expense 2"} amount={calc.oth2} indent />}
+                {calc.oth3 > 0 && <FeeRow label={otherLabel3 || "Other Expense 3"} amount={calc.oth3} indent />}
+                <FeeRow label="Subtotal — Other Expenses" amount={calc.totalOtherExpenses} bold />
+              </div>
+            )}
+
             {/* TOTAL DEDUCTIONS */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderTop: `3px solid ${COLORS.navy}`, borderBottom: `1px solid ${COLORS.border}`, marginBottom: 14, fontFamily: font }}>
               <span style={{ fontSize: 14, fontWeight: 800, color: COLORS.navy }}>TOTAL DEDUCTIONS</span>
@@ -504,6 +554,15 @@ function SellerNetSheet({ isInternal = false, user = null }) {
               * Estimates only. Fees vary by title company, county, and negotiated terms. Transfer tax and title rates are approximate — verify with your title company. Tax prorate is based on a 365-day year.
             </div>
           </SectionCard>
+
+          {/* Reset Fees button */}
+          <div style={{ marginTop: 8, textAlign: "right" }}>
+            <button
+              onClick={() => { setOvSettlement(""); setOvDocPrep(""); setOvCourier(""); setOvTaxCert(""); setOvRecording(""); setOvTransfer(""); setOvAttorney(""); setOvGuaranty(""); }}
+              style={{ padding: "7px 16px", background: "#fff", color: COLORS.navy, border: `1.5px solid ${COLORS.border}`, borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: font }}>
+              ↺ Reset Fees to Defaults
+            </button>
+          </div>
 
         </div>
       </div>

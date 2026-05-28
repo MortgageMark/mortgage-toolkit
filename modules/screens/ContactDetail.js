@@ -1,11 +1,12 @@
-// modules/screens/ContactDetail.js
-const { useState, useEffect: useEffectCD } = React;
+﻿// modules/screens/ContactDetail.js
+const { useState, useEffect: useEffectCD, useRef: useRefCD } = React;
 const fetchContactNotesFromSupabase = window.fetchContactNotesFromSupabase;
 const addContactNoteToSupabase      = window.addContactNoteToSupabase;
 const saveContactToSupabase         = window.saveContactToSupabase;
 const archiveContactInSupabase      = window.archiveContactInSupabase;
 const supabaseCD = window._supabaseClient;
 const formatPhone = window.formatPhone;
+const cdSaveScenario = window.saveScenarioToSupabase;
 
 // Lead helpers (mirrors ScenarioDashboard)
 function cdGetLeadStatusColors(leadStatus) {
@@ -180,9 +181,20 @@ function HdrCell({ label, value, width }) {
   );
 }
 
-function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onLogout, onSelectScenario, contacts, onSelectContact }) {
+function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onLogout, onSelectScenario, contacts, onSelectContact, onScenarios, onTasksScenarios, onTasksContacts, activeView, onSetView }) {
   const isInternal = !!(user && user.isInternal);
   const isAdmin    = !!(user && user.role === "admin");
+  const isPartner  = !!(user && (user.role === "realtor" || user.role === "builder"));
+  const canManage  = isInternal || isPartner;
+
+  // Derive the login role from the contact's type/category
+  const inferredRole = (function() {
+    if (contact.contact_type === "client") return "borrower";
+    var cat = (contact.contact_category || "").toLowerCase();
+    if (cat.includes("realtor")) return "realtor";
+    if (cat.includes("builder")) return "builder";
+    return "borrower"; // safe default for all other business contacts
+  })();
 
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -249,7 +261,35 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
 
   const [linkedScenarios, setLinkedScenarios]       = useState([]);
   const [scenariosLoading, setScenariosLoading]     = useState(false);
+  const [creatingScenario, setCreatingScenario]     = useState(false);
   const [openingScenario, setOpeningScenario]       = useState(null);
+
+  // activeView is now controlled by App.js via props
+  function handleSetView(view) {
+    if (onSetView) onSetView(view);
+    if (view !== "contact") { setEditMode(false); setSaveError(null); }
+  }
+
+  // Portal account creation
+  const [portalCreated, setPortalCreated] = useState(!!contact.auth_user_id);
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [portalModal,   setPortalModal]   = useState(null); // { snippet }
+  const [portalCopied,  setPortalCopied]  = useState(false);
+
+  // On mount: if auth_user_id isn't set, check profiles by email so "Login Active" shows immediately
+  useEffectCD(function() {
+    if (portalCreated) return; // already confirmed
+    var email = (contact.email_personal || contact.email || contact.email_work || "").trim();
+    if (!email || !supabaseCD) return;
+    supabaseCD
+      .from("profiles")
+      .select("id")
+      .eq("email", email.toLowerCase())
+      .maybeSingle()
+      .then(function(res) {
+        if (res.data) setPortalCreated(true);
+      });
+  }, [contact.id]);
 
   // Load activity notes on mount
   useEffectCD(function () {
@@ -276,20 +316,48 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
       });
   }, [contact.id]);
 
+
   function handleFieldChange(field, value) {
     setEditForm(function (prev) { return Object.assign({}, prev, { [field]: value }); });
   }
 
   async function handleDelete() {
     const fullName = [contact.first_name, contact.last_name].filter(Boolean).join(" ") || "this contact";
-    if (!confirm("Permanently delete " + fullName + "? This cannot be undone and will remove all linked data.")) return;
+
+    // Count linked scenarios first
+    const { data: linkedScs } = await supabaseCD
+      .from("scenarios")
+      .select("id")
+      .eq("contact_id", contact.id);
+    const scCount = (linkedScs || []).length;
+
+    const warningLines = [
+      "Permanently delete " + fullName + "?",
+      "",
+      scCount > 0
+        ? "⚠️ This will also permanently delete " + scCount + " linked scenario" + (scCount === 1 ? "" : "s") + "."
+        : "No linked scenarios will be affected.",
+      "",
+      "This cannot be undone.",
+    ];
+    if (!confirm(warningLines.join("\n"))) return;
+
+    // Delete linked scenarios first
+    if (scCount > 0) {
+      const { error: scErr } = await supabaseCD
+        .from("scenarios")
+        .delete()
+        .eq("contact_id", contact.id);
+      if (scErr) { alert("Could not delete linked scenarios: " + scErr.message); return; }
+    }
+
     const { error } = await supabaseCD
       .from("contacts")
       .delete()
       .eq("id", contact.id);
     if (error) { alert("Could not delete contact: " + error.message); return; }
     if (onDelete) onDelete(contact.id);
-    else if (onArchive) onArchive(contact.id); // fallback: remove from list
+    else if (onArchive) onArchive(contact.id);
     else if (onBack) onBack();
   }
 
@@ -319,6 +387,41 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
     } else {
       setNewNote("");
       setNotes(function (prev) { return [data, ...prev]; });
+    }
+  }
+
+  async function handleNewScenario() {
+    if (!supabaseCD || !onSelectScenario || !cdSaveScenario) return;
+    setCreatingScenario(true);
+    const contactName = [contact.first_name, contact.last_name].filter(Boolean).join(" ") || "New Scenario";
+    try {
+      const uid = "s_" + Date.now();
+      const { data, error } = await cdSaveScenario({
+        uid:             uid,
+        name:            contactName,
+        notes:           "",
+        calculationData: { uid: uid },
+        contact_id:      contact.id,
+        lead_status:     "?",
+        loan_purpose:    "purchase",
+      });
+      if (error || !data) { alert("Could not create scenario. Please try again."); return; }
+      onSelectScenario({
+        id:               data.id,
+        clientName:       data.name || contactName,
+        notes:            "",
+        createdBy:        data.user_id,
+        status:           "active",
+        lead_status:      "?",
+        loan_purpose:     "purchase",
+        contact_id:       contact.id,
+        calculatorData:   {},
+        _cloud:           true,
+      });
+    } catch (err) {
+      alert("Could not create scenario.");
+    } finally {
+      setCreatingScenario(false);
     }
   }
 
@@ -359,6 +462,92 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
     }
   }
 
+  async function handleCreatePortal() {
+    const email = (contact.email_personal || contact.email || contact.email_work || "").trim();
+    if (!email) { alert("No email address found for this contact. Add one before creating a portal account."); return; }
+    if (!supabaseCD) return;
+    setPortalLoading(true);
+    try {
+      const emailLower = email.toLowerCase();
+      const { data, error: invokeErr } = await supabaseCD.functions.invoke("create-borrower-account", {
+        body: {
+          contactId:   contact.id,
+          email:       emailLower,
+          displayName: [contact.first_name, contact.last_name].filter(Boolean).join(" ") || email,
+          role:        inferredRole,
+        },
+      });
+
+      if (invokeErr) {
+        alert("Could not create account: " + (invokeErr.message || String(invokeErr)));
+        return;
+      }
+
+      const result = data || {};
+
+      if (result.alreadyExists) {
+        alert("An account already exists for " + email + ". They can already log in.");
+        setPortalCreated(true);
+        return;
+      }
+      if (result.error || result.success !== true) {
+        alert("Could not create account: " + (result.error || "Unexpected response from server."));
+        return;
+      }
+
+      // Patch the profile role in case the Edge Function defaulted to "borrower"
+      if (inferredRole !== "borrower" && isInternal) {
+        try {
+          const { data: prof } = await supabaseCD
+            .from("profiles").select("id").eq("email", emailLower).maybeSingle();
+          if (prof && prof.id) {
+            await supabaseCD.from("profiles").update({ role: inferredRole }).eq("id", prof.id);
+          }
+        } catch (e) { console.warn("Could not patch profile role:", e); }
+      }
+
+      // Build role-aware copy snippet
+      setPortalCreated(true);
+      const appUrl = window.location.origin + window.location.pathname;
+      const firstName = (contact.first_name || "").trim() || "there";
+      const roleLabel = inferredRole === "realtor" ? "Realtor"
+                      : inferredRole === "builder"  ? "Builder"
+                      : "Client";
+      const purposeLine = inferredRole === "realtor" || inferredRole === "builder"
+        ? "You can log in to view scenarios that have been shared with you."
+        : "You can log in to view your mortgage details at any time.";
+      const snippet = [
+        "Hi " + firstName + ",",
+        "",
+        purposeLine,
+        "",
+        "Login page: " + appUrl,
+        "Email: " + emailLower,
+        "Temporary password: 123456",
+        "",
+        "Sign up as: " + roleLabel,
+        "",
+        "You'll be asked to create a new password on your first login.",
+        "",
+        "— " + (user && user.name ? user.name : "Your Loan Officer"),
+      ].join("\n");
+      setPortalModal({ snippet, roleLabel });
+    } catch (err) {
+      alert("Something went wrong. Please try again.");
+      console.error("handleCreatePortal error:", err);
+    } finally {
+      setPortalLoading(false);
+    }
+  }
+
+  function handleCopyPortalSnippet() {
+    if (!portalModal) return;
+    navigator.clipboard.writeText(portalModal.snippet).then(function () {
+      setPortalCopied(true);
+      setTimeout(function () { setPortalCopied(false); }, 2500);
+    });
+  }
+
   const displayName = [
     editMode ? editForm.first_name : contact.first_name,
     editMode ? editForm.last_name  : contact.last_name,
@@ -380,8 +569,15 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
   const sectionStyle = {
     background: "#fff", borderRadius: "12px",
     boxShadow: "0 1px 3px rgba(0,0,0,0.07)", padding: "20px",
-    marginBottom: "16px",
+    marginBottom: "16px", position: "relative",
   };
+  const cardNum = (n) => (
+    <span style={{
+      position: "absolute", bottom: "10px", right: "14px",
+      fontSize: "10px", fontWeight: "700", color: "#d1d5db",
+      userSelect: "none", pointerEvents: "none", lineHeight: 1,
+    }}>{n}</span>
+  );
   const sectionTitleStyle = {
     fontSize: "13px", fontWeight: "700", color: "#1e3a5f", marginBottom: "16px",
     textTransform: "uppercase", letterSpacing: "0.05em",
@@ -431,139 +627,72 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
 
   return (
     <div style={{
-      minHeight: "100vh",
+      height: "100vh",
+      display: "flex",
+      flexDirection: "column",
       background: "#f1f5f9",
       fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
+      overflow: "hidden",
     }}>
 
-      {/* ── Header ───────────────────────────────────────────────── */}
-      <div style={{
-        background: "linear-gradient(135deg, #1e3a5f 0%, #2d5a8e 100%)",
-        padding: "0 24px",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
-        position: "sticky", top: 0, zIndex: 100,
-      }}>
+      {/* ── Sub-nav: Contacts + Scenarios (non-internal, non-borrower only) ── */}
+      {!isInternal && user && user.role !== "borrower" && (
         <div style={{
-          maxWidth: "1000px", margin: "0 auto", padding: "16px 0",
-          display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px",
+          background: "#f0f4f8",
+          borderBottom: "1px solid #dde3ea",
+          padding: "0 24px",
         }}>
-          <div>
-            {/* ── Client 1 columns ───────────────────────────────── */}
-            <div style={{ display: "flex", gap: "12px", alignItems: "flex-end" }}>
-              <HdrCell label="Prefix"   value={contact.prefix || null}    width="52px" />
-              <HdrCell label="First"    value={contact.first_name || null} width="110px" />
-              <HdrCell label="Nickname" value={contact.nickname ? `"${contact.nickname}"` : null} width="110px" />
-              <HdrCell label="Last"     value={contact.last_name || null}  width="120px" />
-              <HdrCell label="Category" value={contact.contact_category || contact.contact_type || null} width="140px" />
-              <HdrCell label="Phone"    value={bestPhone ? cdFormatPhone(bestPhone) : null} width="140px" />
-              <HdrCell label="Email"    value={bestEmail || null}          width="190px" />
-            </div>
-            {/* ── Client 2 columns (only when client 2 has a name) ── */}
-            {(contact.first_name2 || contact.last_name2) && (
-              <div style={{ borderTop: "1px solid rgba(255,255,255,0.18)", paddingTop: "8px", marginTop: "8px" }}>
-                <div style={{ display: "flex", gap: "12px", alignItems: "flex-end" }}>
-                  <HdrCell label="Prefix"     value={contact.prefix2 || null}     width="52px" />
-                  <HdrCell label="First"      value={contact.first_name2 || null}  width="110px" />
-                  <HdrCell label="Nickname"   value={contact.nickname2 ? `"${contact.nickname2}"` : null} width="110px" />
-                  <HdrCell label="Last"       value={contact.last_name2 || null}   width="120px" />
-                  <HdrCell label="Connection" value={contact.connection_to_contact1 || null} width="140px" />
-                  <HdrCell label="Phone"      value={bestPhone2 ? cdFormatPhone(bestPhone2) : null} width="140px" />
-                  <HdrCell label="Email"      value={bestEmail2 || null}           width="190px" />
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div style={{ display: "flex", gap: "10px", alignItems: "center", flexShrink: 0 }}>
+          <div style={{ maxWidth: "1000px", margin: "0 auto", display: "flex", gap: "4px" }}>
             <button
               onClick={onBack}
               style={{
-                background: "rgba(255,255,255,0.15)", color: "#fff",
-                border: "1px solid rgba(255,255,255,0.3)", borderRadius: "8px",
-                padding: "8px 14px", cursor: "pointer", fontSize: "14px",
-                flexShrink: 0,
+                background: "transparent", border: "none",
+                color: "#1e3a5f", fontSize: 13, fontWeight: 600,
+                padding: "7px 14px", borderRadius: 6, cursor: "pointer",
+                fontFamily: "'Inter', system-ui, sans-serif",
               }}
+              onMouseEnter={function(e) { e.currentTarget.style.background = "rgba(30,58,95,0.08)"; }}
+              onMouseLeave={function(e) { e.currentTarget.style.background = "transparent"; }}
             >
-              &larr; Back
+              Contacts
             </button>
-            {isInternal && !editMode && (
+            {onScenarios && (
               <button
-                onClick={function () { setEditMode(true); setSaveError(null); }}
+                onClick={onScenarios}
                 style={{
-                  background: "rgba(255,255,255,0.15)", color: "#fff",
-                  border: "1px solid rgba(255,255,255,0.3)", borderRadius: "8px",
-                  padding: "8px 14px", cursor: "pointer", fontSize: "14px",
+                  background: "transparent", border: "none",
+                  color: "#1e3a5f", fontSize: 13, fontWeight: 600,
+                  padding: "7px 14px", borderRadius: 6, cursor: "pointer",
+                  fontFamily: "'Inter', system-ui, sans-serif",
                 }}
+                onMouseEnter={function(e) { e.currentTarget.style.background = "rgba(30,58,95,0.08)"; }}
+                onMouseLeave={function(e) { e.currentTarget.style.background = "transparent"; }}
               >
-                Edit
+                Scenarios
               </button>
             )}
-            {isInternal && editMode && (
-              <React.Fragment>
-                <button
-                  onClick={function () { setEditMode(false); setSaveError(null); }}
-                  style={{
-                    background: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.8)",
-                    border: "1px solid rgba(255,255,255,0.2)", borderRadius: "8px",
-                    padding: "8px 14px", cursor: "pointer", fontSize: "14px",
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  style={{
-                    background: saving ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.9)",
-                    color: saving ? "rgba(255,255,255,0.5)" : "#1e3a5f",
-                    border: "none", borderRadius: "8px",
-                    padding: "8px 16px",
-                    cursor: saving ? "not-allowed" : "pointer",
-                    fontSize: "14px", fontWeight: "600",
-                  }}
-                >
-                  {saving ? "Saving..." : "Save Changes"}
-                </button>
-              </React.Fragment>
-            )}
-            {isAdmin && !editMode && (
-              <button
-                onClick={handleDelete}
-                title="Permanently delete this contact"
-                style={{
-                  background: "rgba(239,68,68,0.15)", color: "#fca5a5",
-                  border: "1px solid rgba(239,68,68,0.4)", borderRadius: "8px",
-                  padding: "8px 14px", cursor: "pointer", fontSize: "14px",
-                }}
-              >
-                🗑 Delete
-              </button>
-            )}
-            <button
-              onClick={onLogout}
-              style={{
-                background: "rgba(255,255,255,0.15)", color: "#fff",
-                border: "1px solid rgba(255,255,255,0.3)", borderRadius: "8px",
-                padding: "8px 16px", cursor: "pointer", fontSize: "14px",
-              }}
-            >
-              Logout
-            </button>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* ── Body ─────────────────────────────────────────────────── */}
-      <div
-        style={{ maxWidth: "1000px", margin: "0 auto", padding: "24px 16px" }}
-        onDoubleClick={isInternal && !editMode ? function (e) {
-          if (e.target.tagName === "BUTTON" || e.target.tagName === "A" ||
-              e.target.tagName === "INPUT"  || e.target.tagName === "SELECT" ||
-              e.target.tagName === "TEXTAREA") return;
-          setEditMode(true);
-          setSaveError(null);
-        } : undefined}
-      >
+      {/* ── Body row: inline sidebar (internal) + content ────────── */}
+      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+
+        {/* ── Content scroll area ─────────────────────────────────── */}
+        <div style={{ flex: 1, overflowY: "auto", background: "#f1f5f9" }}>
+        <div
+          style={{ maxWidth: "1000px", margin: "0 auto", padding: "24px 16px", paddingBottom: editMode ? "120px" : "24px" }}
+          onDoubleClick={isInternal && !editMode && activeView === "contact" ? function (e) {
+            if (e.target.tagName === "BUTTON" || e.target.tagName === "A" ||
+                e.target.tagName === "INPUT"  || e.target.tagName === "SELECT" ||
+                e.target.tagName === "TEXTAREA") return;
+            setEditMode(true);
+            setSaveError(null);
+          } : undefined}
+        >
+
+        {activeView === "contact" && (
+          <React.Fragment>
 
         {saveError && (
           <div style={{
@@ -574,39 +703,196 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
           </div>
         )}
 
-        {isInternal && !editMode && (
-          <div style={{ textAlign: "right", fontSize: "11px", color: "#94a3b8", marginBottom: "8px", marginTop: "-8px" }}>
-            Double-click any field to edit
+        {/* Status & Type Badges + Create Login + Edit button on same row */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", marginBottom: "12px" }}>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            <span style={{
+              padding: "4px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: "600",
+              background: editMode ? editTypeColors.bg : typeColors.bg,
+              color:      editMode ? editTypeColors.text : typeColors.text,
+              textTransform: "capitalize",
+            }}>
+              {editMode
+                ? (editForm.contact_category || editForm.contact_type)
+                : (contact.contact_category || contact.contact_type || "client")}
+            </span>
+            <span style={{
+              padding: "4px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: "600",
+              background: contact.status === "active" ? "#dcfce7" : "#f1f5f9",
+              color:      contact.status === "active" ? "#166534" : "#64748b",
+              textTransform: "capitalize",
+            }}>
+              {contact.status || "active"}
+            </span>
           </div>
-        )}
-
-        {/* Status & Type Badges */}
-        <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
-          <span style={{
-            padding: "4px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: "600",
-            background: editMode ? editTypeColors.bg : typeColors.bg,
-            color:      editMode ? editTypeColors.text : typeColors.text,
-            textTransform: "capitalize",
-          }}>
-            {editMode
-              ? (editForm.contact_category || editForm.contact_type)
-              : (contact.contact_category || contact.contact_type || "client")}
-          </span>
-          <span style={{
-            padding: "4px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: "600",
-            background: contact.status === "active" ? "#dcfce7" : "#f1f5f9",
-            color:      contact.status === "active" ? "#166534" : "#64748b",
-            textTransform: "capitalize",
-          }}>
-            {contact.status || "active"}
-          </span>
+          {!editMode && (
+            <div style={{ display: "flex", gap: "8px", alignItems: "center", flexShrink: 0 }}>
+              {canManage && (portalCreated || contact.auth_user_id ||
+                contact.email_personal || contact.email || contact.email_work) && (
+                (portalCreated || contact.auth_user_id) ? (
+                  <button
+                    disabled
+                    style={{
+                      background: "#dcfce7", color: "#16a34a",
+                      border: "1px solid #86efac", borderRadius: "8px",
+                      padding: "4px 14px", fontSize: "13px", fontWeight: 700,
+                      cursor: "default", fontFamily: "'Inter', system-ui, sans-serif",
+                      opacity: 1, flexShrink: 0,
+                    }}
+                  >
+                    ✓ Login Active
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleCreatePortal}
+                    disabled={portalLoading}
+                    style={{
+                      background: portalLoading ? "#e2e8f0" : "#1e3a5f",
+                      color: portalLoading ? "#94a3b8" : "#fff",
+                      border: "none", borderRadius: "8px",
+                      padding: "4px 14px", fontSize: "13px", fontWeight: 700,
+                      cursor: portalLoading ? "wait" : "pointer",
+                      fontFamily: "'Inter', system-ui, sans-serif",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {portalLoading ? "Creating…" : "Create Login"}
+                  </button>
+                )
+              )}
+              {isInternal && (
+                <button
+                  onClick={function () { setEditMode(true); setSaveError(null); }}
+                  style={{
+                    background: "transparent", border: "1px solid #cbd5e1", borderRadius: "8px",
+                    padding: "4px 16px", fontSize: "13px", fontWeight: 600, color: "#1e3a5f",
+                    cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif",
+                    letterSpacing: "0.01em", flexShrink: 0,
+                  }}
+                >
+                  Edit
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        {/* CARD 1 — Personal Info                                             */}
+        {/* CARD 1 — Linked Scenarios                                          */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        <div style={sectionStyle}>{cardNum(1)}
+          <h3 style={{ margin: "0 0 14px", fontSize: "16px", fontWeight: "700", color: "#1e293b" }}>
+            Linked Scenarios
+          </h3>
+          {scenariosLoading ? (
+            <div style={{ textAlign: "center", color: "#94a3b8", padding: "20px", fontSize: "14px" }}>
+              Loading...
+            </div>
+          ) : linkedScenarios.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "20px" }}>
+              <div style={{ color: "#94a3b8", fontSize: "14px", marginBottom: "14px" }}>
+                No scenarios linked to this contact yet.
+              </div>
+              {onSelectScenario && (
+                <button
+                  onClick={handleNewScenario}
+                  disabled={creatingScenario}
+                  style={{
+                    background: creatingScenario ? "#e2e8f0" : "#1e3a5f",
+                    color: creatingScenario ? "#94a3b8" : "#fff",
+                    border: "none", borderRadius: "8px",
+                    padding: "10px 22px", fontSize: "13px", fontWeight: 700,
+                    cursor: creatingScenario ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {creatingScenario ? "Creating…" : "+ Start New Scenario"}
+                </button>
+              )}
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {linkedScenarios.map(function (s) {
+                const ls      = s.lead_status  || "?";
+                const lsColor = cdGetLeadStatusColors(ls);
+                const lp      = s.loan_purpose || "purchase";
+                const lpLabel = cdGetLoanPurposeLabel(lp);
+                return (
+                  <div key={s.id} style={{
+                    background: "#f8fafc", borderRadius: "8px", padding: "10px 14px",
+                    borderLeft: "3px solid #2d5a8e",
+                  }}>
+                    <div style={{ fontSize: "14px", fontWeight: 600, color: "#1e293b", marginBottom: "4px" }}>
+                      {s.name || "Untitled Scenario"}
+                    </div>
+                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "4px" }}>
+                      <span style={{
+                        fontSize: "11px", fontWeight: 700,
+                        padding: "2px 8px", borderRadius: "6px",
+                        background: lsColor.bg, color: lsColor.text,
+                      }}>
+                        {ls}
+                      </span>
+                      {lp !== "purchase" && (
+                        <span style={{
+                          fontSize: "11px", fontWeight: 700,
+                          padding: "2px 8px", borderRadius: "6px",
+                          background: "rgba(139,92,246,0.12)", color: "#7c3aed",
+                        }}>
+                          {lpLabel}
+                        </span>
+                      )}
+                    </div>
+                    {s.property_address && (
+                      <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "2px" }}>
+                        {s.property_address}
+                      </div>
+                    )}
+                    {(s.lead_source || s.target_close_date || s.actual_close_date) && (
+                      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", fontSize: "12px", marginBottom: "2px" }}>
+                        {s.lead_source && (
+                          <span style={{ color: "#64748b" }}>{s.lead_source}</span>
+                        )}
+                        {s.target_close_date && (
+                          <span style={{ color: "#b45309" }}>Target: {cdFormatDateOnly(s.target_close_date)}</span>
+                        )}
+                        {s.actual_close_date && (
+                          <span style={{ color: "#16a34a" }}>Closed: {cdFormatDateOnly(s.actual_close_date)}</span>
+                        )}
+                      </div>
+                    )}
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "4px" }}>
+                      <div style={{ fontSize: "11px", color: "#94a3b8" }}>
+                        Updated {s.updated_at ? new Date(s.updated_at).toLocaleDateString() : "—"}
+                      </div>
+                      {onSelectScenario && (
+                        <button
+                          onClick={function (e) { e.stopPropagation(); handleOpenScenario(s.id); }}
+                          disabled={openingScenario === s.id}
+                          style={{
+                            background: openingScenario === s.id ? "#e2e8f0" : "#1e3a5f",
+                            color:      openingScenario === s.id ? "#94a3b8" : "#fff",
+                            border: "none", borderRadius: "6px",
+                            padding: "4px 12px", fontSize: "12px", fontWeight: 600,
+                            cursor: openingScenario === s.id ? "not-allowed" : "pointer",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {openingScenario === s.id ? "Opening..." : "Open →"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* CARD 2 — Personal Info                                             */}
         {/* Left: First / Nickname / Last   Right: Type / Category / Source   */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        <div style={sectionStyle}>
+        <div style={sectionStyle}>{cardNum(2)}
           <div style={sectionTitleStyle}>Personal Info</div>
           {editMode ? (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
@@ -754,259 +1040,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        {/* CARD 3 — Notes                                                     */}
-        {/* ═══════════════════════════════════════════════════════════════════ */}
-        <div style={sectionStyle}>
-          <div style={sectionTitleStyle}>Notes</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: "24px" }}>
-
-            {/* ── Left: Follow-up fields ── */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-              {editMode ? (
-                <React.Fragment>
-                  <div>
-                    <label style={labelStyle}>FU: Next</label>
-                    <input
-                      type="date"
-                      style={fieldStyle}
-                      value={editForm.fu_date}
-                      onChange={function (e) { handleFieldChange("fu_date", e.target.value); }}
-                    />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>FU: Who</label>
-                    <select
-                      style={fieldStyle}
-                      value={editForm.fu_who}
-                      onChange={function (e) { handleFieldChange("fu_who", e.target.value); }}
-                    >
-                      <option value="">—</option>
-                      <option value="MP">MP</option>
-                      <option value="JW">JW</option>
-                      <option value="TP">TP</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label style={labelStyle}>FU: Priority</label>
-                    <select
-                      style={fieldStyle}
-                      value={editForm.fu_priority}
-                      onChange={function (e) { handleFieldChange("fu_priority", e.target.value); }}
-                    >
-                      <option value="">—</option>
-                      <option value="Low">Low</option>
-                      <option value="High">High</option>
-                    </select>
-                  </div>
-                </React.Fragment>
-              ) : (
-                <React.Fragment>
-                  <InfoRow label="FU: Next"     value={contact.fu_date ? cdFormatDateOnly(contact.fu_date) : null} />
-                  <InfoRow label="FU: Who"      value={contact.fu_who || null} />
-                  <InfoRow label="FU: Priority" value={contact.fu_priority || null} />
-                </React.Fragment>
-              )}
-            </div>
-
-            {/* ── Right: Notes ── */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-              {editMode ? (
-                <React.Fragment>
-                  <div>
-                    <label style={labelStyle}>Note: Quick</label>
-                    <input
-                      type="text"
-                      style={fieldStyle}
-                      maxLength={120}
-                      value={editForm.note_quick}
-                      onChange={function (e) { handleFieldChange("note_quick", e.target.value); }}
-                      placeholder="Quick reminder for this call..."
-                    />
-                    <div style={{ fontSize: "11px", color: "#94a3b8", textAlign: "right", marginTop: "3px" }}>
-                      {(editForm.note_quick || "").length}/120
-                    </div>
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Note: Permanent</label>
-                    <textarea
-                      style={Object.assign({}, fieldStyle, { minHeight: "60px", resize: "vertical" })}
-                      value={editForm.notes}
-                      onChange={function (e) { handleFieldChange("notes", e.target.value); }}
-                      placeholder="Permanent notes about this contact..."
-                    />
-                  </div>
-                </React.Fragment>
-              ) : (
-                <React.Fragment>
-                  <InfoRow label="Note: Quick"     value={contact.note_quick || null} />
-                  <InfoRow label="Note: Permanent" value={contact.notes || null} />
-                </React.Fragment>
-              )}
-            </div>
-
-          </div>
-        </div>
-
-        {/* ═══════════════════════════════════════════════════════════════════ */}
-        {/* Activity Log                                                       */}
-        {/* ═══════════════════════════════════════════════════════════════════ */}
-        <div style={sectionStyle}>
-          <div style={sectionTitleStyle}>Activity Log</div>
-
-          {isInternal && (
-            <div style={{ marginBottom: "16px" }}>
-              <div style={{ display: "flex", gap: "8px" }}>
-                <textarea
-                  style={Object.assign({}, fieldStyle, { flex: 1, minHeight: "64px", resize: "vertical" })}
-                  value={newNote}
-                  onChange={function (e) { setNewNote(e.target.value); }}
-                  placeholder="Add a note about this contact..."
-                  disabled={noteAdding}
-                />
-                <button
-                  onClick={handleAddNote}
-                  disabled={noteAdding || !newNote.trim()}
-                  style={{
-                    background: (!newNote.trim() || noteAdding) ? "#e2e8f0" : "#1e3a5f",
-                    color:      (!newNote.trim() || noteAdding) ? "#94a3b8" : "#fff",
-                    border: "none", borderRadius: "8px",
-                    padding: "0 16px",
-                    cursor: (!newNote.trim() || noteAdding) ? "not-allowed" : "pointer",
-                    fontSize: "14px", fontWeight: "600", whiteSpace: "nowrap",
-                  }}
-                >
-                  {noteAdding ? "Adding..." : "Add Note"}
-                </button>
-              </div>
-              {noteError && (
-                <div style={{ color: "#dc2626", fontSize: "12px", marginTop: "6px" }}>{noteError}</div>
-              )}
-            </div>
-          )}
-
-          {notesLoading ? (
-            <div style={{ textAlign: "center", color: "#94a3b8", padding: "20px", fontSize: "14px" }}>
-              Loading activity...
-            </div>
-          ) : notes.length === 0 ? (
-            <div style={{ textAlign: "center", color: "#94a3b8", padding: "20px", fontSize: "14px" }}>
-              No activity yet.
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {notes.map(function (note) {
-                return (
-                  <div key={note.id} style={{
-                    background: "#f8fafc", borderRadius: "8px", padding: "12px 14px",
-                    borderLeft: "3px solid #2d5a8e",
-                  }}>
-                    <div style={{ fontSize: "14px", color: "#1e293b", lineHeight: "1.5" }}>{note.body}</div>
-                    <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "6px" }}>
-                      {note.created_at ? new Date(note.created_at).toLocaleString() : ""}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* ═══════════════════════════════════════════════════════════════════ */}
-        {/* Linked Scenarios                                                   */}
-        {/* ═══════════════════════════════════════════════════════════════════ */}
-        <div style={sectionStyle}>
-          <h3 style={{ margin: "0 0 14px", fontSize: "16px", fontWeight: "700", color: "#1e293b" }}>
-            Linked Scenarios
-          </h3>
-          {scenariosLoading ? (
-            <div style={{ textAlign: "center", color: "#94a3b8", padding: "20px", fontSize: "14px" }}>
-              Loading...
-            </div>
-          ) : linkedScenarios.length === 0 ? (
-            <div style={{ textAlign: "center", color: "#94a3b8", padding: "20px", fontSize: "14px" }}>
-              No scenarios linked to this contact yet.
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              {linkedScenarios.map(function (s) {
-                const ls      = s.lead_status  || "?";
-                const lsColor = cdGetLeadStatusColors(ls);
-                const lp      = s.loan_purpose || "purchase";
-                const lpLabel = cdGetLoanPurposeLabel(lp);
-                return (
-                  <div key={s.id} style={{
-                    background: "#f8fafc", borderRadius: "8px", padding: "10px 14px",
-                    borderLeft: "3px solid #2d5a8e",
-                  }}>
-                    <div style={{ fontSize: "14px", fontWeight: 600, color: "#1e293b", marginBottom: "4px" }}>
-                      {s.name || "Untitled Scenario"}
-                    </div>
-                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "4px" }}>
-                      <span style={{
-                        fontSize: "11px", fontWeight: 700,
-                        padding: "2px 8px", borderRadius: "6px",
-                        background: lsColor.bg, color: lsColor.text,
-                      }}>
-                        {ls}
-                      </span>
-                      {lp !== "purchase" && (
-                        <span style={{
-                          fontSize: "11px", fontWeight: 700,
-                          padding: "2px 8px", borderRadius: "6px",
-                          background: "rgba(139,92,246,0.12)", color: "#7c3aed",
-                        }}>
-                          {lpLabel}
-                        </span>
-                      )}
-                    </div>
-                    {s.property_address && (
-                      <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "2px" }}>
-                        {s.property_address}
-                      </div>
-                    )}
-                    {(s.lead_source || s.target_close_date || s.actual_close_date) && (
-                      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", fontSize: "12px", marginBottom: "2px" }}>
-                        {s.lead_source && (
-                          <span style={{ color: "#64748b" }}>{s.lead_source}</span>
-                        )}
-                        {s.target_close_date && (
-                          <span style={{ color: "#b45309" }}>Target: {cdFormatDateOnly(s.target_close_date)}</span>
-                        )}
-                        {s.actual_close_date && (
-                          <span style={{ color: "#16a34a" }}>Closed: {cdFormatDateOnly(s.actual_close_date)}</span>
-                        )}
-                      </div>
-                    )}
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "4px" }}>
-                      <div style={{ fontSize: "11px", color: "#94a3b8" }}>
-                        Updated {s.updated_at ? new Date(s.updated_at).toLocaleDateString() : "\u2014"}
-                      </div>
-                      {onSelectScenario && (
-                        <button
-                          onClick={function (e) { e.stopPropagation(); handleOpenScenario(s.id); }}
-                          disabled={openingScenario === s.id}
-                          style={{
-                            background: openingScenario === s.id ? "#e2e8f0" : "#1e3a5f",
-                            color:      openingScenario === s.id ? "#94a3b8" : "#fff",
-                            border: "none", borderRadius: "6px",
-                            padding: "4px 12px", fontSize: "12px", fontWeight: 600,
-                            cursor: openingScenario === s.id ? "not-allowed" : "pointer",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {openingScenario === s.id ? "Opening..." : "Open \u2192"}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* ═══════════════════════════════════════════════════════════════════ */}
-        {/* CARD 2 — Contact Info                                              */}
+        {/* Contact Info                                                        */}
         {/* Left: Cell/Work/Home/Best   Right: Personal/Work/Other/Best       */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
         <div style={sectionStyle}>
@@ -1122,10 +1156,293 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
           )}
         </div>
 
+          </React.Fragment>
+        )}
+
+        {activeView === "internal" && isInternal && (
+          <React.Fragment>
+
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* CARD 1 — Linked Scenarios (copy)                                   */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        <div style={sectionStyle}>{cardNum(1)}
+          <h3 style={{ margin: "0 0 14px", fontSize: "16px", fontWeight: "700", color: "#1e293b" }}>
+            Linked Scenarios
+          </h3>
+          {scenariosLoading ? (
+            <div style={{ textAlign: "center", color: "#94a3b8", padding: "20px", fontSize: "14px" }}>
+              Loading...
+            </div>
+          ) : linkedScenarios.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "20px" }}>
+              <div style={{ color: "#94a3b8", fontSize: "14px", marginBottom: "14px" }}>
+                No scenarios linked to this contact yet.
+              </div>
+              {onSelectScenario && (
+                <button
+                  onClick={handleNewScenario}
+                  disabled={creatingScenario}
+                  style={{
+                    background: creatingScenario ? "#e2e8f0" : "#1e3a5f",
+                    color: creatingScenario ? "#94a3b8" : "#fff",
+                    border: "none", borderRadius: "8px",
+                    padding: "10px 22px", fontSize: "13px", fontWeight: 700,
+                    cursor: creatingScenario ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {creatingScenario ? "Creating…" : "+ Start New Scenario"}
+                </button>
+              )}
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {linkedScenarios.map(function (s) {
+                const ls      = s.lead_status  || "?";
+                const lsColor = cdGetLeadStatusColors(ls);
+                const lp      = s.loan_purpose || "purchase";
+                const lpLabel = cdGetLoanPurposeLabel(lp);
+                return (
+                  <div key={s.id} style={{
+                    background: "#f8fafc", borderRadius: "8px", padding: "10px 14px",
+                    borderLeft: "3px solid #2d5a8e",
+                  }}>
+                    <div style={{ fontSize: "14px", fontWeight: 600, color: "#1e293b", marginBottom: "4px" }}>
+                      {s.name || "Untitled Scenario"}
+                    </div>
+                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "4px" }}>
+                      <span style={{
+                        fontSize: "11px", fontWeight: 700,
+                        padding: "2px 8px", borderRadius: "6px",
+                        background: lsColor.bg, color: lsColor.text,
+                      }}>
+                        {ls}
+                      </span>
+                      {lp !== "purchase" && (
+                        <span style={{
+                          fontSize: "11px", fontWeight: 700,
+                          padding: "2px 8px", borderRadius: "6px",
+                          background: "rgba(139,92,246,0.12)", color: "#7c3aed",
+                        }}>
+                          {lpLabel}
+                        </span>
+                      )}
+                    </div>
+                    {s.property_address && (
+                      <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "2px" }}>
+                        {s.property_address}
+                      </div>
+                    )}
+                    {(s.lead_source || s.target_close_date || s.actual_close_date) && (
+                      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", fontSize: "12px", marginBottom: "2px" }}>
+                        {s.lead_source && (
+                          <span style={{ color: "#64748b" }}>{s.lead_source}</span>
+                        )}
+                        {s.target_close_date && (
+                          <span style={{ color: "#b45309" }}>Target: {cdFormatDateOnly(s.target_close_date)}</span>
+                        )}
+                        {s.actual_close_date && (
+                          <span style={{ color: "#16a34a" }}>Closed: {cdFormatDateOnly(s.actual_close_date)}</span>
+                        )}
+                      </div>
+                    )}
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "4px" }}>
+                      <div style={{ fontSize: "11px", color: "#94a3b8" }}>
+                        Updated {s.updated_at ? new Date(s.updated_at).toLocaleDateString() : "—"}
+                      </div>
+                      {onSelectScenario && (
+                        <button
+                          onClick={function (e) { e.stopPropagation(); handleOpenScenario(s.id); }}
+                          disabled={openingScenario === s.id}
+                          style={{
+                            background: openingScenario === s.id ? "#e2e8f0" : "#1e3a5f",
+                            color:      openingScenario === s.id ? "#94a3b8" : "#fff",
+                            border: "none", borderRadius: "6px",
+                            padding: "4px 12px", fontSize: "12px", fontWeight: 600,
+                            cursor: openingScenario === s.id ? "not-allowed" : "pointer",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {openingScenario === s.id ? "Opening..." : "Open →"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* CARD 3 — Notes (Internal only)                                     */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        <div style={sectionStyle}>{cardNum(3)}
+          <div style={sectionTitleStyle}>Notes (Internal)</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: "24px" }}>
+
+            {/* ── Left: Follow-up fields ── */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              {editMode ? (
+                <React.Fragment>
+                  <div>
+                    <label style={labelStyle}>FU: Next</label>
+                    <input
+                      type="date"
+                      style={fieldStyle}
+                      value={editForm.fu_date}
+                      onChange={function (e) { handleFieldChange("fu_date", e.target.value); }}
+                    />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>FU: Who</label>
+                    <select
+                      style={fieldStyle}
+                      value={editForm.fu_who}
+                      onChange={function (e) { handleFieldChange("fu_who", e.target.value); }}
+                    >
+                      <option value="">—</option>
+                      <option value="MP">MP</option>
+                      <option value="JW">JW</option>
+                      <option value="TP">TP</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>FU: Priority</label>
+                    <select
+                      style={fieldStyle}
+                      value={editForm.fu_priority}
+                      onChange={function (e) { handleFieldChange("fu_priority", e.target.value); }}
+                    >
+                      <option value="">—</option>
+                      <option value="Low">Low</option>
+                      <option value="High">High</option>
+                    </select>
+                  </div>
+                </React.Fragment>
+              ) : (
+                <React.Fragment>
+                  <InfoRow label="FU: Next"     value={contact.fu_date ? cdFormatDateOnly(contact.fu_date) : null} />
+                  <InfoRow label="FU: Who"      value={contact.fu_who || null} />
+                  <InfoRow label="FU: Priority" value={contact.fu_priority || null} />
+                </React.Fragment>
+              )}
+            </div>
+
+            {/* ── Right: Notes ── */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              {editMode ? (
+                <React.Fragment>
+                  <div>
+                    <label style={labelStyle}>Note: Quick</label>
+                    <input
+                      type="text"
+                      style={fieldStyle}
+                      maxLength={120}
+                      value={editForm.note_quick}
+                      onChange={function (e) { handleFieldChange("note_quick", e.target.value); }}
+                      placeholder="Quick reminder for this call..."
+                    />
+                    <div style={{ fontSize: "11px", color: "#94a3b8", textAlign: "right", marginTop: "3px" }}>
+                      {(editForm.note_quick || "").length}/120
+                    </div>
+                  </div>
+                  {isInternal && (
+                    <div>
+                      <label style={labelStyle}>Internal: Note: Permanent</label>
+                      <textarea
+                        style={Object.assign({}, fieldStyle, { minHeight: "60px", resize: "vertical" })}
+                        value={editForm.notes}
+                        onChange={function (e) { handleFieldChange("notes", e.target.value); }}
+                        placeholder="Permanent notes about this contact..."
+                      />
+                    </div>
+                  )}
+                </React.Fragment>
+              ) : (
+                <React.Fragment>
+                  <InfoRow label="Note: Quick"     value={contact.note_quick || null} />
+                  {isInternal && <InfoRow label="Internal: Note: Permanent" value={contact.notes || null} />}
+                </React.Fragment>
+              )}
+            </div>
+
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* Activity Log (internal only)                                       */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        <div style={sectionStyle}>{cardNum(4)}
+          <div style={sectionTitleStyle}>Activity Log (Internal)</div>
+
+          {isInternal && (
+            <div style={{ marginBottom: "16px" }}>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <textarea
+                  style={Object.assign({}, fieldStyle, { flex: 1, minHeight: "64px", resize: "vertical" })}
+                  value={newNote}
+                  onChange={function (e) { setNewNote(e.target.value); }}
+                  placeholder="Add a note about this contact..."
+                  disabled={noteAdding}
+                />
+                <button
+                  onClick={handleAddNote}
+                  disabled={noteAdding || !newNote.trim()}
+                  style={{
+                    background: (!newNote.trim() || noteAdding) ? "#e2e8f0" : "#1e3a5f",
+                    color:      (!newNote.trim() || noteAdding) ? "#94a3b8" : "#fff",
+                    border: "none", borderRadius: "8px",
+                    padding: "0 16px",
+                    cursor: (!newNote.trim() || noteAdding) ? "not-allowed" : "pointer",
+                    fontSize: "14px", fontWeight: "600", whiteSpace: "nowrap",
+                  }}
+                >
+                  {noteAdding ? "Adding..." : "Add Note"}
+                </button>
+              </div>
+              {noteError && (
+                <div style={{ color: "#dc2626", fontSize: "12px", marginTop: "6px" }}>{noteError}</div>
+              )}
+            </div>
+          )}
+
+          {notesLoading ? (
+            <div style={{ textAlign: "center", color: "#94a3b8", padding: "20px", fontSize: "14px" }}>
+              Loading activity...
+            </div>
+          ) : notes.length === 0 ? (
+            <div style={{ textAlign: "center", color: "#94a3b8", padding: "20px", fontSize: "14px" }}>
+              No activity yet.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {notes.map(function (note) {
+                return (
+                  <div key={note.id} style={{
+                    background: "#f8fafc", borderRadius: "8px", padding: "12px 14px",
+                    borderLeft: "3px solid #2d5a8e",
+                  }}>
+                    <div style={{ fontSize: "14px", color: "#1e293b", lineHeight: "1.5" }}>{note.body}</div>
+                    <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "6px" }}>
+                      {note.created_at ? new Date(note.created_at).toLocaleString() : ""}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+          </React.Fragment>
+        )}
+
+        {activeView === "contact" && (
+          <React.Fragment>
+
         {/* ═══════════════════════════════════════════════════════════════════ */}
         {/* Personal 2 Info                                                    */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        <div style={sectionStyle}>
+        <div style={sectionStyle}>{cardNum(6)}
           <div style={sectionTitleStyle}>Personal 2 Info</div>
           {editMode ? (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
@@ -1218,7 +1535,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
         {/* Left: Cell/Work/Home/Best   Right: Personal/Work/Other/Best       */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
         {(editMode || contact.first_name2 || contact.last_name2) && (
-          <div style={sectionStyle}>
+          <div style={sectionStyle}>{cardNum(7)}
             <div style={sectionTitleStyle}>Contact 2 Info</div>
             {editMode ? (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
@@ -1333,10 +1650,10 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
         )}
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        {/* CARD 4 — Address Information                                       */}
+        {/* CARD 8 — Address Information                                       */}
         {/* Left: Mailing Address 1 + Type   Right: Mailing Address 2 + Type  */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        <div style={sectionStyle}>
+        <div style={sectionStyle}>{cardNum(8)}
           <div style={sectionTitleStyle}>Address Information</div>
           {editMode ? (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
@@ -1476,7 +1793,135 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
           )}
         </div>
 
+        {/* ── Delete — bottom of page, admin only ── */}
+        {isAdmin && !editMode && (
+          <div style={{ paddingTop: "24px", paddingBottom: "8px", textAlign: "center" }}>
+            <button
+              onClick={handleDelete}
+              title="Permanently delete this contact"
+              style={{
+                background: "transparent", border: "1px solid #fca5a5",
+                color: "#dc2626", borderRadius: "8px",
+                padding: "9px 28px", fontSize: "13px", fontWeight: 600,
+                cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif",
+              }}
+            >
+              🗑 Delete Contact
+            </button>
+          </div>
+        )}
+
+          </React.Fragment>
+        )}
+
       </div>
+      </div>
+      </div>
+
+      {/* ── Sticky Save / Discard bar (edit mode only) ───────────────────── */}
+      {editMode && (
+        <div style={{
+          position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 300,
+          background: "#fff", borderTop: "1px solid #e2e8f0",
+          boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
+          paddingTop: "12px", paddingLeft: "24px", paddingRight: "24px",
+          paddingBottom: "max(14px, env(safe-area-inset-bottom))",
+          display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "10px",
+        }}>
+          {saveError && (
+            <div style={{ flex: 1, fontSize: "13px", color: "#dc2626", fontFamily: "'Inter', system-ui, sans-serif" }}>
+              {saveError}
+            </div>
+          )}
+          <button
+            onClick={function () { setEditMode(false); setSaveError(null); }}
+            style={{
+              padding: "10px 22px", borderRadius: "8px", fontSize: "14px", fontWeight: "600",
+              border: "1px solid #cbd5e1", background: "#f1f5f9", color: "#475569",
+              cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif",
+            }}
+          >
+            Discard
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            style={{
+              padding: "10px 28px", borderRadius: "8px", fontSize: "14px", fontWeight: "700",
+              border: "none",
+              background: saving ? "#93c5fd" : "#2563eb",
+              color: "#fff",
+              cursor: saving ? "not-allowed" : "pointer",
+              fontFamily: "'Inter', system-ui, sans-serif",
+              transition: "background 0.15s",
+            }}
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      )}
+
+      {/* ── Portal Account Created Modal ───────────────────────────────────── */}
+      {portalModal && (
+        <div style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)",
+          zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center",
+          padding: "20px",
+        }}>
+          <div style={{
+            background: "#fff", borderRadius: "16px",
+            boxShadow: "0 16px 48px rgba(0,0,0,0.22)",
+            padding: "32px", maxWidth: "480px", width: "100%",
+            fontFamily: "'Inter', system-ui, sans-serif",
+          }}>
+            <div style={{ fontSize: "18px", fontWeight: 800, color: "#1e3a5f", marginBottom: "8px" }}>
+              {portalModal && portalModal.roleLabel ? portalModal.roleLabel + " Login Created!" : "Login Created!"}
+            </div>
+            <div style={{ fontSize: "13px", color: "#475569", marginBottom: "20px", lineHeight: 1.6 }}>
+              Copy the message below and send it to{" "}
+              <strong>{[contact.first_name, contact.last_name].filter(Boolean).join(" ") || "the contact"}</strong>.
+              They'll be prompted to set a personal password when they first log in.
+            </div>
+            <textarea
+              readOnly
+              value={portalModal.snippet}
+              style={{
+                width: "100%", height: "170px",
+                fontSize: "13px", fontFamily: "monospace",
+                padding: "10px 12px", borderRadius: "8px",
+                border: "1px solid #cbd5e1", boxSizing: "border-box",
+                resize: "none", background: "#f8fafc",
+                color: "#1e293b", lineHeight: 1.65,
+              }}
+            />
+            <div style={{ display: "flex", gap: "10px", marginTop: "14px" }}>
+              <button
+                onClick={handleCopyPortalSnippet}
+                style={{
+                  flex: 1, padding: "11px 0",
+                  background: portalCopied ? "#16a34a" : "#1e3a5f",
+                  color: "#fff", border: "none", borderRadius: "8px",
+                  fontSize: "14px", fontWeight: 700, cursor: "pointer",
+                  transition: "background 0.2s",
+                }}
+              >
+                {portalCopied ? "Copied!" : "Copy to Clipboard"}
+              </button>
+              <button
+                onClick={function () { setPortalModal(null); }}
+                style={{
+                  padding: "11px 20px", background: "#f1f5f9",
+                  color: "#475569", border: "1px solid #e2e8f0",
+                  borderRadius: "8px", fontSize: "14px", cursor: "pointer",
+                }}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

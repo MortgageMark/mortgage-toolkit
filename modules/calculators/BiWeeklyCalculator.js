@@ -74,10 +74,10 @@ function BiWeeklyCalculator() {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <SectionCard title="LOAN DETAILS" accent={c.navy || COLORS.navy}>
         <div className="mtk-grid-3" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <LabeledInput label="Loan Amount" value={loanAmt} onChange={setLoanAmt} prefix="$" />
+          <LabeledInput label="Loan Amount" value={loanAmt} onChange={setLoanAmt} prefix="$" useCommas />
           <LabeledInput label="Interest Rate" value={rate} onChange={setRate} suffix="%" />
           <LabeledInput label="Loan Term (years)" value={termYrs} onChange={setTermYrs} />
-          <LabeledInput label="Extra Monthly Payment" value={extraMo} onChange={setExtraMo} prefix="$" />
+          <LabeledInput label="Extra Monthly Payment" value={extraMo} onChange={setExtraMo} prefix="$" useCommas />
         </div>
       </SectionCard>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>

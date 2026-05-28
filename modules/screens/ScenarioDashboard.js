@@ -9,10 +9,18 @@ const deleteScenarioFromSupabase = window.deleteScenarioFromSupabase;
 const writeAuditLog = window.writeAuditLog;
 const fetchAuditLog = window.fetchAuditLog;
 const fetchContactsFromSupabase = window.fetchContactsFromSupabase;
-const fetchClaimableScenariosForBorrower = window.fetchClaimableScenariosForBorrower;
-const claimScenarioInSupabase = window.claimScenarioInSupabase;
-const fetchTemplatesFromSupabase   = window.fetchTemplatesFromSupabase;
-const patchContactInSupabase       = window.patchContactInSupabase;
+const fetchClaimableScenariosForBorrower   = window.fetchClaimableScenariosForBorrower;
+const claimScenarioInSupabase              = window.claimScenarioInSupabase;
+const fetchCoborrowerScenariosForBorrower  = window.fetchCoborrowerScenariosForBorrower;
+const fetchTemplatesFromSupabase      = window.fetchTemplatesFromSupabase;
+const patchContactInSupabase          = window.patchContactInSupabase;
+const shareScenarioWithPartner        = window.shareScenarioWithPartner;
+const shareScenarioByInvite           = window.shareScenarioByInvite;
+const referScenarioToLO               = window.referScenarioToLO;
+const fetchScenarioShares             = window.fetchScenarioShares;
+const fetchSharedScenariosFromSupabase = window.fetchSharedScenariosFromSupabase;
+const fetchPartnerProfiles            = window.fetchPartnerProfiles;
+const AppHeader                       = window.AppHeader;
 const saveTemplateToSupabase       = window.saveTemplateToSupabase;
 const deleteTemplateFromSupabase   = window.deleteTemplateFromSupabase;
 const setDefaultTemplateInSupabase = window.setDefaultTemplateInSupabase;
@@ -76,8 +84,9 @@ function LeadStatusSelect({ value, onChange, style }) {
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────
-function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onUsers, onMyInfo }) {
+function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpenContact, onUsers, onMyInfo, pageTitle }) {
   const c = useThemeColors();
+  const [darkMode, setDarkMode] = useLocalStorage("app_dark", false);
   const [scenarios, setScenarios] = useLocalStorage("scenarios", []);
   const [groupFilter, setGroupFilter] = useState("active");
   const [searchTerm, setSearchTerm] = useState("");
@@ -129,11 +138,37 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onUse
   const [auditLogLoading, setAuditLogLoading] = useState(false);
   const [claimable, setClaimable] = useState([]);
   const [claiming, setClaiming] = useState(false);
+  const [coborrowerScenarios, setCoborrowerScenarios] = useState([]);
+  const [liveInvite, setLiveInvite] = useState(null); // { scenario, loName }
   const [borrowerContactId, setBorrowerContactId] = useState(user.newContactId || null); // own contact ID, for auto-linking
   const [editDetailsOpen,   setEditDetailsOpen]   = useState(null);
   const [editDetailsForm,   setEditDetailsForm]   = useState({});
   const [editDetailsSaving, setEditDetailsSaving] = useState(false);
   const [contactsMap,       setContactsMap]       = useState({});
+
+  // ── Sharing / Referral state ──────────────────────────────────────────────
+  const isPartner = user && (user.role === "realtor" || user.role === "builder");
+  const [sharedWithMe,      setSharedWithMe]      = useState([]);   // scenarios shared TO this partner
+  const [sharedWithMeTab,   setSharedWithMeTab]   = useState(false); // toggle between My Pipeline / Shared With Me
+  const [referringId,       setReferringId]       = useState(null); // scenario being referred
+  const [referNote,         setReferNote]         = useState("");
+  const [referSaving,       setReferSaving]       = useState(false);
+  const [referredIds,       setReferredIds]       = useState(new Set()); // scenario IDs already referred
+  // LO: share modal state
+  const [shareModalScenario, setShareModalScenario] = useState(null);
+  const [partnerProfiles,    setPartnerProfiles]    = useState([]);
+  const [sharePartnerId,     setSharePartnerId]     = useState("");
+  const [sharePermission,    setSharePermission]    = useState("view");
+  const [shareNote,          setShareNote]          = useState("");
+  const [shareSaving,        setShareSaving]        = useState(false);
+  const [shareMode,          setShareMode]          = useState("existing"); // "existing" | "invite"
+  const [shareInviteEmail,   setShareInviteEmail]   = useState("");
+  const [shareInviteRole,    setShareInviteRole]    = useState("realtor");
+  const [shareInviteDone,    setShareInviteDone]    = useState(null); // copy-paste snippet after invite
+  // Per-scenario share counts (LO view): { [scenarioId]: number }
+  const [shareCountsMap,     setShareCountsMap]     = useState({});
+  // Referred badge set: scenario IDs that were referred TO this LO
+  const [referralScenarioIds, setReferralScenarioIds] = useState(new Set());
 
   // ── Template state ──────────────────────────────────────────────────────
   const [templates,           setTemplates]           = useState([]);
@@ -155,6 +190,8 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onUse
   const [tplSortDir,             setTplSortDir]             = useState("asc");
 
   const isCloudUser = !!(user && user.supabaseUser && supabase);
+  // Roles that must link scenarios to a contact (internal, realtor, builder)
+  const requiresContact = isCloudUser && (user.isInternal || user.role === "realtor" || user.role === "builder");
   const roster = JSON.parse(localStorage.getItem("mtk_roster") || "[]");
   const currentMember = roster.find(m => m.id === user.id);
   const displayName = currentMember ? currentMember.name : (user.name || "Team Member");
@@ -177,8 +214,9 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onUse
       lead_source:       row.lead_source      || "",
       target_close_date: row.target_close_date || null,
       actual_close_date: row.actual_close_date || null,
-      contact_id:        row.contact_id        || null,
-      lockLevel:         row.lock_level        || "none",
+      contact_id:             row.contact_id             || null,
+      co_borrower_contact_id: row.co_borrower_contact_id || null,
+      lockLevel:              row.lock_level             || "none",
       lockedBy:        row.locked_by    || null,
       lockedAt:        row.locked_at    || null,
       calculatorData:  row.calculation_data || {},
@@ -225,9 +263,94 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onUse
     return function() { cancelled = true; };
   }, []);
 
-  // ── Contact fetch on mount (internal only) — populates table map + new form picker ──
+  // ── Borrower co-borrower fetch ────────────────────────────────────────────
+  useEffect(function() {
+    if (!isCloudUser || user.role !== "borrower") return;
+    let cancelled = false;
+    fetchCoborrowerScenariosForBorrower().then(function({ data, error }) {
+      if (cancelled || error) return;
+      setCoborrowerScenarios(data || []);
+    });
+    return function() { cancelled = true; };
+  }, []);
+
+  // ── Partner: fetch scenarios shared WITH me ───────────────────────────────
+  useEffect(function() {
+    if (!isCloudUser || !isPartner) return;
+    let cancelled = false;
+    fetchSharedScenariosFromSupabase().then(function({ data, error }) {
+      if (cancelled || error) return;
+      setSharedWithMe((data || []).map(function(raw) {
+        const mapped = mapFromCloud(raw);
+        return { ...mapped, _share: raw._share || null, _shared_by_name: raw._shared_by_name || "" };
+      }));
+    });
+    return function() { cancelled = true; };
+  }, []);
+
+  // ── Partner: load already-referred scenario IDs so button shows "Referred" state ──
+  useEffect(function() {
+    if (!isCloudUser || !isPartner || !supabase) return;
+    let cancelled = false;
+    supabase
+      .from("scenario_shares")
+      .select("scenario_id")
+      .eq("share_type", "referral")
+      .then(function({ data, error }) {
+        if (cancelled || error) return;
+        setReferredIds(new Set((data || []).map(function(r) { return r.scenario_id; })));
+      });
+    return function() { cancelled = true; };
+  }, []);
+
+  // ── LO: fetch partner profiles for share modal ────────────────────────────
   useEffect(function() {
     if (!isCloudUser || !user.isInternal) return;
+    let cancelled = false;
+    fetchPartnerProfiles().then(function({ data }) {
+      if (cancelled) return;
+      setPartnerProfiles(data || []);
+    });
+    return function() { cancelled = true; };
+  }, []);
+
+  // ── LO: fetch referral scenario IDs (scenarios referred to the team) ──────
+  useEffect(function() {
+    if (!isCloudUser || !user.isInternal || !supabase) return;
+    let cancelled = false;
+    supabase
+      .from("scenario_shares")
+      .select("scenario_id")
+      .eq("share_type", "referral")
+      .then(function({ data, error }) {
+        if (cancelled || error) return;
+        setReferralScenarioIds(new Set((data || []).map(function(r) { return r.scenario_id; })));
+      });
+    return function() { cancelled = true; };
+  }, []);
+
+  // ── Live-session invite listener (borrower only) ──────────────────────────
+  // Subscribes to invite_scenario_{id} for each loaded scenario.
+  // When LO broadcasts a live_invite event, shows the join banner.
+  useEffect(function() {
+    if (!isCloudUser || user.role !== "borrower" || !supabase || scenarios.length === 0) return;
+    var channels = scenarios.filter(function(s) { return !!s.id; }).map(function(s) {
+      var ch = supabase.channel("invite_scenario_" + s.id, { config: { broadcast: { self: false } } });
+      ch.on("broadcast", { event: "live_invite" }, function(msg) {
+        var payload = (msg && msg.payload) ? msg.payload : {};
+        setLiveInvite({ scenario: s, loName: payload.loName || "Your Loan Officer" });
+      });
+      ch.subscribe();
+      return ch;
+    });
+    return function() {
+      channels.forEach(function(ch) { try { supabase.removeChannel(ch); } catch {} });
+    };
+  }, [isCloudUser, user.role, scenarios.length]);
+
+  // ── Contact fetch on mount — populates table map + new form picker ──
+  useEffect(function() {
+    if (!requiresContact) return;
     let cancelled = false;
     fetchContactsFromSupabase().then(function({ data, error }) {
       if (cancelled || error) return;
@@ -447,18 +570,10 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onUse
   // ── CRUD actions ───────────────────────────────────────────────────────
   async function createScenario() {
     if (!newClientName.trim() || saving) return;
-    if (isCloudUser && user.isInternal && !newContactId) {
+    if (requiresContact && !newContactId) {
       alert("Please link this scenario to a contact before creating it.");
       return;
     }
-    if (isCloudUser && user.isInternal && !newReferralContactId) {
-      alert("Please select a referral source before creating this scenario.");
-      return;
-    }
-    const referralContact = contactOptions.find(function(ct) { return ct.id === newReferralContactId; });
-    const referralName = referralContact
-      ? ((referralContact.first_name || "") + " " + (referralContact.last_name || "")).trim()
-      : (newLeadSource.trim() || null);
     // Seed calculationData from selected template (if any)
     const selectedTemplate = templates.find(function(t) { return t.id === newTemplateId; });
     const templateCalcData = selectedTemplate ? (selectedTemplate.calculation_data || {}) : {};
@@ -498,11 +613,11 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onUse
           name:             newClientName.trim(),
           notes:            "",
           calculationData:  { ...templateCalcData, uid: newUid },
-          contact_id:       user.isInternal ? (newContactId || null) : (resolvedBorrowerContactId || null),
+          contact_id:       requiresContact ? (newContactId || null) : (resolvedBorrowerContactId || null),
           lead_status:      "?",
           loan_purpose:     newLoanPurpose,
           property_address: null,
-          lead_source:      referralName,
+          lead_source:      null,
         });
         if (error) { alert("Could not save scenario: " + error.message); return; }
         createdScenario = mapFromCloud(data);
@@ -712,16 +827,17 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onUse
     setEditDetailsSaving(true);
     try {
       const { error } = await saveScenarioToSupabase({
-        scenarioId:        scenario.id,
-        name:              scenario.clientName,
-        notes:             scenario.notes,
-        status:            scenario.status,
-        lead_status:       scenario.lead_status,
-        loan_purpose:      scenario.loan_purpose,
-        property_address:  editDetailsForm.property_address || null,
-        lead_source:       editDetailsForm.lead_source      || null,
-        target_close_date: editDetailsForm.target_close_date || null,
-        actual_close_date: editDetailsForm.actual_close_date || null,
+        scenarioId:             scenario.id,
+        name:                   scenario.clientName,
+        notes:                  scenario.notes,
+        status:                 scenario.status,
+        lead_status:            scenario.lead_status,
+        loan_purpose:           scenario.loan_purpose,
+        property_address:       editDetailsForm.property_address       || null,
+        lead_source:            editDetailsForm.lead_source            || null,
+        target_close_date:      editDetailsForm.target_close_date      || null,
+        actual_close_date:      editDetailsForm.actual_close_date      || null,
+        co_borrower_contact_id: editDetailsForm.co_borrower_contact_id || null,
       });
       if (error) { alert("Could not save details: " + error.message); return; }
       setScenarios(function(prev) {
@@ -729,11 +845,12 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onUse
           if (s.id !== scenario.id) return s;
           return {
             ...s,
-            property_address:  editDetailsForm.property_address  || "",
-            lead_source:       editDetailsForm.lead_source        || "",
-            target_close_date: editDetailsForm.target_close_date || null,
-            actual_close_date: editDetailsForm.actual_close_date || null,
-            updatedAt:         new Date().toISOString(),
+            property_address:       editDetailsForm.property_address       || "",
+            lead_source:            editDetailsForm.lead_source            || "",
+            target_close_date:      editDetailsForm.target_close_date      || null,
+            actual_close_date:      editDetailsForm.actual_close_date      || null,
+            co_borrower_contact_id: editDetailsForm.co_borrower_contact_id || null,
+            updatedAt:              new Date().toISOString(),
           };
         });
       });
@@ -743,6 +860,91 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onUse
     } catch (err) {
       alert("Could not save details: " + err.message);
     } finally { setEditDetailsSaving(false); }
+  }
+
+  // ── Partner: refer scenario to LO team ───────────────────────────────────
+  async function handleReferToLO(scenarioId) {
+    if (referSaving) return;
+    setReferSaving(true);
+    try {
+      const { error } = await referScenarioToLO({ scenarioId, note: referNote.trim() });
+      if (error) { alert("Could not send referral: " + error.message); return; }
+      setReferredIds(function(prev) { const s = new Set(prev); s.add(scenarioId); return s; });
+      setReferringId(null);
+      setReferNote("");
+    } catch (err) {
+      alert("Could not send referral: " + err.message);
+    } finally { setReferSaving(false); }
+  }
+
+  // ── LO: share scenario with a specific partner ────────────────────────────
+  async function handleShareWithPartner() {
+    if (!shareModalScenario || !sharePartnerId || shareSaving) return;
+    setSharaSaving(true);
+    try {
+      const { error } = await shareScenarioWithPartner({
+        scenarioId:  shareModalScenario.id,
+        partnerUserId: sharePartnerId,
+        permission:  sharePermission,
+        note:        shareNote.trim(),
+      });
+      if (error) { alert("Could not share scenario: " + error.message); return; }
+      // Update share count badge
+      setShareCountsMap(function(prev) {
+        return { ...prev, [shareModalScenario.id]: (prev[shareModalScenario.id] || 0) + 1 };
+      });
+      setShareModalScenario(null);
+      setSharePartnerId("");
+      setShareNote("");
+      setSharePermission("view");
+    } catch (err) {
+      alert("Could not share scenario: " + err.message);
+    } finally { setShareSaving(false); }
+  }
+  // typo fix helper — setSharaSaving won't exist so point to the real setter
+  function setSharaSaving(v) { setShareSaving(v); }
+
+  function resetShareModal() {
+    setShareModalScenario(null);
+    setSharePartnerId("");
+    setShareNote("");
+    setSharePermission("view");
+    setShareMode("existing");
+    setShareInviteEmail("");
+    setShareInviteRole("realtor");
+    setShareInviteDone(null);
+  }
+
+  async function handleInviteAndShare() {
+    if (!shareModalScenario || !shareInviteEmail.trim() || shareSaving) return;
+    const emailVal = shareInviteEmail.trim().toLowerCase();
+    const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRx.test(emailVal)) { alert("Please enter a valid email address."); return; }
+    setSharaSaving(true);
+    try {
+      const { error } = await shareScenarioByInvite({
+        scenarioId:  shareModalScenario.id,
+        email:       emailVal,
+        role:        shareInviteRole,
+        permission:  sharePermission,
+        note:        shareNote.trim(),
+      });
+      if (error) { alert("Could not create invite: " + error.message); return; }
+      setShareCountsMap(function(prev) {
+        return { ...prev, [shareModalScenario.id]: (prev[shareModalScenario.id] || 0) + 1 };
+      });
+      const appUrl = window.location.origin + window.location.pathname;
+      const roleLabel = shareInviteRole === "builder" ? "Builder" : "Realtor";
+      setShareInviteDone(
+        "Hi,\n\nI've shared a scenario with you on Mortgage Mark. You can view it by signing up at:\n\n" +
+        appUrl + "\n\n" +
+        "Use this email to sign up: " + emailVal + "\n" +
+        "Sign up as: " + roleLabel + "\n\n" +
+        "Once you're in, the scenario \"" + shareModalScenario.clientName + "\" will appear in your \"Shared With Me\" tab."
+      );
+    } catch (err) {
+      alert("Could not create invite: " + err.message);
+    } finally { setShareSaving(false); }
   }
 
   // ── Bulk edit apply ────────────────────────────────────────────────────
@@ -1271,72 +1473,29 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onUse
       }}>
         <div>
           <h1 style={{ margin: 0, fontSize: "24px", fontWeight: 700 }}>
-            {(user && (user.role === "admin" || user.role === "internal"))
-              ? "Scenario Dashboard" : "My Scenarios"}
+            {pageTitle || ((user && (user.role === "admin" || user.role === "internal"))
+              ? "Scenario Dashboard" : "My Scenarios")}
           </h1>
           <p style={{ margin: "4px 0 0", opacity: 0.8, fontSize: "14px" }}>
             Welcome back, {displayName}
           </p>
         </div>
         <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-          {onMyInfo && (
-            <button
-              onClick={onMyInfo}
-              style={{
-                background: "rgba(255,255,255,0.9)", color: "#1e3a5f",
-                border: "none", borderRadius: "8px", padding: "8px 16px",
-                cursor: "pointer", fontSize: "14px", fontWeight: "600",
-              }}
-            >
-              👤 My Info
-            </button>
+          {AppHeader && (
+            <AppHeader
+              user={user}
+              darkMode={darkMode}
+              setDarkMode={setDarkMode}
+              onContacts={onContacts || null}
+              onScenarios={null}
+              onMyProfile={onMyInfo || null}
+              onTeam={onUsers || null}
+              onTemplates={isCloudUser && user.isInternal ? function() { setShowManageTemplates(true); } : null}
+              onLogout={onLogout}
+              isInternal={!!(user && user.isInternal)}
+              isAdmin={!!(user && user.role === "admin")}
+            />
           )}
-          {onUsers && (
-            <button
-              onClick={onUsers}
-              style={{
-                background: "rgba(255,255,255,0.9)", color: "#1e3a5f",
-                border: "none", borderRadius: "8px", padding: "8px 16px",
-                cursor: "pointer", fontSize: "14px", fontWeight: "600",
-              }}
-            >
-              👥 Team
-            </button>
-          )}
-          {isCloudUser && user.isInternal && (
-            <button
-              onClick={function() { setShowManageTemplates(true); }}
-              style={{
-                background: "rgba(255,255,255,0.9)", color: "#1e3a5f",
-                border: "none", borderRadius: "8px", padding: "8px 16px",
-                cursor: "pointer", fontSize: "14px", fontWeight: "600",
-              }}
-            >
-              📋 Templates{templates.length > 0 ? " (" + templates.length + ")" : ""}
-            </button>
-          )}
-          {onContacts && (
-            <button
-              onClick={onContacts}
-              style={{
-                background: "rgba(255,255,255,0.9)", color: "#1e3a5f",
-                border: "none", borderRadius: "8px", padding: "8px 16px",
-                cursor: "pointer", fontSize: "14px", fontWeight: "600",
-              }}
-            >
-              Contacts
-            </button>
-          )}
-          <button
-            onClick={onLogout}
-            style={{
-              background: "rgba(255,255,255,0.15)", color: "#fff",
-              border: "1px solid rgba(255,255,255,0.3)", borderRadius: "8px",
-              padding: "8px 16px", cursor: "pointer", fontSize: "14px",
-            }}
-          >
-            Logout
-          </button>
         </div>
       </div>
 
@@ -1467,7 +1626,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onUse
             <div style={{ background: "#0f1f30", padding: "20px 24px", display: "flex", flexDirection: "column", gap: "16px" }}>
 
               {/* ── Contact * ── */}
-              {isCloudUser && user.isInternal && (
+              {requiresContact && (
                 <div>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
                     <label style={{ fontSize: "12px", fontWeight: 700, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
@@ -1510,49 +1669,6 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onUse
                 </div>
               )}
 
-              {/* ── Referred By * ── */}
-              {isCloudUser && user.isInternal && (
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
-                    <label style={{ fontSize: "12px", fontWeight: 700, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                      Referred By <span style={{ color: "#f87171" }}>*</span>
-                    </label>
-                    {!showInlineReferralContact && (
-                      <button type="button" onClick={function() { setShowInlineReferralContact(true); }}
-                        style={{ fontSize: "12px", fontWeight: 600, color: "#60a5fa", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-                        + New Contact
-                      </button>
-                    )}
-                  </div>
-                  <select value={newReferralContactId} onChange={function(e) { setNewReferralContactId(e.target.value); }}
-                    style={{ width: "100%", padding: "10px 12px", borderRadius: "8px", border: "1px solid " + (!newReferralContactId ? "#f87171" : "#2a4a6a"), background: "#1a3450", color: "#fff", fontSize: "14px", outline: "none", boxSizing: "border-box" }}>
-                    <option value="">— Select referral source —</option>
-                    {contactOptions.map(function(ct) {
-                      return <option key={ct.id} value={ct.id}>{((ct.first_name || "") + " " + (ct.last_name || "")).trim()}{ct.email_personal ? " (" + ct.email_personal + ")" : ""}</option>;
-                    })}
-                  </select>
-                  {showInlineReferralContact && (
-                    <div style={{ marginTop: "10px", padding: "14px", background: "#162c42", borderRadius: "8px", border: "1px solid #2a4a6a" }}>
-                      <div style={{ fontSize: "11px", fontWeight: 700, color: "#60a5fa", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "10px" }}>Quick-add referral contact</div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "10px" }}>
-                        {[["text","First Name *",inlineRefFirstName,setInlineRefFirstName],["text","Last Name *",inlineRefLastName,setInlineRefLastName],["email","Email (optional)",inlineRefEmail,setInlineRefEmail],["tel","Phone (optional)",inlineRefPhone,setInlineRefPhone]].map(function(f) {
-                          return <input key={f[1]} type={f[0]} placeholder={f[1]} value={f[2]} onChange={function(e) { f[3](e.target.value); }} style={{ padding: "7px 10px", borderRadius: "6px", border: "1px solid #2a4a6a", background: "#1a3450", color: "#fff", fontSize: "12px", outline: "none", width: "100%", boxSizing: "border-box" }} />;
-                        })}
-                      </div>
-                      <div style={{ display: "flex", gap: "8px" }}>
-                        <button type="button" onClick={saveInlineReferralContact} disabled={savingInlineReferralContact}
-                          style={{ padding: "6px 16px", background: "#2563eb", color: "#fff", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: 600, cursor: savingInlineReferralContact ? "not-allowed" : "pointer" }}>
-                          {savingInlineReferralContact ? "Saving…" : "Save Contact"}
-                        </button>
-                        <button type="button" onClick={function() { setShowInlineReferralContact(false); setInlineRefFirstName(""); setInlineRefLastName(""); setInlineRefEmail(""); setInlineRefPhone(""); }}
-                          style={{ padding: "6px 12px", background: "transparent", color: "rgba(255,255,255,0.5)", border: "1px solid #2a4a6a", borderRadius: "6px", fontSize: "12px", cursor: "pointer" }}>
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
 
               {/* ── Scenario Name ── */}
               <div>
@@ -1642,6 +1758,51 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onUse
           </div>
         )}
 
+        {/* ── Borrower: Live Session Invite ────────────────────────── */}
+        {liveInvite && (
+          <div style={{
+            marginBottom: "16px",
+            background: "linear-gradient(135deg, #064E3B 0%, #065F46 100%)",
+            border: "2px solid #34D399",
+            borderRadius: "12px", padding: "16px 20px",
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            flexWrap: "wrap", gap: 12,
+            boxShadow: "0 4px 20px rgba(52,211,153,0.25)",
+            animation: "mtk-pulse-border 2s infinite",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ fontSize: 28, flexShrink: 0 }}>📡</span>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: "15px", color: "#ECFDF5", letterSpacing: "-0.01em" }}>
+                  {liveInvite.loName} is ready for a live session!
+                </div>
+                <div style={{ fontSize: "12px", color: "#6EE7B7", marginTop: 3 }}>
+                  {liveInvite.scenario.name || "Your Scenario"} — tap below to join and see numbers update in real time.
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <button
+                onClick={function() { onSelectScenario(liveInvite.scenario); }}
+                style={{
+                  padding: "10px 22px", borderRadius: 8, border: "none", cursor: "pointer",
+                  background: "#34D399", color: "#064E3B",
+                  fontSize: "14px", fontWeight: 800, letterSpacing: "-0.01em",
+                  whiteSpace: "nowrap", boxShadow: "0 2px 8px rgba(52,211,153,0.4)",
+                }}
+              >Join Live Session →</button>
+              <button
+                onClick={function() { setLiveInvite(null); }}
+                style={{
+                  padding: "10px 14px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)",
+                  cursor: "pointer", background: "transparent", color: "#6EE7B7",
+                  fontSize: "12px", fontWeight: 600,
+                }}
+              >Dismiss</button>
+            </div>
+          </div>
+        )}
+
         {/* ── Borrower: Scenarios Prepared For You ────────────────── */}
         {isCloudUser && user.role === "borrower" && claimable.length > 0 && (
           <div style={{
@@ -1683,6 +1844,50 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onUse
                     >
                       {claiming ? "Claiming\u2026" : "Claim \u2192"}
                     </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── Borrower: Co-Borrower Scenarios ──────────────────────── */}
+        {isCloudUser && user.role === "borrower" && coborrowerScenarios.length > 0 && (
+          <div style={{
+            marginBottom: "20px",
+            background: "rgba(124,58,237,0.06)",
+            border: "1px solid rgba(124,58,237,0.3)",
+            borderRadius: "12px", padding: "16px 20px",
+          }}>
+            <div style={{ fontWeight: 700, fontSize: "15px", marginBottom: "12px", color: "#6d28d9" }}>
+              👥 Scenarios you are listed on as co-borrower ({coborrowerScenarios.length})
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {coborrowerScenarios.map(function(s) {
+                return (
+                  <div key={s.id} style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    background: c.cardBg, border: "1px solid " + c.border,
+                    borderRadius: "8px", padding: "10px 14px",
+                  }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: "14px" }}>{s.name || "Untitled"}</div>
+                      {s.property_address && (
+                        <div style={{ fontSize: "12px", color: c.textSecondary || "#888", marginTop: "2px" }}>{s.property_address}</div>
+                      )}
+                      <div style={{ fontSize: "11px", color: c.textSecondary || "#888", marginTop: "2px" }}>
+                        {getLoanPurposeLabel(s.loan_purpose)} · Updated {new Date(s.updated_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <button
+                      onClick={function() { onSelectScenario(mapFromCloud(s)); }}
+                      style={{
+                        background: "#7c3aed", color: "#fff",
+                        border: "none", borderRadius: "6px", padding: "7px 16px",
+                        fontSize: "13px", fontWeight: 600,
+                        cursor: "pointer", whiteSpace: "nowrap", marginLeft: "16px",
+                      }}
+                    >View &#8594;</button>
                   </div>
                 );
               })}
@@ -1896,7 +2101,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onUse
         )}
 
         {/* ── Scenario Table ───────────────────────────────────────── */}
-        {filtered.length > 0 && (
+        {user.isInternal && filtered.length > 0 && (
           <div style={{ overflowX: "auto", background: c.cardBg, border: "1px solid " + c.border, borderRadius: "12px" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
@@ -1985,81 +2190,22 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onUse
                           </select>
                         </th>
 
-                        {/* FU Next — sortable + filterable by date window */}
-                        <th style={clickTh}>
-                          <div onClick={function() { handleSort("fu_date"); }} style={{ display: "inline-block" }}>
-                            FU Next {arrow("fu_date")}
-                          </div>
-                          <select
-                            value={filterFuDate}
-                            onChange={function(e) { e.stopPropagation(); setFilterFuDate(e.target.value); }}
-                            onClick={function(e) { e.stopPropagation(); }}
-                            style={{ ...filterSelectStyle, minWidth: 90 }}
-                          >
-                            <option value="">All</option>
-                            <option value="overdue">Overdue</option>
-                            <option value="today">Today</option>
-                            <option value="this_week">This Week</option>
-                            <option value="this_month">This Month</option>
-                            <option value="none">— (none)</option>
-                          </select>
-                        </th>
-
-                        {/* FU Who — sortable + filterable by distinct values */}
-                        <th style={clickTh}>
-                          <div onClick={function() { handleSort("fu_who"); }} style={{ display: "inline-block" }}>
-                            FU Who {arrow("fu_who")}
-                          </div>
-                          <select
-                            value={filterFuWho}
-                            onChange={function(e) { e.stopPropagation(); setFilterFuWho(e.target.value); }}
-                            onClick={function(e) { e.stopPropagation(); }}
-                            style={{ ...filterSelectStyle, minWidth: 80 }}
-                          >
-                            <option value="">All</option>
-                            {(function() {
-                              const seen = {};
-                              Object.values(contactsMap).forEach(function(ct) {
-                                const w = ct.fu_who || "";
-                                if (w) seen[w] = true;
-                              });
-                              return Object.keys(seen).sort().map(function(w) {
-                                return <option key={w} value={w}>{w}</option>;
-                              });
-                            })()}
-                            <option value="_none">— (none)</option>
-                          </select>
-                        </th>
-
-                        {/* FU Priority — sortable + filterable */}
-                        <th style={clickTh}>
-                          <div onClick={function() { handleSort("fu_priority"); }} style={{ display: "inline-block" }}>
-                            FU Priority {arrow("fu_priority")}
-                          </div>
-                          <select
-                            value={filterFuPriority}
-                            onChange={function(e) { e.stopPropagation(); setFilterFuPriority(e.target.value); }}
-                            onClick={function(e) { e.stopPropagation(); }}
-                            style={{ ...filterSelectStyle, minWidth: 70 }}
-                          >
-                            <option value="">All</option>
-                            <option value="High">High</option>
-                            <option value="Medium">Medium</option>
-                            <option value="Low">Low</option>
-                            <option value="_none">— (none)</option>
-                          </select>
-                        </th>
-
-                        {/* Note: Quick — not sortable */}
-                        <th style={thStyle}>Note: Quick</th>
-
                         {/* Created — sortable */}
                         <th style={clickTh} onClick={function() { handleSort("createdAt"); }}>
                           Created {arrow("createdAt")}
                         </th>
 
+                        {/* Loan Officer */}
+                        <th style={thStyle}>LO</th>
+
                         {/* Actions column */}
                         <th style={thStyle}></th>
+
+                        {/* Archive column */}
+                        <th style={{ ...thStyle, textAlign: "center" }}>Archive</th>
+
+                        {/* Delete column */}
+                        <th style={{ ...thStyle, textAlign: "center" }}>Delete</th>
                       </React.Fragment>
                     );
                   })()}
@@ -2073,10 +2219,6 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onUse
                   const contactName = contact
                     ? ((contact.first_name || "") + " " + (contact.last_name || "")).trim()
                     : "";
-                  const fuDate     = contact ? (contact.fu_date     || "") : "";
-                  const fuWho      = contact ? (contact.fu_who      || "") : "";
-                  const fuPriority = contact ? (contact.fu_priority || "") : "";
-                  const noteQuick  = contact ? (contact.note_quick  || "") : "";
 
                   const isLastRow = filtered[filtered.length - 1].id === scenario.id;
                   const rowBorderStyle = isLastRow && auditLogOpen !== scenario.id && editDetailsOpen !== scenario.id
@@ -2133,10 +2275,16 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onUse
                         </td>
 
                         {/* Contact Name */}
-                        <td style={tdStyle}>
-                          <span style={{ fontWeight: 500, whiteSpace: "nowrap" }}>
-                            {contactName || <span style={{ color: c.textSecondary || "#aaa" }}>—</span>}
-                          </span>
+                        <td style={tdStyle} onClick={function(e) { e.stopPropagation(); }}>
+                          {(contactName && onOpenContact && scenario.contact_id)
+                            ? <span
+                                style={{ fontWeight: 500, whiteSpace: "nowrap", color: "#60a5fa", cursor: "pointer", textDecoration: "underline" }}
+                                onClick={function() { onOpenContact(scenario.contact_id); }}
+                              >{contactName}</span>
+                            : <span style={{ fontWeight: 500, whiteSpace: "nowrap" }}>
+                                {contactName || <span style={{ color: c.textSecondary || "#aaa" }}>—</span>}
+                              </span>
+                          }
                         </td>
 
                         {/* ID */}
@@ -2149,7 +2297,25 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onUse
 
                         {/* Scenario Name */}
                         <td style={tdStyle}>
-                          <span style={{ fontWeight: 600 }}>{scenario.clientName}</span>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                            <span style={{ fontWeight: 600 }}>{scenario.clientName}</span>
+                            {user.isInternal && referralScenarioIds.has(scenario.id) && (
+                              <span title="Referred by a partner" style={{
+                                fontSize: "10px", fontWeight: 700,
+                                background: "rgba(124,58,237,0.12)", color: "#7c3aed",
+                                border: "1px solid rgba(124,58,237,0.25)",
+                                borderRadius: 99, padding: "1px 7px", whiteSpace: "nowrap",
+                              }}>⭐ Referred</span>
+                            )}
+                            {(shareCountsMap[scenario.id] || 0) > 0 && (
+                              <span title="Shared with partner(s)" style={{
+                                fontSize: "10px", fontWeight: 700,
+                                background: "rgba(37,99,235,0.1)", color: "#2563eb",
+                                border: "1px solid rgba(37,99,235,0.25)",
+                                borderRadius: 99, padding: "1px 7px", whiteSpace: "nowrap",
+                              }}>🔗 {shareCountsMap[scenario.id]} shared</span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Purpose */}
@@ -2170,50 +2336,17 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onUse
                           })()}
                         </td>
 
-                        {/* FU Next */}
-                        <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
-                          {fuDate
-                            ? <span style={{ color: "#b45309", fontWeight: 500 }}>{formatDateOnly(fuDate)}</span>
-                            : <span style={{ color: c.textSecondary || "#aaa" }}>—</span>
-                          }
-                        </td>
-
-                        {/* FU Who */}
-                        <td style={tdStyle}>
-                          {fuWho
-                            ? <span style={{ fontWeight: 600, fontSize: "12px" }}>{fuWho}</span>
-                            : <span style={{ color: c.textSecondary || "#aaa" }}>—</span>
-                          }
-                        </td>
-
-                        {/* FU Priority */}
-                        <td style={tdStyle}>
-                          {fuPriority
-                            ? <span style={{
-                                background: fuPriority === "High" ? "rgba(239,68,68,0.1)" : "rgba(245,158,11,0.1)",
-                                color:      fuPriority === "High" ? "#dc2626" : "#b45309",
-                                fontSize: "11px", fontWeight: 700,
-                                padding: "2px 7px", borderRadius: "5px",
-                                whiteSpace: "nowrap",
-                              }}>{fuPriority}</span>
-                            : <span style={{ color: c.textSecondary || "#aaa" }}>—</span>
-                          }
-                        </td>
-
-                        {/* Note: Quick */}
-                        <td style={{ ...tdStyle, maxWidth: "220px" }}>
-                          {noteQuick
-                            ? <span style={{ fontSize: "12px" }} title={noteQuick}>
-                                {noteQuick.length > 60 ? noteQuick.substring(0, 60) + "\u2026" : noteQuick}
-                              </span>
-                            : <span style={{ color: c.textSecondary || "#aaa" }}>—</span>
-                          }
-                        </td>
-
                         {/* Created */}
                         <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
                           <span style={{ color: c.textSecondary || "#888", fontSize: "12px" }}>
                             {formatDate(scenario.createdAt)}
+                          </span>
+                        </td>
+
+                        {/* Loan Officer */}
+                        <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                          <span style={{ fontSize: "12px", color: c.text }}>
+                            {scenario.createdByName || <span style={{ color: c.textSecondary || "#aaa" }}>—</span>}
                           </span>
                         </td>
 
@@ -2241,11 +2374,12 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onUse
                                   } else {
                                     setEditDetailsOpen(scenario.id);
                                     setEditDetailsForm({
-                                      loan_purpose:      scenario.loan_purpose      || "purchase",
-                                      property_address:  scenario.property_address  || "",
-                                      lead_source:       scenario.lead_source       || "",
-                                      target_close_date: scenario.target_close_date || "",
-                                      actual_close_date: scenario.actual_close_date || "",
+                                      loan_purpose:           scenario.loan_purpose           || "purchase",
+                                      property_address:       scenario.property_address       || "",
+                                      lead_source:            scenario.lead_source            || "",
+                                      target_close_date:      scenario.target_close_date      || "",
+                                      actual_close_date:      scenario.actual_close_date      || "",
+                                      co_borrower_contact_id: scenario.co_borrower_contact_id || "",
                                     });
                                   }
                                 }}
@@ -2273,26 +2407,61 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onUse
                                 style={{ ...actionBtnStyle }}
                               >📋</button>
                             )}
-                            {isCloudUser && user.role === "admin" && (
+                            {isCloudUser && user.isInternal && partnerProfiles.length > 0 && (
                               <button
-                                title="Delete Scenario"
-                                onClick={function() { deleteScenario(scenario.id); }}
-                                style={{
-                                  ...actionBtnStyle,
-                                  background: "transparent",
-                                  borderColor: "rgba(239,68,68,0.4)",
-                                  color: "#ef4444",
+                                title="Share with Partner (Realtor / Builder)"
+                                onClick={function() {
+                                  setShareModalScenario(scenario);
+                                  setSharePartnerId("");
+                                  setSharePermission("view");
+                                  setShareNote("");
                                 }}
-                              >🗑</button>
+                                style={{ ...actionBtnStyle }}
+                              >🔗</button>
                             )}
                           </div>
+                        </td>
+
+                        {/* Archive */}
+                        <td style={{ ...tdStyle, textAlign: "center" }} onClick={function(e) { e.stopPropagation(); }}>
+                          {user.isInternal && (
+                            <button
+                              title="Archive Scenario"
+                              onClick={function() {
+                                if (!confirm("Archive this scenario? It will move to the Archived tab.")) return;
+                                changeLeadStatus(scenario, "z- Lead");
+                              }}
+                              style={{
+                                ...actionBtnStyle,
+                                background: "transparent",
+                                borderColor: "rgba(245,158,11,0.4)",
+                                color: "#b45309",
+                              }}
+                            >📦</button>
+                          )}
+                        </td>
+
+                        {/* Delete */}
+                        <td style={{ ...tdStyle, textAlign: "center" }} onClick={function(e) { e.stopPropagation(); }}>
+                          {isCloudUser && user.role === "admin" && (
+                            <button
+                              title="Delete Scenario"
+                              onClick={function() { deleteScenario(scenario.id); }}
+                              style={{
+                                ...actionBtnStyle,
+                                background: "transparent",
+                                borderColor: "rgba(239,68,68,0.4)",
+                                color: "#ef4444",
+                              }}
+                            >🗑</button>
+                          )}
                         </td>
                       </tr>
 
                       {/* ── Audit Log expanded row ── */}
                       {auditLogOpen === scenario.id && (
                         <tr>
-                          <td colSpan={11} style={{ padding: 0, borderBottom: "1px solid " + c.border }}>
+                          <td colSpan={15} style={{ padding: 0, borderBottom: "1px solid " + c.border }}>
                             <div style={{
                               padding: "12px 20px", fontSize: "13px",
                               maxHeight: "220px", overflowY: "auto",
@@ -2333,7 +2502,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onUse
                       {/* ── Edit Details expanded row ── */}
                       {isCloudUser && user.isInternal && editDetailsOpen === scenario.id && (
                         <tr>
-                          <td colSpan={11} style={{ padding: 0, borderBottom: "1px solid " + c.border }}
+                          <td colSpan={15} style={{ padding: 0, borderBottom: "1px solid " + c.border }}
                               onClick={function(e) { e.stopPropagation(); }}>
                             <div style={{ padding: "16px 20px" }}>
                               <div style={{ fontWeight: 600, marginBottom: "12px", fontSize: "13px" }}>✏️ Edit Lead Details</div>
@@ -2387,6 +2556,30 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onUse
                                   />
                                 </div>
                               </div>
+                              {/* Co-borrower contact picker */}
+                              <div style={{ marginBottom: "12px" }}>
+                                <label style={{ display: "block", fontSize: "12px", color: c.textSecondary || "#888", marginBottom: "3px" }}>
+                                  Co-Borrower Contact
+                                  <span style={{ marginLeft: "6px", fontWeight: 400, opacity: 0.7 }}>(optional — gives them read-only access)</span>
+                                </label>
+                                <select
+                                  value={editDetailsForm.co_borrower_contact_id || ""}
+                                  onChange={function(e) { setEditDetailsForm(function(p) { return { ...p, co_borrower_contact_id: e.target.value || null }; }); }}
+                                  style={{ ...inputStyle, fontSize: "13px", padding: "7px 10px" }}
+                                >
+                                  <option value="">— None —</option>
+                                  {contactOptions.filter(function(ct) { return ct.id !== scenario.contact_id; }).map(function(ct) {
+                                    const name = ((ct.first_name || "") + " " + (ct.last_name || "")).trim();
+                                    const email = ct.email_personal || ct.email_work || ct.email || "";
+                                    return <option key={ct.id} value={ct.id}>{name}{email ? " (" + email + ")" : ""}</option>;
+                                  })}
+                                </select>
+                                {editDetailsForm.co_borrower_contact_id && (
+                                  <div style={{ fontSize: "11px", color: c.textSecondary || "#888", marginTop: "4px" }}>
+                                    This contact will be able to log in and view this scenario.
+                                  </div>
+                                )}
+                              </div>
                               <div style={{ display: "flex", gap: "8px" }}>
                                 <button
                                   onClick={function() { saveEditDetails(scenario); }}
@@ -2420,28 +2613,486 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onUse
           </div>
         )}
 
-        {/* ── Quick-start: open without saving ────────────────────── */}
-        <div style={{
-          marginTop: "32px", padding: "16px 20px",
-          background: c.cardBg, borderRadius: "12px",
-          border: "1px solid " + c.border, textAlign: "center",
-        }}>
-          <p style={{ margin: "0 0 8px", fontSize: "14px", color: c.textSecondary || "#888" }}>
-            Need a quick calculation without saving?
-          </p>
-          <button
-            onClick={function() { onSelectScenario(null); }}
-            style={{
-              background: "transparent", color: "#2563eb",
-              border: "1px solid #2563eb", borderRadius: "8px",
-              padding: "8px 20px", fontSize: "14px", fontWeight: 600, cursor: "pointer",
-            }}
-          >
-            Open Calculators (No Scenario)
-          </button>
-        </div>
+        {/* ── Borrower Scenario Table ───────────────────────────────── */}
+        {!user.isInternal && !isPartner && !sharedWithMeTab && filtered.length > 0 && (
+          <div style={{ overflowX: "auto", background: c.cardBg, border: "1px solid " + c.border, borderRadius: "12px" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ borderBottom: "2px solid " + c.border }}>
+                  <th style={thStyle}>Scenario Name</th>
+                  <th style={thStyle}>Loan Amount</th>
+                  <th style={thStyle}>Interest Rate</th>
+                  <th style={thStyle}>Loan Term</th>
+                  <th style={thStyle}>Monthly Payment</th>
+                  <th style={thStyle}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(function(scenario) {
+                  const d = scenario.calculatorData || {};
+                  function parseN(v) {
+                    if (v === null || v === undefined) return 0;
+                    try { const p = JSON.parse(v); return parseFloat(p) || 0; } catch { return parseFloat(v) || 0; }
+                  }
+                  const la   = parseN(d["pc_la"]);
+                  const rate = parseN(d["pc_rate"]);
+                  const term = parseN(d["pc_term"]);
+                  const r = rate / 100 / 12;
+                  const n = term * 12;
+                  const payment = (la > 0 && r > 0 && n > 0)
+                    ? la * r / (1 - Math.pow(1 + r, -n))
+                    : (la > 0 && n > 0 ? la / n : 0);
+                  const fmtDollar = function(v) {
+                    return v > 0 ? "$" + Math.round(v).toLocaleString("en-US") : "—";
+                  };
+                  const isLastRow = filtered[filtered.length - 1].id === scenario.id;
+                  return (
+                    <tr
+                      key={scenario.id}
+                      onClick={function() { onSelectScenario(scenario); }}
+                      style={{
+                        borderBottom: isLastRow ? "none" : "1px solid " + c.border,
+                        cursor: "pointer",
+                        background: "transparent",
+                      }}
+                      onMouseEnter={function(e) { e.currentTarget.style.background = "rgba(37,99,235,0.04)"; }}
+                      onMouseLeave={function(e) { e.currentTarget.style.background = "transparent"; }}
+                    >
+                      <td style={{ ...tdStyle, fontWeight: 600 }}>{scenario.clientName}</td>
+                      <td style={tdStyle}>{fmtDollar(la)}</td>
+                      <td style={tdStyle}>{rate ? rate.toFixed(2) + "%" : "—"}</td>
+                      <td style={tdStyle}>{term ? term + " years" : "—"}</td>
+                      <td style={tdStyle}>{payment > 0 ? fmtDollar(payment) + "/mo" : "—"}</td>
+                      <td style={{ ...tdStyle, textAlign: "right" }} onClick={function(e) { e.stopPropagation(); }}>
+                        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
+                          {isPartner && (
+                            referredIds.has(scenario.id)
+                              ? <span style={{ fontSize: 11, fontWeight: 700, color: "#7c3aed", background: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.25)", borderRadius: 99, padding: "3px 10px", whiteSpace: "nowrap" }}>⭐ Referred</span>
+                              : <button onClick={function() { setReferringId(scenario.id); setReferNote(""); }}
+                                  style={{ background: "rgba(124,58,237,0.12)", color: "#7c3aed", border: "1px solid rgba(124,58,237,0.3)", borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                                  ⭐ Refer
+                                </button>
+                          )}
+                          <button
+                            onClick={function() { onSelectScenario(scenario); }}
+                            style={{ background: "#2563eb", color: "#fff", border: "none", borderRadius: 6, padding: "6px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                            Open →
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+
+        {/* ── Partner: My Pipeline / Shared With Me tab switcher ──────── */}
+        {isPartner && isCloudUser && (
+          <div style={{ marginTop: 32 }}>
+            {/* Sub-tab switcher */}
+            <div style={{ display: "flex", gap: 4, marginBottom: 16, borderBottom: "2px solid " + c.border }}>
+              {[
+                { key: false, label: "My Pipeline" },
+                { key: true,  label: "Shared With Me" + (sharedWithMe.length > 0 ? " (" + sharedWithMe.length + ")" : "") },
+              ].map(function(t) {
+                const active = sharedWithMeTab === t.key;
+                return (
+                  <button key={String(t.key)} onClick={function() { setSharedWithMeTab(t.key); }}
+                    style={{
+                      background: "transparent", border: "none",
+                      borderBottom: active ? "2px solid #7c3aed" : "2px solid transparent",
+                      marginBottom: "-2px", padding: "8px 16px",
+                      fontSize: "14px", fontWeight: active ? 700 : 400,
+                      color: active ? "#7c3aed" : (c.textSecondary || "#888"),
+                      cursor: "pointer",
+                    }}
+                  >{t.label}</button>
+                );
+              })}
+            </div>
+
+            {/* ── Shared With Me table ── */}
+            {sharedWithMeTab && (
+              sharedWithMe.length === 0
+                ? <div style={{ textAlign: "center", padding: "40px 24px", background: c.cardBg, borderRadius: 12, border: "1px solid " + c.border, color: c.textSecondary }}>
+                    No scenarios have been shared with you yet.
+                  </div>
+                : <div style={{ overflowX: "auto", background: c.cardBg, border: "1px solid " + c.border, borderRadius: 12 }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr style={{ borderBottom: "2px solid " + c.border }}>
+                          <th style={thStyle}>Scenario Name</th>
+                          <th style={thStyle}>Purpose</th>
+                          <th style={thStyle}>Shared By</th>
+                          <th style={thStyle}>Date Shared</th>
+                          <th style={thStyle}>Note</th>
+                          <th style={thStyle}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sharedWithMe.map(function(scenario) {
+                          const share = scenario._share || {};
+                          const lp = scenario.loan_purpose || "purchase";
+                          const isRefi = lp.startsWith("refi");
+                          const isLast = sharedWithMe[sharedWithMe.length - 1].id === scenario.id;
+                          return (
+                            <tr key={scenario.id}
+                              onClick={function() { onSelectScenario(scenario); }}
+                              style={{ borderBottom: isLast ? "none" : "1px solid " + c.border, cursor: "pointer" }}
+                              onMouseEnter={function(e) { e.currentTarget.style.background = "rgba(124,58,237,0.04)"; }}
+                              onMouseLeave={function(e) { e.currentTarget.style.background = "transparent"; }}
+                            >
+                              <td style={{ ...tdStyle, fontWeight: 600 }}>{scenario.clientName}</td>
+                              <td style={tdStyle}>
+                                <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 10, fontSize: 11, fontWeight: 700, background: isRefi ? "rgba(59,130,246,0.12)" : "rgba(34,197,94,0.12)", color: isRefi ? "#1d4ed8" : "#15803d" }}>
+                                  {isRefi ? "Refi" : "Purchase"}
+                                </span>
+                              </td>
+                              <td style={tdStyle}>{scenario._shared_by_name || "—"}</td>
+                              <td style={{ ...tdStyle, whiteSpace: "nowrap", fontSize: 12, color: c.textSecondary }}>
+                                {share.created_at ? new Date(share.created_at).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "2-digit" }) : "—"}
+                              </td>
+                              <td style={{ ...tdStyle, fontSize: 12, maxWidth: 200 }}>
+                                {share.note
+                                  ? <span title={share.note}>{share.note.length > 60 ? share.note.slice(0, 60) + "…" : share.note}</span>
+                                  : <span style={{ color: c.textSecondary }}>—</span>}
+                              </td>
+                              <td style={{ ...tdStyle, textAlign: "right" }} onClick={function(e) { e.stopPropagation(); }}>
+                                <button onClick={function() { onSelectScenario(scenario); }}
+                                  style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 6, padding: "6px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                                  Open →
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+            )}
+
+            {/* ── Partner: Refer to Mortgage Mark button on own scenarios ── */}
+            {!sharedWithMeTab && filtered.length === 0 && (
+              <div style={{ textAlign: "center", padding: "40px 24px", background: c.cardBg, borderRadius: 12, border: "1px solid " + c.border, color: c.textSecondary }}>
+                No scenarios yet. Create one above to get started.
+              </div>
+            )}
+
+            {!sharedWithMeTab && filtered.length > 0 && (
+              <div style={{ overflowX: "auto", background: c.cardBg, border: "1px solid " + c.border, borderRadius: 12 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "2px solid " + c.border }}>
+                      <th style={thStyle}>Lead Status</th>
+                      <th style={thStyle}>Contact</th>
+                      <th style={thStyle}>ID</th>
+                      <th style={thStyle}>Scenario Name</th>
+                      <th style={thStyle}>Purpose</th>
+                      <th style={thStyle}>Property</th>
+                      <th style={thStyle}>Created</th>
+                      <th style={thStyle}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map(function(scenario) {
+                      const ls       = scenario.lead_status || "?";
+                      const lsColor  = getLeadStatusColors(ls);
+                      const contact  = contactsMap[scenario.contact_id] || null;
+                      const contactName = contact
+                        ? ((contact.first_name || "") + " " + (contact.last_name || "")).trim()
+                        : "";
+                      const lp     = scenario.loan_purpose || "purchase";
+                      const isRefi = lp.startsWith("refi");
+                      const isLast = filtered[filtered.length - 1].id === scenario.id;
+                      return (
+                        <tr key={scenario.id}
+                          onClick={function() { onSelectScenario(scenario); }}
+                          style={{ borderBottom: isLast ? "none" : "1px solid " + c.border, cursor: "pointer" }}
+                          onMouseEnter={function(e) { e.currentTarget.style.background = "rgba(124,58,237,0.04)"; }}
+                          onMouseLeave={function(e) { e.currentTarget.style.background = "transparent"; }}
+                        >
+                          {/* Lead Status */}
+                          <td style={tdStyle} onClick={function(e) { e.stopPropagation(); }}>
+                            <span style={{
+                              display: "inline-block", padding: "3px 8px", borderRadius: 5,
+                              fontSize: 11, fontWeight: 700,
+                              background: lsColor.bg, color: lsColor.text,
+                            }}>{ls}</span>
+                          </td>
+
+                          {/* Contact */}
+                          <td style={tdStyle}>
+                            <span style={{ fontWeight: 500, whiteSpace: "nowrap" }}>
+                              {contactName || <span style={{ color: c.textSecondary }}>—</span>}
+                            </span>
+                          </td>
+
+                          {/* ID */}
+                          <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                            {scenario.uid
+                              ? <span style={{ fontFamily: "monospace", fontSize: 11, color: c.textSecondary, letterSpacing: "0.03em" }}>{scenario.uid}</span>
+                              : <span style={{ color: c.textSecondary }}>—</span>}
+                          </td>
+
+                          {/* Scenario Name */}
+                          <td style={tdStyle}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                              <span style={{ fontWeight: 600 }}>{scenario.clientName}</span>
+                              {referredIds.has(scenario.id) && (
+                                <span style={{ fontSize: 10, fontWeight: 700, background: "rgba(124,58,237,0.12)", color: "#7c3aed", border: "1px solid rgba(124,58,237,0.25)", borderRadius: 99, padding: "1px 7px", whiteSpace: "nowrap" }}>⭐ Referred</span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Purpose */}
+                          <td style={tdStyle}>
+                            <span style={{
+                              display: "inline-block", padding: "2px 8px", borderRadius: 10,
+                              fontSize: 11, fontWeight: 700, whiteSpace: "nowrap",
+                              background: isRefi ? "rgba(59,130,246,0.12)" : "rgba(34,197,94,0.12)",
+                              color:      isRefi ? "#1d4ed8"               : "#15803d",
+                            }}>
+                              {isRefi ? "Refi" : "Purchase"}
+                            </span>
+                          </td>
+
+                          {/* Property Address */}
+                          <td style={{ ...tdStyle, fontSize: 12, maxWidth: 200 }}>
+                            {scenario.property_address
+                              ? <span title={scenario.property_address}>{scenario.property_address.length > 40 ? scenario.property_address.slice(0, 40) + "…" : scenario.property_address}</span>
+                              : <span style={{ color: c.textSecondary }}>—</span>}
+                          </td>
+
+                          {/* Created */}
+                          <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                            <span style={{ color: c.textSecondary, fontSize: 12 }}>{formatDate(scenario.createdAt)}</span>
+                          </td>
+
+                          {/* Actions */}
+                          <td style={{ ...tdStyle, whiteSpace: "nowrap" }} onClick={function(e) { e.stopPropagation(); }}>
+                            <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
+                              {referredIds.has(scenario.id)
+                                ? <span style={{ fontSize: 11, fontWeight: 700, color: "#7c3aed", background: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.25)", borderRadius: 99, padding: "3px 10px", whiteSpace: "nowrap" }}>⭐ Referred</span>
+                                : <button onClick={function() { setReferringId(scenario.id); setReferNote(""); }}
+                                    style={{ background: "rgba(124,58,237,0.12)", color: "#7c3aed", border: "1px solid rgba(124,58,237,0.3)", borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                                    ⭐ Refer
+                                  </button>
+                              }
+                              <button onClick={function() { onSelectScenario(scenario); }}
+                                style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 6, padding: "6px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                                Open →
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
 
       </div>
+
+      {/* ── Share with Partner Modal (LO) ──────────────────────────────────── */}
+      {shareModalScenario && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)" }}
+          onClick={function() { setShareModalScenario(null); }}>
+          <div style={{ background: "#0f1f30", border: "1px solid #2a4a6a", borderRadius: 14, padding: "28px", minWidth: 340, maxWidth: 460, width: "90%", boxShadow: "0 12px 40px rgba(0,0,0,0.5)" }}
+            onClick={function(e) { e.stopPropagation(); }}>
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <div style={{ fontSize: 17, fontWeight: 700, color: "#fff" }}>🔗 Share with Partner</div>
+              <button onClick={resetShareModal} style={{ background: "transparent", border: "none", color: "rgba(255,255,255,0.4)", fontSize: 20, cursor: "pointer", lineHeight: 1 }}>✕</button>
+            </div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", marginBottom: 18 }}>
+              Scenario: <strong style={{ color: "#fff" }}>{shareModalScenario.clientName}</strong>
+            </div>
+
+            {/* Mode tabs */}
+            <div style={{ display: "flex", borderBottom: "1px solid #2a4a6a", marginBottom: 20 }}>
+              {[
+                { key: "existing", label: "Existing Partner" },
+                { key: "invite",   label: "Invite New Partner" },
+              ].map(function(tab) {
+                var active = shareMode === tab.key;
+                return (
+                  <button key={tab.key} onClick={function() { setShareMode(tab.key); setShareInviteDone(null); }}
+                    style={{
+                      background: "transparent", border: "none", borderBottom: active ? "2px solid #2563eb" : "2px solid transparent",
+                      marginBottom: "-1px", padding: "8px 16px", fontSize: 13, fontWeight: active ? 700 : 400,
+                      color: active ? "#60a5fa" : "rgba(255,255,255,0.45)", cursor: "pointer",
+                    }}>
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* ── Existing partner mode ── */}
+            {shareMode === "existing" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div>
+                  <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
+                    Partner <span style={{ color: "#f87171" }}>*</span>
+                  </label>
+                  <select value={sharePartnerId} onChange={function(e) { setSharePartnerId(e.target.value); }}
+                    style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid " + (!sharePartnerId ? "#f87171" : "#2a4a6a"), background: "#1a3450", color: "#fff", fontSize: 14, outline: "none", boxSizing: "border-box" }}>
+                    <option value="">— Select a Realtor or Builder —</option>
+                    {partnerProfiles.map(function(p) {
+                      return <option key={p.id} value={p.id}>{p.display_name || p.email} ({p.role})</option>;
+                    })}
+                  </select>
+                  {partnerProfiles.length === 0 && (
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 6 }}>
+                      No partners in your account yet — use "Invite New Partner" to add one.
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Permission</label>
+                  <select value={sharePermission} onChange={function(e) { setSharePermission(e.target.value); }}
+                    style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #2a4a6a", background: "#1a3450", color: "#fff", fontSize: 14, outline: "none", boxSizing: "border-box" }}>
+                    <option value="view">View only</option>
+                    <option value="collaborate">Collaborate (full access)</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
+                    Note <span style={{ fontSize: 10, fontWeight: 400, opacity: 0.6 }}>(optional)</span>
+                  </label>
+                  <input type="text" value={shareNote} onChange={function(e) { setShareNote(e.target.value); }}
+                    placeholder="e.g. Working with this buyer on Oakwood subdivision"
+                    style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #2a4a6a", background: "#1a3450", color: "#fff", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+                </div>
+                <div style={{ display: "flex", gap: 10, paddingTop: 4 }}>
+                  <button onClick={handleShareWithPartner} disabled={!sharePartnerId || shareSaving}
+                    style={{ background: !sharePartnerId || shareSaving ? "#374151" : "#2563eb", color: "#fff", border: "none", borderRadius: 8, padding: "11px 28px", fontSize: 14, fontWeight: 700, cursor: !sharePartnerId || shareSaving ? "not-allowed" : "pointer", opacity: (!sharePartnerId || shareSaving) ? 0.6 : 1 }}>
+                    {shareSaving ? "Sharing…" : "Share Scenario"}
+                  </button>
+                  <button onClick={resetShareModal}
+                    style={{ background: "transparent", color: "rgba(255,255,255,0.5)", border: "1px solid #2a4a6a", borderRadius: 8, padding: "11px 24px", fontSize: 14, cursor: "pointer" }}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ── Invite new partner mode ── */}
+            {shareMode === "invite" && !shareInviteDone && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", lineHeight: 1.6, marginBottom: 2 }}>
+                  Enter their email and role. The scenario will be waiting in their "Shared With Me" tab the moment they sign up.
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
+                    Email <span style={{ color: "#f87171" }}>*</span>
+                  </label>
+                  <input type="email" value={shareInviteEmail} onChange={function(e) { setShareInviteEmail(e.target.value); }}
+                    placeholder="partner@email.com"
+                    style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #2a4a6a", background: "#1a3450", color: "#fff", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Role <span style={{ color: "#f87171" }}>*</span></label>
+                  <select value={shareInviteRole} onChange={function(e) { setShareInviteRole(e.target.value); }}
+                    style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #2a4a6a", background: "#1a3450", color: "#fff", fontSize: 14, outline: "none", boxSizing: "border-box" }}>
+                    <option value="realtor">Realtor</option>
+                    <option value="builder">Builder</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Permission</label>
+                  <select value={sharePermission} onChange={function(e) { setSharePermission(e.target.value); }}
+                    style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #2a4a6a", background: "#1a3450", color: "#fff", fontSize: 14, outline: "none", boxSizing: "border-box" }}>
+                    <option value="view">View only</option>
+                    <option value="collaborate">Collaborate (full access)</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
+                    Note <span style={{ fontSize: 10, fontWeight: 400, opacity: 0.6 }}>(optional)</span>
+                  </label>
+                  <input type="text" value={shareNote} onChange={function(e) { setShareNote(e.target.value); }}
+                    placeholder="e.g. Working with this buyer on Oakwood subdivision"
+                    style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #2a4a6a", background: "#1a3450", color: "#fff", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+                </div>
+                <div style={{ display: "flex", gap: 10, paddingTop: 4 }}>
+                  <button onClick={handleInviteAndShare} disabled={!shareInviteEmail.trim() || shareSaving}
+                    style={{ background: !shareInviteEmail.trim() || shareSaving ? "#374151" : "#2563eb", color: "#fff", border: "none", borderRadius: 8, padding: "11px 28px", fontSize: 14, fontWeight: 700, cursor: !shareInviteEmail.trim() || shareSaving ? "not-allowed" : "pointer", opacity: !shareInviteEmail.trim() || shareSaving ? 0.6 : 1 }}>
+                    {shareSaving ? "Saving…" : "Create Invite & Share"}
+                  </button>
+                  <button onClick={resetShareModal}
+                    style={{ background: "transparent", color: "rgba(255,255,255,0.5)", border: "1px solid #2a4a6a", borderRadius: 8, padding: "11px 24px", fontSize: 14, cursor: "pointer" }}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ── Invite success: copy-paste message ── */}
+            {shareMode === "invite" && shareInviteDone && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#4ade80", fontWeight: 700, fontSize: 14 }}>
+                  ✓ Invite created — scenario is queued for {shareInviteEmail}
+                </div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", marginBottom: 2 }}>
+                  Copy the message below and send it to your partner however you like (text, email, etc.):
+                </div>
+                <textarea readOnly value={shareInviteDone} rows={9}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #2a4a6a", background: "#0d1b2a", color: "#e2e8f0", fontSize: 12, lineHeight: 1.6, resize: "none", boxSizing: "border-box", fontFamily: "monospace", outline: "none" }} />
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button onClick={function() { navigator.clipboard && navigator.clipboard.writeText(shareInviteDone); }}
+                    style={{ background: "#2563eb", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                    Copy Message
+                  </button>
+                  <button onClick={resetShareModal}
+                    style={{ background: "transparent", color: "rgba(255,255,255,0.5)", border: "1px solid #2a4a6a", borderRadius: 8, padding: "10px 20px", fontSize: 13, cursor: "pointer" }}>
+                    Done
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Refer to LO Modal (Partner) ─────────────────────────────────────── */}
+      {referringId && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)" }}
+          onClick={function() { setReferringId(null); setReferNote(""); }}>
+          <div style={{ background: "#0f1f30", border: "1px solid #2a4a6a", borderRadius: 14, padding: "28px", minWidth: 340, maxWidth: 460, width: "90%", boxShadow: "0 12px 40px rgba(0,0,0,0.5)" }}
+            onClick={function(e) { e.stopPropagation(); }}>
+            <div style={{ fontSize: 17, fontWeight: 700, color: "#fff", marginBottom: 8 }}>⭐ Refer to Mortgage Mark</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", marginBottom: 20, lineHeight: 1.5 }}>
+              This will notify the Mortgage Mark team that your client is ready for a mortgage conversation.
+              They'll follow up and can access this scenario to hit the ground running.
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
+                Note <span style={{ fontSize: 10, fontWeight: 400, opacity: 0.6 }}>(optional)</span>
+              </label>
+              <input type="text" value={referNote} onChange={function(e) { setReferNote(e.target.value); }}
+                placeholder="e.g. Pre-approved target $450k, looking to close by June"
+                style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #2a4a6a", background: "#1a3450", color: "#fff", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={function() { handleReferToLO(referringId); }} disabled={referSaving}
+                style={{ background: referSaving ? "#374151" : "#7c3aed", color: "#fff", border: "none", borderRadius: 8, padding: "11px 28px", fontSize: 14, fontWeight: 700, cursor: referSaving ? "not-allowed" : "pointer", opacity: referSaving ? 0.6 : 1 }}>
+                {referSaving ? "Sending…" : "Send Referral →"}
+              </button>
+              <button onClick={function() { setReferringId(null); setReferNote(""); }}
+                style={{ background: "transparent", color: "rgba(255,255,255,0.5)", border: "1px solid #2a4a6a", borderRadius: 8, padding: "11px 24px", fontSize: 14, cursor: "pointer" }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Save as Template Modal ──────────────────────────────────────── */}
       {saveTemplateModal && (

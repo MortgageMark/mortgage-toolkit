@@ -57,7 +57,7 @@ function LoanProgramComparison() {
     <div>
       <SectionCard title="Loan Program Comparison" subtitle="Compare FHA, VA, USDA & Conventional side-by-side">
         <div className="mtk-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <LabeledInput label="Purchase Price" value={price} onChange={setPrice} prefix="$" />
+          <LabeledInput label="Purchase Price" value={price} onChange={setPrice} prefix="$" useCommas />
           <LabeledInput label="Credit Score" value={credit} onChange={setCredit} />
           <LabeledInput label="Conventional Rate" value={convRate} onChange={setConvRate} suffix="%" step="0.125" />
           <LabeledInput label="FHA Rate" value={fhaRate} onChange={setFhaRate} suffix="%" step="0.125" />

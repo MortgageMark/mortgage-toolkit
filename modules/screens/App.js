@@ -156,16 +156,12 @@ function DisclaimerModal({ onAck }) {
 }
 
 // ── PersistentFooter ──────────────────────────────────────────────────────────
-// Fixed disclaimer strip always visible at the bottom of the viewport.
+// Normal flow footer — only visible when scrolled to the bottom.
 function PersistentFooter() {
   return (
     <div style={{
-      position: "fixed",
-      bottom: 0, left: 0, right: 0,
-      zIndex: 9000,
+      marginTop: 24,
       background: "rgba(10, 34, 56, 0.94)",
-      backdropFilter: "blur(6px)",
-      WebkitBackdropFilter: "blur(6px)",
       borderTop: "1px solid rgba(255,255,255,0.10)",
       padding: "6px 20px",
       textAlign: "center",
@@ -178,6 +174,127 @@ function PersistentFooter() {
       Rates shown are estimates only and subject to change without notice.{" "}
       Mark Pfeiffer | NMLS #729612 | CMG Home Loans | NMLS #1820 | Equal Housing Lender |{" "}
       NMLS Consumer Access: www.nmlsconsumeraccess.org
+    </div>
+  );
+}
+
+// ── ChangePasswordScreen ──────────────────────────────────────────────────────
+// Shown to borrowers whose account was created by an LO (must_change_password = true).
+// Forces them to set a personal password before reaching the dashboard.
+function ChangePasswordScreen({ user, onComplete }) {
+  const supa = window._supabaseClient;
+  const [newPw,     setNewPw]     = React.useState("");
+  const [confirmPw, setConfirmPw] = React.useState("");
+  const [saving,    setSaving]    = React.useState(false);
+  const [err,       setErr]       = React.useState("");
+
+  const inputSt = {
+    width: "100%", padding: "12px 14px",
+    border: "1.5px solid #E0E8E8", borderRadius: 8,
+    fontSize: 15, fontFamily: _font,
+    color: "#0C4160", background: "#F7FAFB",
+    outline: "none", boxSizing: "border-box",
+  };
+  const labelSt = {
+    display: "block", fontSize: 11, fontWeight: 600,
+    letterSpacing: "0.08em", textTransform: "uppercase",
+    color: "#6B7D8A", marginBottom: 5, fontFamily: _font,
+  };
+
+  const handleSave = async function () {
+    setErr("");
+    if (newPw.length < 6)      { setErr("Password must be at least 6 characters."); return; }
+    if (newPw !== confirmPw)   { setErr("Passwords don't match. Please try again."); return; }
+    setSaving(true);
+    try {
+      const { error: updateErr } = await supa.auth.updateUser({ password: newPw });
+      if (updateErr) { setErr(updateErr.message || "Could not update password."); setSaving(false); return; }
+      // Clear the flag on their profile
+      if (user && user.id) {
+        await supa.from("profiles").update({ must_change_password: false }).eq("id", user.id);
+      }
+      onComplete();
+    } catch (e) {
+      setErr("Something went wrong. Please try again.");
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div style={{
+      minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
+      background: "linear-gradient(135deg, #0C4160 0%, #164E72 40%, #48A0CE 100%)",
+      padding: 20, fontFamily: _font,
+    }}>
+      <div style={{
+        background: "#fff", borderRadius: 16,
+        boxShadow: "0 8px 32px rgba(0,0,0,0.14)",
+        padding: "36px 32px", maxWidth: 420, width: "100%",
+      }}>
+        {/* Header */}
+        <div style={{ textAlign: "center", marginBottom: 24 }}>
+          <h2 style={{ fontSize: 22, fontWeight: 800, color: "#0C4160", margin: "0 0 6px 0", fontFamily: _font }}>
+            Welcome{user && user.name ? ", " + user.name.split(" ")[0] : ""}!
+          </h2>
+          <p style={{ fontSize: 13, color: "#6B7D8A", margin: 0, lineHeight: 1.6, fontFamily: _font }}>
+            Your account was set up by your loan officer. Please create a personal password to continue.
+          </p>
+        </div>
+
+        {/* Fields */}
+        <div style={{ marginBottom: 14 }}>
+          <label style={labelSt}>NEW PASSWORD</label>
+          <input
+            type="password"
+            value={newPw}
+            onChange={function (e) { setNewPw(e.target.value); }}
+            style={inputSt}
+            placeholder="At least 6 characters"
+            autoFocus
+          />
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <label style={labelSt}>CONFIRM PASSWORD</label>
+          <input
+            type="password"
+            value={confirmPw}
+            onChange={function (e) { setConfirmPw(e.target.value); }}
+            style={inputSt}
+            placeholder="Re-enter password"
+            onKeyDown={function (e) { if (e.key === "Enter") handleSave(); }}
+          />
+        </div>
+
+        {err && (
+          <div style={{
+            background: "#FEE2E2", border: "1.5px solid #DC2626",
+            color: "#B91C1C", padding: "11px 14px", borderRadius: 8,
+            fontSize: 13, marginBottom: 14, fontFamily: _font,
+          }}>
+            {err}
+          </div>
+        )}
+
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          style={{
+            width: "100%", padding: "14px 24px",
+            background: saving
+              ? "#94A3B0"
+              : "linear-gradient(135deg, #0C4160 0%, #164E72 100%)",
+            color: "#fff", border: "none", borderRadius: 10,
+            fontSize: 15, fontWeight: 700, fontFamily: _font,
+            cursor: saving ? "wait" : "pointer",
+          }}
+        >
+          {saving ? "Saving…" : "Set Password & Continue →"}
+        </button>
+
+        <div style={{ textAlign: "center", marginTop: 16, fontSize: 11, color: "#94A3B0", fontFamily: _font }}>
+          © {new Date().getFullYear()} Mortgage Mark · NMLS #729612
+        </div>
+      </div>
     </div>
   );
 }
@@ -710,8 +827,21 @@ function App() {
   const [pendingContactId, setPendingContactId] = React.useState(null);
   const [showProfileSetup, setShowProfileSetup] = React.useState(false);
   const [profileContactId, setProfileContactId] = React.useState(null);
-  const [showMyInfo,       setShowMyInfo]        = React.useState(false);
-  const [showUsers,        setShowUsers]         = React.useState(false);
+  const [showMyInfo,           setShowMyInfo]           = React.useState(false);
+  const [showUsers,            setShowUsers]            = React.useState(false);
+  const [showTasksScenarios,   setShowTasksScenarios]   = React.useState(false);
+  const [showTasksContacts,    setShowTasksContacts]    = React.useState(false);
+  const [showChangePassword,   setShowChangePassword]   = React.useState(false);
+  const [sidebarPinned,        setSidebarPinned]        = React.useState(true);
+  const [contactView,          setContactView]          = React.useState("internal");
+  const [contactsKey,          setContactsKey]          = React.useState(0);
+  const [darkMode,             setDarkMode]             = useLocalStorage("app_dark", false);
+  const [userRole,             setUserRole]             = useLocalStorage("app_role", "admin");
+  const [activeContactInfo,    setActiveContactInfo]    = React.useState(null);
+
+  // ── Browser back-button: history state refs ─────────────────────────────
+  const _bNavPrev    = React.useRef(null);  // last screen key pushed
+  const _bNavFromPop = React.useRef(false); // suppress push when popstate drives nav
 
   // ── Magic link / view token ────────────────────────────────────────────────
   // Read on first render from URL params + sessionStorage (set by view.html).
@@ -719,11 +849,29 @@ function App() {
   const viewTokenDataRef = React.useRef(null);
   const [viewPrefill, setViewPrefill] = React.useState(null); // { clientName, clientEmail, loName }
 
+  // ── Live session invite ────────────────────────────────────────────────────
+  // ?live=SCENARIO_ID in the URL means the LO shared a live-session link.
+  // Store it in sessionStorage so it survives the login/signup flow.
+  const pendingLiveRef = React.useRef(null);
+  const [pendingLive, setPendingLive] = React.useState(false);
+
   React.useEffect(function() {
     var params = new URLSearchParams(window.location.search);
     var viewToken = params.get("view_token");
     var dest      = params.get("dest");
-    if (!viewToken) return;
+    var liveId    = params.get("live");
+
+    // Handle ?live= invite link
+    if (liveId) {
+      pendingLiveRef.current = liveId;
+      setPendingLive(true);
+      try { sessionStorage.setItem("mtk_pending_live", liveId); } catch(e) {}
+    }
+
+    if (!viewToken) {
+      if (liveId) window.history.replaceState({}, "", window.location.pathname);
+      return;
+    }
 
     // Read token data stored by view.html
     var raw = null;
@@ -790,6 +938,56 @@ function App() {
               supabaseUser: true,
               borrowerPermissions: profile.borrower_permissions || [],
             });
+
+            // Resume force-change if they closed before finishing
+            if (profile.must_change_password && !cancelled) {
+              setShowChangePassword(true);
+            }
+
+            // Sync team roster on every session restore so email_display and other
+            // profile fields are always current without requiring a fresh sign-in.
+            if (isInternal && supabase && !cancelled) {
+              supabase.from("profiles")
+                .select("id, display_name, email, email_display, role, nmls, phone, cell_phone, fax, title, company, company_nmls, branch_nmls, website, address, city, state, zip")
+                .in("role", ["admin", "internal"])
+                .then(function(res) {
+                  if (res.error || !res.data) return;
+                  var uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                  try {
+                    var roster = [];
+                    try { roster = JSON.parse(localStorage.getItem("mtk_roster") || "[]"); } catch(e) {}
+                    res.data.forEach(function(p) {
+                      var idx = roster.findIndex(function(m) { return m.id === p.id; });
+                      var entry = {
+                        id: p.id,
+                        name: p.display_name || p.email || "",
+                        email: p.email || "",
+                        email_display: p.email_display || "",
+                        role: p.role,
+                        nmls: p.nmls || "",
+                        phone: p.phone || "",
+                        cell: p.cell_phone || "",
+                        fax: p.fax || "",
+                        title: p.title || "",
+                        company: p.company || "",
+                        companyNMLS: p.company_nmls || "",
+                        branchNmls: p.branch_nmls || "",
+                        website: p.website || "",
+                        address: p.address || "",
+                        city: p.city || "",
+                        state: p.state || "",
+                        zip: p.zip || "",
+                        active: true,
+                        passwordHash: "supabase-managed",
+                      };
+                      if (idx >= 0) { roster[idx] = Object.assign({}, roster[idx], entry); }
+                      else { roster.push(entry); }
+                    });
+                    localStorage.setItem("mtk_roster", JSON.stringify(roster));
+                    window.dispatchEvent(new Event("storage"));
+                  } catch(e) {}
+                });
+            }
           }
         } else if (!cancelled && loggedInUser && loggedInUser.supabaseUser) {
           setLoggedInUser(null);
@@ -845,6 +1043,16 @@ function App() {
   const handleLogin = (userData) => {
     setLoggedInUser(userData);
 
+    // Always land on the Scenario Dashboard after a fresh login.
+    // Magic-link and live-session paths below immediately overwrite this.
+    setActiveScenario(null);
+
+    // ── Force password change for LO-created accounts ──────────────────────
+    if (userData && userData.mustChangePassword) {
+      setShowChangePassword(true);
+      return; // don't do any other routing until password is set
+    }
+
     // ── Magic link: auto-load the scenario that was shared ─────────────────
     const td = viewTokenDataRef.current;
     if (td && td.scenario) {
@@ -872,6 +1080,35 @@ function App() {
       return; // skip profile setup / contacts redirect
     }
 
+    // ── Live session invite: fetch scenario and jump straight in ───────────
+    var pendingLiveId = null;
+    try { pendingLiveId = sessionStorage.getItem("mtk_pending_live"); } catch(e) {}
+    if (pendingLiveId) {
+      try { sessionStorage.removeItem("mtk_pending_live"); } catch(e) {}
+      pendingLiveRef.current = null;
+      setPendingLive(false);
+      if (supabase) {
+        supabase.from("scenarios").select("*").eq("id", pendingLiveId).single()
+          .then(function(res) {
+            if (res.error || !res.data) return; // scenario not found or no access — fall through to dashboard
+            var row = res.data;
+            var calcData = (row.calculation_data && typeof row.calculation_data === "object")
+              ? row.calculation_data : {};
+            handleSelectScenario({
+              id:               row.id,
+              name:             row.name || "Live Session",
+              notes:            row.notes || "",
+              loan_purpose:     row.loan_purpose || "purchase",
+              property_address: row.property_address || "",
+              calculatorData:   calcData,
+              status:           row.status || "active",
+            });
+          })
+          .catch(function() {}); // non-fatal — user lands on dashboard if fetch fails
+      }
+      return;
+    }
+
     // ── Normal login flow ──────────────────────────────────────────────────
     if (userData && userData.newContactId) {
       const userIsInternal = userData.isInternal ||
@@ -883,7 +1120,11 @@ function App() {
         setProfileContactId(userData.newContactId);
         setShowProfileSetup(true);
       }
+    } else if (userData && userData.role === "borrower" && userData.supabaseUser) {
+      // Borrowers (clients) go to their contact card first
+      setShowMyInfo(true);
     }
+    // LO / Builder / Realtor → fall through to ScenarioDashboard (activeScenario is null)
   };
 
   const handleLogout = async () => {
@@ -898,6 +1139,9 @@ function App() {
     setShowProfileSetup(false);
     setShowMyInfo(false);
     setShowUsers(false);
+    setShowTasksScenarios(false);
+    setShowTasksContacts(false);
+    setShowChangePassword(false);
     setProfileContactId(null);
     setActiveScenario(null);
     setLoggedInUser(null);
@@ -906,29 +1150,90 @@ function App() {
   const handleSelectScenario = (scenario) => {
     if (scenario === null) {
       restoreCalculatorData({});
+      window._mtkInitCalcData = null;
       localStorage.setItem("mtk_active_scenario", JSON.stringify({ none: true }));
       scenarioSnapshotRef.current = null;
       setActiveScenario({ none: true });
     } else {
       const calcData = scenario.calculatorData || {};
       restoreCalculatorData(calcData);
-      // For borrowers: stash their name on window so DTI Calculator / Pre-Qual
-      // can display it even when the About tab has never been filled in.
-      // Using window avoids any localStorage timing issues.
+      // DEFINITIVE FIX: expose calcData on window so BuilderTab's useState initializer
+      // can read the authoritative scenario value BEFORE any localStorage timing can interfere.
+      // This is synchronous — guaranteed to be set before React mounts BuilderTab.
+      window._mtkInitCalcData = calcData;
+      // For borrowers: stash their name so DTI Calculator / Pre-Qual can display it
+      // even when the About tab has never been filled in.
+      // Write to localStorage (abt_c1fn/abt_c1ln) so the name survives page reloads.
+      // Only fills in if the LO hasn't already set the name via the About tab.
       if (loggedInUser && !loggedInUser.isInternal && loggedInUser.name) {
         var _np = loggedInUser.name.trim().split(/\s+/);
         window._mtkBorrowerFn = _np[0] || "";
         window._mtkBorrowerLn = _np.slice(1).join(" ") || "";
+        if (!calcData["abt_c1fn"]) {
+          localStorage.setItem("mtk_abt_c1fn", JSON.stringify(_np[0] || ""));
+        }
+        if (!calcData["abt_c1ln"]) {
+          localStorage.setItem("mtk_abt_c1ln", JSON.stringify(_np.slice(1).join(" ") || ""));
+        }
       }
       if (!calcData.pc_purpose && scenario.loan_purpose) {
         const mappedPurpose = (scenario.loan_purpose || "").startsWith("refi") ? "refinance" : "purchase";
         localStorage.setItem("mtk_pc_purpose", JSON.stringify(mappedPurpose));
       }
+      // Auto-open the right tab: Payment Calculator for purchases, Refi Analyzer for refis
+      const _lp = (scenario.loan_purpose || calcData["pc_purpose"] || "").toLowerCase();
+      const _isRefi = _lp.startsWith("refi") || _lp === "refinance";
+      localStorage.setItem("mtk_app_mod", JSON.stringify(_isRefi ? "refi" : "payment"));
       localStorage.setItem("mtk_active_scenario", JSON.stringify(scenario));
       scenarioSnapshotRef.current = calcData;
       setActiveScenario(scenario);
     }
   };
+
+  // ── Browser back-button support ──────────────────────────────────────────
+  // Derive a single key for the currently visible top-level screen.
+  var _bNavKey = activeScenario   ? 'scenario'
+    : showContacts                ? 'contacts'
+    : showTasksScenarios          ? 'tasks-sc'
+    : showTasksContacts           ? 'tasks-co'
+    : showUsers                   ? 'users'
+    : showMyInfo                  ? 'myinfo'
+    : 'dashboard';
+
+  // Mount: tag the page-load history entry so popstate can identify it.
+  React.useEffect(function() {
+    window.history.replaceState({ mtkScreen: 'dashboard' }, '');
+    _bNavPrev.current = 'dashboard';
+  }, []);
+
+  // Push a new history entry whenever the user navigates to a different screen.
+  React.useEffect(function() {
+    if (_bNavFromPop.current) { _bNavFromPop.current = false; return; }
+    if (_bNavPrev.current === null || _bNavPrev.current === _bNavKey) return;
+    window.history.pushState({ mtkScreen: _bNavKey }, '');
+    _bNavPrev.current = _bNavKey;
+  }, [_bNavKey]); // eslint-disable-line
+
+  // Listen for the browser back (or forward) button.
+  React.useEffect(function() {
+    function onPop(e) {
+      var screen = e.state && e.state.mtkScreen;
+      if (!screen) return; // entry is not ours — let the browser leave the page
+      _bNavFromPop.current = true;
+      _bNavPrev.current = screen;
+      // Restore app state to match the history entry being popped to.
+      setActiveScenario(null);
+      setShowContacts(screen === 'contacts');
+      setShowTasksScenarios(screen === 'tasks-sc');
+      setShowTasksContacts(screen === 'tasks-co');
+      setShowUsers(screen === 'users');
+      setShowMyInfo(screen === 'myinfo');
+      setPendingContactId(null);
+    }
+    window.addEventListener('popstate', onPop);
+    return function() { window.removeEventListener('popstate', onPop); };
+  }, []); // state setters are stable — empty deps is safe
+  // ─────────────────────────────────────────────────────────────────────────
 
   const handleBackToScenarios = () => {
     if (activeScenario && activeScenario.id) {
@@ -943,7 +1248,8 @@ function App() {
           scenarioId: activeScenario.id,
           name: activeScenario.clientName || activeScenario.name || "Untitled",
           notes: activeScenario.notes || "",
-          status: activeScenario.status || "active"
+          status: activeScenario.status || "active",
+          calculationData: afterSnap
         }).then(function() {
           if (diff.sections.length > 0) {
             writeAuditLog(
@@ -953,9 +1259,12 @@ function App() {
               "Changed: " + diff.sections.join(", ")
             );
           }
+          setActiveScenario(null);
         }).catch(function(err) {
           console.warn("Cloud save on exit failed:", err);
+          setActiveScenario(null);
         });
+        return; // setActiveScenario(null) handled inside promise
       }
     }
     setActiveScenario(null);
@@ -982,7 +1291,14 @@ function App() {
       </div>
     );
   } else if (!loggedInUser) {
-    pageContent = <LoginScreen onLogin={handleLogin} viewPrefill={viewPrefill} />;
+    pageContent = <LoginScreen onLogin={handleLogin} viewPrefill={viewPrefill} pendingLive={pendingLive} />;
+  } else if (showChangePassword) {
+    pageContent = (
+      <ChangePasswordScreen
+        user={loggedInUser}
+        onComplete={function () { setShowChangePassword(false); }}
+      />
+    );
   } else if (showProfileSetup) {
     pageContent = (
       <BorrowerProfileSetup
@@ -1007,9 +1323,40 @@ function App() {
         onLogout={handleLogout}
       />
     );
+  } else if (showTasksScenarios && isInternal) {
+    pageContent = (
+      <ScenarioDashboard
+        user={loggedInUser}
+        onSelectScenario={function(s) { setShowTasksScenarios(false); handleSelectScenario(s); }}
+        onLogout={handleLogout}
+        onContacts={isInternal ? function() { setShowTasksScenarios(false); setShowContacts(true); } : null}
+        onOpenContact={isInternal ? function(contactId) { setPendingContactId(contactId); setShowTasksScenarios(false); setShowContacts(true); } : null}
+        onUsers={loggedInUser && loggedInUser.role === "admin" ? function() { setShowTasksScenarios(false); setShowUsers(true); } : null}
+        onMyInfo={null}
+        pageTitle="Tasks: Scenarios"
+      />
+    );
+  } else if (showTasksContacts && isInternal) {
+    pageContent = (
+      <ContactsTab
+        key={"tasks-contacts-" + contactsKey}
+        user={loggedInUser}
+        initialContactId={pendingContactId}
+        onBack={function() { setShowTasksContacts(false); setPendingContactId(null); }}
+        onLogout={handleLogout}
+        onSelectScenario={function(scenario) { setShowTasksContacts(false); handleSelectScenario(scenario); }}
+        onUsers={loggedInUser && loggedInUser.role === "admin" ? function() { setShowTasksContacts(false); setShowUsers(true); } : null}
+        onTasksScenarios={isInternal ? function() { setShowTasksContacts(false); setShowTasksScenarios(true); } : null}
+        activeView={contactView}
+        onSetView={setContactView}
+        onContactSelected={setActiveContactInfo}
+        pageTitle="Tasks: Contacts"
+      />
+    );
   } else if (showContacts) {
     pageContent = (
       <ContactsTab
+        key={"contacts-" + contactsKey}
         user={loggedInUser}
         initialContactId={pendingContactId}
         onBack={function() { setShowContacts(false); setPendingContactId(null); }}
@@ -1019,6 +1366,11 @@ function App() {
           handleSelectScenario(scenario);
         }}
         onUsers={loggedInUser && ["super_admin", "admin"].includes(loggedInUser.role) ? function() { setShowContacts(false); setShowUsers(true); } : null}
+        onTasksScenarios={isInternal ? function() { setShowContacts(false); setShowTasksScenarios(true); } : null}
+        onTasksContacts={isInternal ? function() { setShowContacts(false); setShowTasksContacts(true); } : null}
+        activeView={contactView}
+        onSetView={setContactView}
+        onContactSelected={setActiveContactInfo}
       />
     );
   } else if (showDashboard && activeScenario === null) {
@@ -1027,7 +1379,8 @@ function App() {
         user={loggedInUser}
         onSelectScenario={handleSelectScenario}
         onLogout={handleLogout}
-        onContacts={isInternal ? function() { setShowContacts(true); } : null}
+        onContacts={(isInternal || (loggedInUser && (loggedInUser.role === "realtor" || loggedInUser.role === "builder"))) ? function() { setShowContacts(true); } : null}
+        onOpenContact={isInternal ? function(contactId) { setPendingContactId(contactId); setShowContacts(true); } : null}
         onUsers={loggedInUser && loggedInUser.role === "admin" ? function() { setShowUsers(true); } : null}
         onMyInfo={(!isInternal && loggedInUser && loggedInUser.supabaseUser) ? function() { setShowMyInfo(true); } : null}
       />
@@ -1041,18 +1394,220 @@ function App() {
         onLogout={handleLogout}
         activeScenario={currentScenario}
         onBackToScenarios={showDashboard ? handleBackToScenarios : null}
-        onOpenContact={isInternal ? function(contactId) { setPendingContactId(contactId); setShowContacts(true); } : null}
+        onOpenContact={(isInternal || (loggedInUser && (loggedInUser.role === "realtor" || loggedInUser.role === "builder"))) ? function(contactId) { setPendingContactId(contactId); setShowContacts(true); setActiveScenario(null); } : null}
         onOpenProfile={!isInternal ? function() { setShowMyInfo(true); } : null}
       />
     );
   }
 
-  // Single return — disclaimer modal overlays everything; footer is always present
+  // Footer is hidden while inside the toolkit (MortgageToolkit uses height:100vh +
+  // overflow:hidden, so the footer creates extra body height and causes the mobile
+  // scroll confusion bug — user could scroll the page to reveal/stick the footer).
+  const inToolkit = !authLoading && !!loggedInUser && !showChangePassword &&
+    !showProfileSetup && !showMyInfo && !showUsers && !showContacts &&
+    activeScenario !== null;
+
+  // Sidebar is visible for internal users on all non-scenario screens
+  const showSidebar = !!(isInternal && loggedInUser && !activeScenario && !authLoading &&
+    !showChangePassword && !showProfileSetup && !showMyInfo && !showUsers);
+  const sidebarWidth = showSidebar ? (sidebarPinned ? 220 : 42) : 0;
+
+  // Determine which nav item is "active" (mutually exclusive highlights)
+  const inContacts   = showContacts && !showTasksContacts;
+  const inScenarios  = !showContacts && !showTasksScenarios && !showTasksContacts && !showUsers && activeScenario === null;
+  const inTasksSc    = showTasksScenarios;
+  const inTasksCo    = showTasksContacts;
+  const inAnyContacts = showContacts || showTasksContacts; // for view-tab visibility
+
+  // Sidebar panel icon SVG (rectangle with vertical divider line)
+  const SidebarIcon = (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: "block" }}>
+      <rect x="1.5" y="1.5" width="13" height="13" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+      <line x1="6" y1="1.5" x2="6" y2="14.5" stroke="currentColor" strokeWidth="1.5"/>
+    </svg>
+  );
+
+  function sidebarNavBtn(label, isActive, onClick) {
+    return (
+      <button
+        key={label}
+        onClick={onClick}
+        style={{
+          display: "block", width: "100%", textAlign: "left",
+          padding: "9px 16px", border: "none", cursor: "pointer",
+          background: isActive ? "rgba(255,255,255,0.12)" : "transparent",
+          color: isActive ? "#fff" : "rgba(255,255,255,0.75)",
+          fontSize: 13, fontWeight: isActive ? 700 : 500,
+          fontFamily: "'Inter', system-ui, sans-serif",
+          borderLeft: isActive ? "3px solid #60a5fa" : "3px solid transparent",
+          whiteSpace: "nowrap", transition: "background 0.15s",
+        }}
+        onMouseEnter={function(e) { if (!isActive) e.currentTarget.style.background = "rgba(255,255,255,0.07)"; }}
+        onMouseLeave={function(e) { if (!isActive) e.currentTarget.style.background = "transparent"; }}
+      >
+        {label}
+      </button>
+    );
+  }
+
   return (
     <React.Fragment>
       {!disclaimerAcked && <DisclaimerModal onAck={handleAckDisclaimer} />}
-      {pageContent}
-      <PersistentFooter />
+
+      {/* ── Global fixed sidebar (internal users, non-scenario screens) ── */}
+      {showSidebar && (
+        <div style={{
+          position: "fixed", left: 0, top: 0,
+          width: sidebarPinned ? 220 : 42,
+          height: "100vh",
+          background: "#1e3a5f",
+          zIndex: 200,
+          display: "flex", flexDirection: "column",
+          overflow: "hidden",
+          transition: "width 0.2s ease",
+          borderRight: "1px solid rgba(0,0,0,0.18)",
+          boxSizing: "border-box",
+        }}>
+
+          {/* ── Contact / user name at top of sidebar ── */}
+          {sidebarPinned && (
+            <div style={{
+              padding: "16px 16px 12px",
+              borderBottom: "1px solid rgba(255,255,255,0.12)",
+              flexShrink: 0,
+            }}>
+              <div style={{
+                fontSize: 15, fontWeight: 700, color: "#fff",
+                lineHeight: 1.3, overflow: "hidden",
+                textOverflow: "ellipsis", whiteSpace: "nowrap",
+                fontFamily: "'Inter', system-ui, sans-serif",
+              }}>
+                {activeContactInfo ? activeContactInfo.name : (loggedInUser && (loggedInUser.name || loggedInUser.email)) || ""}
+              </div>
+              {(activeContactInfo ? activeContactInfo.badge : (loggedInUser && loggedInUser.role)) && (
+                <div style={{
+                  fontSize: 11, color: "rgba(255,255,255,0.55)",
+                  marginTop: 3, overflow: "hidden",
+                  textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  fontFamily: "'Inter', system-ui, sans-serif",
+                  textTransform: "capitalize",
+                }}>
+                  {activeContactInfo ? activeContactInfo.badge : (loggedInUser && loggedInUser.role)}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Pin / expand button */}
+          <div style={{
+            display: "flex",
+            justifyContent: sidebarPinned ? "flex-end" : "center",
+            padding: "10px 10px 6px",
+            borderBottom: "1px solid rgba(255,255,255,0.1)",
+            flexShrink: 0,
+          }}>
+            <button
+              onClick={function() { setSidebarPinned(function(p) { return !p; }); }}
+              title={sidebarPinned ? "Collapse sidebar" : "Expand sidebar"}
+              style={{
+                background: "none", border: "none", cursor: "pointer",
+                color: "rgba(255,255,255,0.75)", fontSize: 15,
+                padding: "3px 5px", lineHeight: 1,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                borderRadius: 4, transition: "color 0.2s",
+              }}
+              onMouseEnter={function(e) { e.currentTarget.style.color = "#fff"; }}
+              onMouseLeave={function(e) { e.currentTarget.style.color = "rgba(255,255,255,0.75)"; }}
+            >
+              {SidebarIcon}
+            </button>
+          </div>
+
+          {/* Nav items — only when expanded */}
+          {sidebarPinned && (
+            <div style={{ flex: 1, overflowY: "auto", paddingTop: 8, paddingBottom: 16 }}>
+
+              {/* Dashboards section */}
+              <div style={{ padding: "8px 16px 4px", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.38)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                Dashboards
+              </div>
+              {sidebarNavBtn("Contact Dashboard", inContacts, function() {
+                if (showContacts) {
+                  // Already on Contact Dashboard — reset to list view
+                  setContactsKey(function(k) { return k + 1; });
+                } else {
+                  // Navigate to Contact Dashboard (from Scenario Dashboard, Tasks, etc.)
+                  setShowContacts(true);
+                  setShowTasksScenarios(false);
+                  setShowTasksContacts(false);
+                  setPendingContactId(null);
+                }
+              })}
+              {sidebarNavBtn("Scenario Dashboard", inScenarios, function() {
+                setShowContacts(false);
+                setShowTasksScenarios(false);
+                setShowTasksContacts(false);
+                setShowUsers(false);
+              })}
+
+              {/* Tasks section */}
+              <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "6px 16px" }} />
+              {sidebarNavBtn("Tasks: Scenarios", inTasksSc, function() {
+                setShowTasksScenarios(true);
+                setShowContacts(false);
+                setShowTasksContacts(false);
+              })}
+              {sidebarNavBtn("Tasks: Contacts", inTasksCo, function() {
+                setShowTasksContacts(true);
+                setShowContacts(false);
+                setShowTasksScenarios(false);
+              })}
+
+              {/* Contact view tabs — shown when in any contacts context */}
+              {inAnyContacts && (
+                <React.Fragment>
+                  <div style={{ height: 1, background: "rgba(255,255,255,0.1)", margin: "8px 0" }} />
+                  {sidebarNavBtn("Contact Info",    contactView === "contact",  function() { setContactView("contact");  })}
+                  {sidebarNavBtn("Internal Notes",  contactView === "internal", function() { setContactView("internal"); })}
+                </React.Fragment>
+              )}
+
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Global fixed profile icon (top-right) ── */}
+      {showSidebar && (
+        <div style={{
+          position: "fixed", top: 0, right: 0,
+          padding: "8px 14px", zIndex: 190,
+          display: "flex", alignItems: "center",
+        }}>
+          {window.AppHeader && React.createElement(window.AppHeader, {
+            user: loggedInUser,
+            darkMode: darkMode,
+            setDarkMode: setDarkMode,
+            userRole: userRole,
+            setUserRole: isInternal ? setUserRole : null,
+            onTeam: (loggedInUser && loggedInUser.role === "admin") ? function() { setShowUsers(true); } : null,
+            onLogout: handleLogout,
+            isInternal: isInternal,
+            isAdmin: !!(loggedInUser && loggedInUser.role === "admin"),
+          })}
+        </div>
+      )}
+
+      {/* ── Page content — pushed right by sidebar width ── */}
+      <div style={{
+        marginLeft: sidebarWidth,
+        transition: "margin-left 0.2s ease",
+        minHeight: "100vh",
+        display: "flex", flexDirection: "column",
+      }}>
+        {pageContent}
+        {!inToolkit && <PersistentFooter />}
+      </div>
     </React.Fragment>
   );
 }

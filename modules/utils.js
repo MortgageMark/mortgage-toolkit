@@ -183,14 +183,25 @@ function ficoIndex(fico) {
 }
 
 // line 522
-function lookupPMI({ ltv, fico, termYears, occupancy, isFixed, isCashOut, isMultiBorrower, highDTI }) {
+function lookupPMI({ ltv, fico, termYears, occupancy, isFixed, isCashOut, isMultiBorrower, highDTI, reducedCoverage = false }) {
   if (ltv <= 80) return { rate: 0, coverage: 0, tier: "No PMI required" };
   if (fico < 620) return { rate: null, coverage: 0, tier: "FICO below 620 — manual quote needed" };
   const fi = ficoIndex(fico);
   const table = termYears > 20 ? PMI_RATES.over20 : PMI_RATES.under20;
   let match = null;
-  for (const row of table) {
-    if (ltv > row.ltvMin && ltv <= row.ltvMax) { match = row; break; }
+  if (reducedCoverage) {
+    // HomeReady / HFA: prefer cov:25 rows (reduced coverage requirement)
+    for (const row of table) {
+      if (ltv > row.ltvMin && ltv <= row.ltvMax && row.cov === 25) { match = row; break; }
+    }
+    // fallback to any matching row if no cov:25 available
+    if (!match) for (const row of table) {
+      if (ltv > row.ltvMin && ltv <= row.ltvMax) { match = row; break; }
+    }
+  } else {
+    for (const row of table) {
+      if (ltv > row.ltvMin && ltv <= row.ltvMax) { match = row; break; }
+    }
   }
   if (!match && ltv > 80 && ltv <= 85) match = table.find(r => r.ltvMax === 85);
   if (!match) return { rate: null, coverage: 0, tier: "LTV out of range" };
@@ -208,18 +219,32 @@ function lookupPMI({ ltv, fico, termYears, occupancy, isFixed, isCashOut, isMult
 }
 
 // line 548
-function lookupPMICompany(company, { ltv, fico, termYears, isMultiBorrower = false, highDTI = false, isCashOut = false, occupancy = "primary" } = {}) {
+function lookupPMICompany(company, { ltv, fico, termYears, isMultiBorrower = false, highDTI = false, isCashOut = false, occupancy = "primary", reducedCoverage = false } = {}) {
   const data = company === "enact" ? PMI_ENACT : PMI_ESSENT;
   if (ltv <= 80 || fico < 620) return null;
   const fi = ficoIndex(fico);
   const table = termYears > 20 ? data.over20 : data.under20;
   let baseRate = null;
-  for (const row of table) {
+  const parseLtvRow = (row) => {
     const parts = row.ltv.replace("%","").split("-");
-    let lo, hi;
-    if (parts.length === 2 && !row.ltv.includes("below")) { lo = parseFloat(parts[1]); hi = parseFloat(parts[0]); }
-    else { lo = 80.01; hi = 85; }
-    if (ltv > lo && ltv <= hi) { baseRate = row.rates[fi]; break; }
+    if (parts.length === 2 && !row.ltv.includes("below")) { return { lo: parseFloat(parts[1]), hi: parseFloat(parts[0]) }; }
+    return { lo: 80.01, hi: 85 };
+  };
+  if (reducedCoverage) {
+    // HomeReady / HFA: prefer cov:25 rows
+    for (const row of table) {
+      const { lo, hi } = parseLtvRow(row);
+      if (ltv > lo && ltv <= hi && row.cov === 25) { baseRate = row.rates[fi]; break; }
+    }
+    if (baseRate === null) for (const row of table) {
+      const { lo, hi } = parseLtvRow(row);
+      if (ltv > lo && ltv <= hi) { baseRate = row.rates[fi]; break; }
+    }
+  } else {
+    for (const row of table) {
+      const { lo, hi } = parseLtvRow(row);
+      if (ltv > lo && ltv <= hi) { baseRate = row.rates[fi]; break; }
+    }
   }
   if (baseRate === null) return null;
   const adj = data.adjustments || {};
@@ -461,10 +486,8 @@ function exportToPDF(title, headers, rows, filename, options = {}) {
 const STATE_TITLE_DATA = {
   TX: {
     name: "Texas", basicRate: (a) => tieredRate(a, [
-      {upTo:100000,perThousand:5.75},{upTo:200000,perThousand:5.00},
-      {upTo:500000,perThousand:4.50},{upTo:1000000,perThousand:3.50},
-      {upTo:Infinity,perThousand:2.75}]),
-    simultaneousRate: 0.40, transferTaxRate: 0,
+      {upTo:100000,perThousand:7.80},{upTo:1000000,perThousand:4.94},{upTo:Infinity,perThousand:4.06}]),
+    simultaneousRate: 0.40, simultaneousFlatFee: 100, transferTaxRate: 0,
     recording: {deed:26,mortgage:44,release:15},
     endorsements: [{name:"ALTA 8.1",cost:75},{name:"ALTA 9",cost:"0.10%"},{name:"T-36",cost:125},{name:"T-42",cost:150}],
     surveyFee: 450, appraisal:{conv:550,fha:600,va:550,jumbo:750},

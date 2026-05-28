@@ -1,11 +1,15 @@
 // modules/ui/charts.js
 
-function DonutChart({ data, size = 160, thickness = 24, centerLabel, centerValue }) {
+function DonutChart({ data, size = 160, thickness = 24, centerLabel, centerValue, centerSub, centerSubColor }) {
   const c = useThemeColors();
   const r = (size - thickness) / 2;
   const circ = 2 * Math.PI * r;
   const total = data.reduce((s, d) => s + d.value, 0);
   let cum = 0;
+  // Shift label/value up slightly when a sub-line is present so all 3 lines stay centered
+  const labelY = size/2 + (centerSub ? -18 : -10);
+  const valueY = size/2 + (centerSub ? 4   :  12);
+  const subY   = size/2 + 19;
   return (
     <svg width={size} height={size} style={{ display: "block", margin: "0 auto" }}>
       <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={c.border || COLORS.border} strokeWidth={thickness} opacity="0.3" />
@@ -17,8 +21,9 @@ function DonutChart({ data, size = 160, thickness = 24, centerLabel, centerValue
         return <circle key={i} cx={size/2} cy={size/2} r={r} fill="none" stroke={d.color} strokeWidth={thickness} strokeDasharray={`${dash} ${circ - dash}`} strokeDashoffset={off} transform={`rotate(-90 ${size/2} ${size/2})`} style={{transition:"stroke-dasharray 0.6s, stroke-dashoffset 0.6s"}} />;
       })}
       {centerLabel && <>
-        <text x={size/2} y={size/2 - 10} textAnchor="middle" fontSize="9" fontWeight="700" fill={c.gray || COLORS.gray} fontFamily={font} letterSpacing="0.05em">{centerLabel}</text>
-        <text x={size/2} y={size/2 + 12} textAnchor="middle" fontSize="18" fontWeight="800" fill={c.text || c.navy || COLORS.navy} fontFamily={font}>{centerValue}</text>
+        <text x={size/2} y={labelY} textAnchor="middle" fontSize="9" fontWeight="700" fill={c.gray || COLORS.gray} fontFamily={font} letterSpacing="0.05em">{centerLabel}</text>
+        <text x={size/2} y={valueY} textAnchor="middle" fontSize="18" fontWeight="800" fill={c.text || c.navy || COLORS.navy} fontFamily={font}>{centerValue}</text>
+        {centerSub && <text x={size/2} y={subY} textAnchor="middle" fontSize="8" fontWeight="700" fill={centerSubColor || "#16a34a"} fontFamily={font} letterSpacing="0.03em">{centerSub}</text>}
       </>}
     </svg>
   );

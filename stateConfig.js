@@ -1,6 +1,6 @@
 // =============================================================================
 // STATE CONFIG — TITLE ENDORSEMENT ROUTER
-// Mortgage Toolkit | Mortgage Mark / CMG Home Loans
+// Home Loan Toolkit | Mortgage Mark / CMG Home Loans
 // Step 3 of 4 in the Title Endorsements Architecture
 // =============================================================================
 //

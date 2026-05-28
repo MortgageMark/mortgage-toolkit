@@ -9,10 +9,13 @@ const fetchTemplatesFromSupabase_sp   = window.fetchTemplatesFromSupabase;
 const saveTemplateToSupabase_sp       = window.saveTemplateToSupabase;
 const deleteTemplateFromSupabase_sp   = window.deleteTemplateFromSupabase;
 const setDefaultTemplateInSupabase_sp = window.setDefaultTemplateInSupabase;
+const fetchWarningRulesSP             = window.fetchWarningRules;
+const saveWarningRuleSP               = window.saveWarningRule;
+const deleteWarningRuleSP             = window.deleteWarningRule;
 
-function SettingsPanel({ open, onClose, darkMode, allModules }) {
+function SettingsPanel({ open, onClose, darkMode, allModules, openTab }) {
   const c = useThemeColors();
-  const [brandName, setBrandName] = useLocalStorage("brand_name", "Mortgage Toolkit");
+  const [brandName, setBrandName] = useLocalStorage("brand_name", "Home Loan Toolkit");
   const [brandSub, setBrandSub] = useLocalStorage("brand_sub", "MORTGAGE MARK · CMG HOME LOANS · NMLS #729612");
   const [brandLogo, setBrandLogo] = useLocalStorage("brand_logo", "");
   const [brandColor, setBrandColor] = useLocalStorage("brand_color", COLORS.navy);
@@ -34,12 +37,30 @@ function SettingsPanel({ open, onClose, darkMode, allModules }) {
   const [tplEditGlobal, setTplEditGlobal] = useState(false);
   const [tplSaving,     setTplSaving]     = useState(false);
   const [portalClient, setPortalClient] = useState("");
+  const [warnSuppressions, setWarnSuppressions] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("mtk_warning_suppressions") || "[]"); }
+    catch { return []; }
+  });
+
+  // ── Custom warning rules state ─────────────────────────────────────────────
+  const [customRules,   setCustomRules]   = useState([]);
+  const [rulesLoading,  setRulesLoading]  = useState(false);
+  const [editingRule,   setEditingRule]   = useState(null);
+  const [ruleSaving,    setRuleSaving]    = useState(false);
+  const [ruleDeleteId,  setRuleDeleteId]  = useState(null);
+  const [ruleError,     setRuleError]     = useState(null);
+
   const portalLink = useMemo(() => {
     const base = window.location.href.split("?")[0];
     const params = new URLSearchParams({ tabs: portalModule });
     if (portalClient) params.set("client", portalClient);
     return base + "?" + params.toString();
   }, [portalModule, portalClient]);
+
+  // Jump to a specific tab when the panel is opened with openTab
+  useEffect(() => {
+    if (open && openTab) setSettingsTab(openTab);
+  }, [open, openTab]);
 
   // Fetch templates when "templates" tab is opened
   useEffect(() => {
@@ -62,6 +83,17 @@ function SettingsPanel({ open, onClose, darkMode, allModules }) {
             setTplRole(data.role || null);
           }
         });
+    });
+    return () => { cancelled = true; };
+  }, [settingsTab]);
+
+  // Fetch custom warning rules when warnings tab opens
+  useEffect(() => {
+    if (settingsTab !== "warnings" || !fetchWarningRulesSP) return;
+    let cancelled = false;
+    setRulesLoading(true);
+    fetchWarningRulesSP().then(({ data }) => {
+      if (!cancelled) { setCustomRules(data || []); setRulesLoading(false); }
     });
     return () => { cancelled = true; };
   }, [settingsTab]);
@@ -106,6 +138,81 @@ function SettingsPanel({ open, onClose, darkMode, allModules }) {
     setSharedTabs(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
+  const _spUser = (() => { try { return JSON.parse(localStorage.getItem("mtk_app_user") || "null"); } catch { return null; } })();
+  const _spIsInternal = _spUser?.isInternal === true;
+
+  const toggleSuppression = (id) => {
+    const next = warnSuppressions.includes(id)
+      ? warnSuppressions.filter(x => x !== id)
+      : [...warnSuppressions, id];
+    setWarnSuppressions(next);
+    localStorage.setItem("mtk_warning_suppressions", JSON.stringify(next));
+  };
+
+  // ── Warning rule builder helpers ───────────────────────────────────────────
+  const WARN_FIELDS = [
+    { key: "loanProgram", label: "Loan Program",    type: "enum",   options: [{v:"conventional",l:"Conventional"},{v:"fha",l:"FHA"},{v:"va",l:"VA"},{v:"usda",l:"USDA"},{v:"jumbo",l:"Jumbo"},{v:"nonqm",l:"Non-QM"}] },
+    { key: "occupancy",   label: "Occupancy",       type: "enum",   options: [{v:"primary",l:"Primary"},{v:"vacation",l:"Vacation / 2nd"},{v:"investment",l:"Investment"}] },
+    { key: "propType",    label: "Property Type",   type: "enum",   options: [{v:"sfr",l:"SFR"},{v:"condo",l:"Condo"},{v:"townhome",l:"Townhome"},{v:"duplex",l:"Duplex"},{v:"3plex",l:"3-Plex"},{v:"4plex",l:"4-Plex"}] },
+    { key: "purpose",     label: "Loan Purpose",    type: "enum",   options: [{v:"purchase",l:"Purchase"},{v:"rateTermRefi",l:"Rate/Term Refi"},{v:"cashOutRefi",l:"Cash-Out Refi"}] },
+    { key: "ltv",         label: "LTV (%)",         type: "number" },
+    { key: "fico",        label: "Credit Score",    type: "number" },
+    { key: "loanAmount",  label: "Loan Amount ($)", type: "number" },
+    { key: "homePrice",   label: "Home Price ($)",  type: "number" },
+    { key: "pcState",     label: "State",           type: "state"  },
+  ];
+  const WARN_OPS = {
+    enum:   [{v:"is",l:"is"},{v:"is_not",l:"is not"}],
+    number: [{v:"gt",l:">"},{v:"gte",l:"≥"},{v:"lt",l:"<"},{v:"lte",l:"≤"},{v:"eq",l:"="}],
+    state:  [{v:"is",l:"is"},{v:"is_not",l:"is not"}],
+  };
+  const getFieldMeta  = (key) => WARN_FIELDS.find(f => f.key === key) || WARN_FIELDS[0];
+  const blankCond     = () => ({ field: "loanProgram", op: "is", value: "conventional" });
+  const blankRule     = () => ({ id: null, label: "", message: "", severity: "warning", enabled: true, conditions: [blankCond()] });
+
+  const startNewRule  = () => { setEditingRule(blankRule()); setRuleError(null); };
+  const startEdit     = (r) => { setEditingRule({ ...r, conditions: r.conditions.map(c => ({...c})) }); setRuleError(null); };
+
+  const updateCond = (idx, patch) => {
+    setEditingRule(prev => {
+      const conditions = prev.conditions.map((c, i) => {
+        if (i !== idx) return c;
+        const next = { ...c, ...patch };
+        if (patch.field && patch.field !== c.field) {
+          const meta = getFieldMeta(patch.field);
+          next.op    = WARN_OPS[meta.type][0].v;
+          next.value = meta.type === "enum" ? meta.options[0].v : "";
+        }
+        return next;
+      });
+      return { ...prev, conditions };
+    });
+  };
+  const addCond    = () => setEditingRule(prev => ({ ...prev, conditions: [...prev.conditions, blankCond()] }));
+  const removeCond = (idx) => setEditingRule(prev => ({ ...prev, conditions: prev.conditions.filter((_, i) => i !== idx) }));
+
+  const saveRule = async () => {
+    if (!editingRule.label.trim() || !editingRule.message.trim()) { setRuleError("Name and message are required."); return; }
+    if (!editingRule.conditions.length) { setRuleError("Add at least one condition."); return; }
+    setRuleSaving(true); setRuleError(null);
+    const { data, error } = await saveWarningRuleSP(editingRule);
+    setRuleSaving(false);
+    if (error) { setRuleError("Save failed: " + (error.message || error)); return; }
+    setCustomRules(prev => editingRule.id ? prev.map(r => r.id === editingRule.id ? data : r) : [...prev, data]);
+    setEditingRule(null);
+  };
+
+  const confirmDelete = async (id) => {
+    const { error } = await deleteWarningRuleSP(id);
+    if (!error) { setCustomRules(prev => prev.filter(r => r.id !== id)); setRuleDeleteId(null); }
+  };
+
+  const toggleCustomEnabled = async (rule) => {
+    const updated = { ...rule, enabled: !rule.enabled };
+    const { data, error } = await saveWarningRuleSP(updated);
+    if (!error && data) setCustomRules(prev => prev.map(r => r.id === rule.id ? data : r));
+  };
+
   if (!open) return null;
   const bg = darkMode ? "#1A2530" : "#fff";
   const fg = darkMode ? "#E0E8EF" : "#333";
@@ -136,6 +243,7 @@ function SettingsPanel({ open, onClose, darkMode, allModules }) {
             <button onClick={() => setSettingsTab("scenarios")} style={tabStyle(settingsTab === "scenarios")}>Scenarios</button>
             <button onClick={() => setSettingsTab("sharing")} style={tabStyle(settingsTab === "sharing")}>Share Tabs</button>
             <button onClick={() => setSettingsTab("portal")} style={tabStyle(settingsTab === "portal")}>Client Portal</button>
+            {_spIsInternal && <button onClick={() => setSettingsTab("warnings")} style={tabStyle(settingsTab === "warnings")}>Warnings</button>}
           </div>
         </div>
         <div style={{ padding: "20px 24px" }}>
@@ -144,7 +252,7 @@ function SettingsPanel({ open, onClose, darkMode, allModules }) {
               <div style={{ fontSize: 13, fontWeight: 600, fontFamily: font }}>Customize how the toolkit appears</div>
               <div>
                 <label style={{ fontSize: 11, fontWeight: 600, display: "block", marginBottom: 4, fontFamily: font }}>TOOLKIT NAME</label>
-                <input value={brandName} onChange={e => setBrandName(e.target.value)} style={inputStyle} placeholder="Mortgage Toolkit" />
+                <input value={brandName} onChange={e => setBrandName(e.target.value)} style={inputStyle} placeholder="Home Loan Toolkit" />
               </div>
               <div>
                 <label style={{ fontSize: 11, fontWeight: 600, display: "block", marginBottom: 4, fontFamily: font }}>SUBTITLE / COMPANY INFO</label>
@@ -395,6 +503,179 @@ function SettingsPanel({ open, onClose, darkMode, allModules }) {
               </div>
             </div>
           )}
+          {settingsTab === "warnings" && _spIsInternal && (() => {
+            const selStyle  = { padding: "6px 8px", borderRadius: 6, border: `1px solid ${border}`, background: inputBg, color: fg, fontSize: 12, fontFamily: font, cursor: "pointer" };
+            const btnSm     = (extra) => ({ padding: "5px 12px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: font, ...extra });
+
+            const renderValueInput = (cond, idx) => {
+              const meta = getFieldMeta(cond.field);
+              if (meta.type === "enum") return (
+                <select value={cond.value} onChange={e => updateCond(idx, { value: e.target.value })} style={selStyle}>
+                  {meta.options.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+                </select>
+              );
+              if (meta.type === "state") return (
+                <select value={cond.value} onChange={e => updateCond(idx, { value: e.target.value })} style={selStyle}>
+                  {(window.STATE_LIST || []).map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                </select>
+              );
+              return <input type="number" value={cond.value} onChange={e => updateCond(idx, { value: e.target.value })}
+                style={{ ...selStyle, width: 80 }} placeholder="value" />;
+            };
+
+            return (
+              <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+                {/* ── Rule builder form ── */}
+                {editingRule && (
+                  <div style={{ padding: 16, borderRadius: 10, border: `1.5px solid ${COLORS.blue}`, background: inputBg }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, fontFamily: font, color: fg, marginBottom: 12 }}>
+                      {editingRule.id ? "Edit Rule" : "New Rule"}
+                    </div>
+
+                    <div style={{ marginBottom: 10 }}>
+                      <label style={{ fontSize: 11, fontWeight: 600, fontFamily: font, color: darkMode ? "#8A9BAA" : "#666", display: "block", marginBottom: 4 }}>RULE NAME</label>
+                      <input value={editingRule.label} onChange={e => setEditingRule(p => ({...p, label: e.target.value}))}
+                        style={inputStyle} placeholder="e.g. Non-warrantable condo LTV limit" />
+                    </div>
+
+                    <div style={{ marginBottom: 10 }}>
+                      <label style={{ fontSize: 11, fontWeight: 600, fontFamily: font, color: darkMode ? "#8A9BAA" : "#666", display: "block", marginBottom: 4 }}>WARNING MESSAGE (shown in calculator)</label>
+                      <textarea value={editingRule.message} onChange={e => setEditingRule(p => ({...p, message: e.target.value}))}
+                        rows={2} style={{ ...inputStyle, resize: "vertical" }} placeholder="Describe the guideline or limit..." />
+                    </div>
+
+                    <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ fontSize: 11, fontWeight: 600, fontFamily: font, color: darkMode ? "#8A9BAA" : "#666", display: "block", marginBottom: 4 }}>SEVERITY</label>
+                        <select value={editingRule.severity} onChange={e => setEditingRule(p => ({...p, severity: e.target.value}))} style={{ ...selStyle, width: "100%" }}>
+                          <option value="warning">Warning (amber)</option>
+                          <option value="error">Error (red)</option>
+                        </select>
+                      </div>
+                      <div style={{ flex: 1, display: "flex", alignItems: "flex-end", paddingBottom: 2 }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, fontFamily: font, color: fg }}>
+                          <input type="checkbox" checked={editingRule.enabled} onChange={e => setEditingRule(p => ({...p, enabled: e.target.checked}))} />
+                          Active (fires in calculator)
+                        </label>
+                      </div>
+                    </div>
+
+                    <div style={{ marginBottom: 10 }}>
+                      <label style={{ fontSize: 11, fontWeight: 600, fontFamily: font, color: darkMode ? "#8A9BAA" : "#666", display: "block", marginBottom: 6 }}>CONDITIONS (all must match)</label>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        {editingRule.conditions.map((cond, idx) => {
+                          const meta = getFieldMeta(cond.field);
+                          const ops  = WARN_OPS[meta.type] || WARN_OPS.enum;
+                          return (
+                            <div key={idx} style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                              <select value={cond.field} onChange={e => updateCond(idx, { field: e.target.value })} style={selStyle}>
+                                {WARN_FIELDS.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+                              </select>
+                              <select value={cond.op} onChange={e => updateCond(idx, { op: e.target.value })} style={selStyle}>
+                                {ops.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+                              </select>
+                              {renderValueInput(cond, idx)}
+                              <button onClick={() => removeCond(idx)} style={{ ...btnSm({ background: "none", border: `1px solid ${border}`, color: darkMode ? "#8A9BAA" : "#999" }), padding: "5px 9px" }}>×</button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <button onClick={addCond} style={{ ...btnSm({ background: "none", border: `1px solid ${border}`, color: fg }), marginTop: 8 }}>+ Add Condition</button>
+                    </div>
+
+                    {ruleError && <div style={{ fontSize: 11, color: "#DC2626", fontFamily: font, marginBottom: 8 }}>{ruleError}</div>}
+
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button onClick={saveRule} disabled={ruleSaving} style={btnSm({ background: COLORS.navy, color: "#fff", opacity: ruleSaving ? 0.6 : 1 })}>
+                        {ruleSaving ? "Saving…" : "Save Rule"}
+                      </button>
+                      <button onClick={() => { setEditingRule(null); setRuleError(null); }} style={btnSm({ background: "none", border: `1px solid ${border}`, color: fg })}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Default (hardcoded) rules ── */}
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, fontFamily: font, color: darkMode ? "#8A9BAA" : "#888", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>
+                    Default Rules
+                  </div>
+                  <div style={{ fontSize: 11, color: darkMode ? "#6B7C8A" : "#999", fontFamily: font, marginBottom: 10, lineHeight: 1.5 }}>
+                    Built-in agency guidelines. Toggle off any rule your program supports — suppressed per device only.
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {(window.WARNING_RULES || []).map(rule => {
+                      const suppressed = warnSuppressions.includes(rule.id);
+                      return (
+                        <div key={rule.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 12px", borderRadius: 8, border: `1px solid ${suppressed ? border : (rule.severity === "error" ? "#FECACA" : "#FCD34D")}`, background: suppressed ? inputBg : (rule.severity === "error" ? "#FEF2F2" : "#FFFBEB"), opacity: suppressed ? 0.6 : 1 }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, fontFamily: font, color: fg, marginBottom: 2 }}>{rule.label}</div>
+                            <div style={{ fontSize: 11, fontFamily: font, color: darkMode ? "#8A9BAA" : "#666", lineHeight: 1.4 }}>{rule.message}</div>
+                          </div>
+                          <button onClick={() => toggleSuppression(rule.id)} style={btnSm({ background: suppressed ? (darkMode ? "#2A3A48" : "#E8ECF0") : COLORS.navy, color: suppressed ? (darkMode ? "#8A9BAA" : "#666") : "#fff" })}>
+                            {suppressed ? "Off" : "On"}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {warnSuppressions.length > 0 && (
+                    <button onClick={() => { setWarnSuppressions([]); localStorage.setItem("mtk_warning_suppressions", "[]"); }} style={{ ...btnSm({ background: "none", border: `1px solid ${border}`, color: fg }), marginTop: 10 }}>
+                      Reset All to On
+                    </button>
+                  )}
+                </div>
+
+                {/* ── Custom (tenant) rules ── */}
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, fontFamily: font, color: darkMode ? "#8A9BAA" : "#888", letterSpacing: "0.06em", textTransform: "uppercase" }}>Custom Rules</div>
+                    {!editingRule && <button onClick={startNewRule} style={btnSm({ background: COLORS.navy, color: "#fff" })}>+ New Rule</button>}
+                  </div>
+                  {rulesLoading && <div style={{ fontSize: 12, color: darkMode ? "#6B7C8A" : "#999", fontFamily: font }}>Loading…</div>}
+                  {!rulesLoading && customRules.length === 0 && (
+                    <div style={{ fontSize: 12, color: darkMode ? "#6B7C8A" : "#999", fontFamily: font, fontStyle: "italic" }}>
+                      No custom rules yet. Click "+ New Rule" to add one.
+                    </div>
+                  )}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {customRules.map(rule => (
+                      <div key={rule.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 12px", borderRadius: 8, border: `1px solid ${!rule.enabled ? border : (rule.severity === "error" ? "#FECACA" : "#FCD34D")}`, background: !rule.enabled ? inputBg : (rule.severity === "error" ? "#FEF2F2" : "#FFFBEB"), opacity: rule.enabled ? 1 : 0.6 }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, fontFamily: font, color: fg, marginBottom: 2 }}>{rule.label}</div>
+                          <div style={{ fontSize: 11, fontFamily: font, color: darkMode ? "#8A9BAA" : "#666", lineHeight: 1.4, marginBottom: 4 }}>{rule.message}</div>
+                          <div style={{ fontSize: 10, fontFamily: font, color: darkMode ? "#6B7C8A" : "#aaa" }}>
+                            {(rule.conditions || []).map((c, i) => {
+                              const meta = getFieldMeta(c.field);
+                              const opLabel = (WARN_OPS[meta.type] || []).find(o => o.v === c.op)?.l || c.op;
+                              return <span key={i}>{i > 0 ? " AND " : ""}{meta.label} {opLabel} <strong>{c.value}</strong></span>;
+                            })}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
+                          <button onClick={() => toggleCustomEnabled(rule)} style={btnSm({ background: rule.enabled ? COLORS.navy : (darkMode ? "#2A3A48" : "#E8ECF0"), color: rule.enabled ? "#fff" : (darkMode ? "#8A9BAA" : "#666") })}>
+                            {rule.enabled ? "On" : "Off"}
+                          </button>
+                          <button onClick={() => startEdit(rule)} style={btnSm({ background: "none", border: `1px solid ${border}`, color: fg })}>Edit</button>
+                          {ruleDeleteId === rule.id ? (
+                            <div style={{ display: "flex", gap: 4 }}>
+                              <button onClick={() => confirmDelete(rule.id)} style={btnSm({ background: "#DC2626", color: "#fff" })}>Yes</button>
+                              <button onClick={() => setRuleDeleteId(null)} style={btnSm({ background: "none", border: `1px solid ${border}`, color: fg })}>No</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => setRuleDeleteId(rule.id)} style={btnSm({ background: "none", border: `1px solid #FECACA`, color: "#DC2626" })}>Del</button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+            );
+          })()}
         </div>
       </div>
     </>

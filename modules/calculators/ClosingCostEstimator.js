@@ -112,11 +112,11 @@ function ClosingCostEstimator() {
     <div>
       <SectionCard title="Closing Cost Estimator" subtitle="TRID-style itemized breakdown">
         <div className="mtk-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <LabeledInput label="Purchase Price" value={purchPrice} onChange={setPurchPrice} prefix="$" />
-          <LabeledInput label="Loan Amount" value={loanAmt} onChange={setLoanAmt} prefix="$" />
+          <LabeledInput label="Purchase Price" value={purchPrice} onChange={setPurchPrice} prefix="$" useCommas />
+          <LabeledInput label="Loan Amount" value={loanAmt} onChange={setLoanAmt} prefix="$" useCommas />
           <LabeledInput label="Interest Rate" value={rate} onChange={setRate} suffix="%" step="0.125" />
           <LabeledInput label="Property Tax Rate" value={propTaxRate} onChange={setPropTaxRate} suffix="%" step="0.1" />
-          <LabeledInput label="Annual Home Insurance" value={homeIns} onChange={setHomeIns} prefix="$" />
+          <LabeledInput label="Annual Home Insurance" value={homeIns} onChange={setHomeIns} prefix="$" useCommas />
           <div>
             <div style={{ fontSize: 11, fontWeight: 600, color: c.textSecondary || COLORS.gray, marginBottom: 4, fontFamily: font }}>State</div>
             <Select value={state} onChange={setState} options={[

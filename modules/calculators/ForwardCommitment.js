@@ -51,12 +51,12 @@ function ForwardCommitment() {
       {showAdd && (
         <SectionCard title="NEW RATE LOCK" accent={COLORS.green}>
           <div className="mtk-grid-3" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-            <LabeledInput label="Borrower" value={newLock.borrower} onChange={(v) => setNewLock(p => ({ ...p, borrower: v }))} type="text" small />
-            <LabeledInput label="Loan Amount" prefix="$" value={newLock.loanAmount} onChange={(v) => setNewLock(p => ({ ...p, loanAmount: v }))} useCommas small />
-            <LabeledInput label="Rate" value={newLock.rate} onChange={(v) => setNewLock(p => ({ ...p, rate: v }))} suffix="%" small />
-            <Select label="Lock Period" value={newLock.lockDays} onChange={(v) => setNewLock(p => ({ ...p, lockDays: v }))} options={[{ value: "30", label: "30 Days" }, { value: "45", label: "45 Days" }, { value: "60", label: "60 Days" }, { value: "90", label: "90 Days" }, { value: "120", label: "120 Days" }, { value: "180", label: "180 Days (Extended)" }]} small />
-            <LabeledInput label="Loan Type" value={newLock.loanType} onChange={(v) => setNewLock(p => ({ ...p, loanType: v }))} type="text" small />
-            <LabeledInput label="Notes" value={newLock.notes} onChange={(v) => setNewLock(p => ({ ...p, notes: v }))} type="text" small />
+            <LabeledInput label="Borrower" value={newLock.borrower} onChange={(v) => setNewLock(p => ({ ...p, borrower: v }))} type="text" />
+            <LabeledInput label="Loan Amount" prefix="$" value={newLock.loanAmount} onChange={(v) => setNewLock(p => ({ ...p, loanAmount: v }))} useCommas />
+            <LabeledInput label="Rate" value={newLock.rate} onChange={(v) => setNewLock(p => ({ ...p, rate: v }))} suffix="%" />
+            <Select label="Lock Period" value={newLock.lockDays} onChange={(v) => setNewLock(p => ({ ...p, lockDays: v }))} options={[{ value: "30", label: "30 Days" }, { value: "45", label: "45 Days" }, { value: "60", label: "60 Days" }, { value: "90", label: "90 Days" }, { value: "120", label: "120 Days" }, { value: "180", label: "180 Days (Extended)" }]} />
+            <LabeledInput label="Loan Type" value={newLock.loanType} onChange={(v) => setNewLock(p => ({ ...p, loanType: v }))} type="text" />
+            <LabeledInput label="Notes" value={newLock.notes} onChange={(v) => setNewLock(p => ({ ...p, notes: v }))} type="text" />
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
             <Button label="Save Lock" onClick={addLock} primary small color={COLORS.green} />
