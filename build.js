@@ -108,7 +108,9 @@ async function build() {
       process.stdout.write('  ⚠  missing: ' + srcFile + '\n');
       continue;
     }
-    parts.push(compileFile(srcPath));
+    // Wrap each module in an IIFE so const/let declarations don't collide
+    // across files when concatenated. window.X exports still work fine.
+    parts.push('(function(){\n' + compileFile(srcPath) + '\n})();');
     process.stdout.write('  ✓  ' + srcFile + '\n');
   }
   let bundle     = parts.join('\n');
