@@ -76,6 +76,14 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
     return function() { clearTimeout(t); };
   }, [purchasePrice, loanAmount, maxRate, loanType, loanTerm]);
 
+  // Reset generated-letter state when LO clears PQ params
+  React.useEffect(() => {
+    if (!purchasePrice || !loanAmount) {
+      setShowLetter(false);
+      setDisplaySnap(null);
+    }
+  }, [purchasePrice, loanAmount]);
+
   // LOSelector (child) dispatches mtk_propagated before this component's useLocalStorage
   // listeners are registered (React runs child effects before parent effects). Re-propagate
   // the selected LO here — by the time this parent effect runs, all listeners are ready.
@@ -581,6 +589,11 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
       React.createElement(Toggle, { label: "OTHER", checked: cOther, onChange: setCOther }),
       cOther ? React.createElement(LabeledInput, { label: "Other contingency (specify)", value: cOtherText, onChange: setCOtherText, type: "text" }) : null
     ),
+    // Print / Download PQ buttons — under Contingencies card
+    !isInternal ? null : React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "flex-end", marginTop: "-4px", marginBottom: "8px" } },
+      React.createElement(Button, { label: "🖨️ Print PQ Letter", small: true, onClick: () => printLetter() }),
+      React.createElement(Button, { label: pdfLoading ? "Generating..." : "⬇️ Download PQ PDF", small: true, primary: true, onClick: downloadPDF, disabled: pdfLoading })
+    ),
     // LO Heartburn — renders as "Notable Mentions" on the letter
     !isInternal ? null : React.createElement(SectionCard, { title: "LO Heartburn (Internal)" },
       React.createElement("div", { style: { fontSize: 12, color: "#6B7280", marginBottom: 12, lineHeight: 1.5 } },
@@ -610,6 +623,11 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
           }) : null
         );
       })
+    ),
+    // Heartburn print buttons — under LO Heartburn section
+    !isInternal ? null : React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "flex-end", marginTop: "-4px", marginBottom: "8px" } },
+      React.createElement(Button, { label: "🖨️ Print Heartburn Letter", small: true, onClick: () => printHeartburnLetter() }),
+      React.createElement(Button, { label: "⬇️ Heartburn PDF", small: true, onClick: () => downloadHeartburnPDF() })
     ),
     // LOSelector + LO Signature — full width, internal only
     !isInternal ? null : React.createElement(React.Fragment, null,
@@ -642,9 +660,6 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
           )
         : React.createElement("div", null),
       React.createElement("div", { style: { display: "flex", gap: 8, alignItems: "center" } },
-        isInternal && heartburnItems.length > 0
-          ? React.createElement(Button, { label: "🫀 Print Concerns", small: true, onClick: () => printHeartburnLetter() })
-          : null,
       React.createElement(Button, { onClick: () => {
         const missing = [];
         if (!purchasePrice) missing.push("Max Purchase Price (PQ Parameters)");
@@ -1010,10 +1025,16 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
     try {
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF({ orientation: "portrait", unit: "in", format: "letter" });
-      const margin = 0.4;
+      const margin = 0.25;
       const contentW = 8.5 - margin * 2;
       const maxH = 11 - margin * 2;
-      const canvas = await window.html2canvas(page1El, { scale: 2, useCORS: true, backgroundColor: "#ffffff", width: 760, windowWidth: 760 });
+      const canvas = await window.html2canvas(page1El, {
+        scale: 2, useCORS: true, backgroundColor: "#ffffff", width: 760, windowWidth: 760,
+        onclone: function(doc) {
+          const letter = doc.querySelector(".mtk-prequal-letter");
+          if (letter) { letter.style.boxShadow = "none"; letter.style.borderRadius = "0"; }
+        }
+      });
       const imgData = canvas.toDataURL("image/png");
       const naturalH = (canvas.height / canvas.width) * contentW;
       const fitW = naturalH <= maxH ? contentW : contentW * (maxH / naturalH);
@@ -1034,10 +1055,16 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
     try {
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF({ orientation: "portrait", unit: "in", format: "letter" });
-      const margin = 0.4;
+      const margin = 0.25;
       const contentW = 8.5 - margin * 2;
       const maxH = 11 - margin * 2;
-      const canvas = await window.html2canvas(el, { scale: 2, useCORS: true, backgroundColor: "#ffffff", width: 760, windowWidth: 760 });
+      const canvas = await window.html2canvas(el, {
+        scale: 2, useCORS: true, backgroundColor: "#ffffff", width: 760, windowWidth: 760,
+        onclone: function(doc) {
+          const letter = doc.querySelector(".mtk-prequal-letter");
+          if (letter) { letter.style.boxShadow = "none"; letter.style.borderRadius = "0"; }
+        }
+      });
       const imgData = canvas.toDataURL("image/png");
       const naturalH = (canvas.height / canvas.width) * contentW;
       const fitW = naturalH <= maxH ? contentW : contentW * (maxH / naturalH);
@@ -1055,13 +1082,12 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
     const el = document.getElementById("pq-letter-print");
     if (!el) return;
     const css = [
-      "@page { size: letter; margin: 0; }",
-      "html, body { margin: 0; padding: 0; width: 8.5in; }",
-      "body { padding: 0.35in 0.45in; box-sizing: border-box; }",
+      "@page { size: letter; margin: 0.35in 0.4in; }",
+      "html, body { margin: 0; padding: 0; }",
       "* { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; }",
       "a { color: #1B8A5A !important; }",
-      "#pq-letter-print { overflow: visible !important; border: none !important; border-radius: 0 !important; }",
-      ".mtk-prequal-letter { zoom: 0.93; }"
+      "#pq-letter-print { overflow: visible !important; border: none !important; border-radius: 0 !important; box-shadow: none !important; }",
+      ".mtk-prequal-letter { box-shadow: none !important; border-radius: 0 !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; }"
     ].join(" ");
     const baseHref = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
     const win = window.open("", "_blank", "width=900,height=750");
@@ -1075,12 +1101,11 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
     const el = document.getElementById("pq-heartburn-print");
     if (!el) return;
     const css = [
-      "@page { size: letter; margin: 0; }",
-      "html, body { margin: 0; padding: 0; width: 8.5in; }",
-      "body { padding: 0.35in 0.45in; box-sizing: border-box; }",
+      "@page { size: letter; margin: 0.35in 0.4in; }",
+      "html, body { margin: 0; padding: 0; }",
       "* { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; }",
       "a { color: #1B8A5A !important; }",
-      ".mtk-prequal-letter { zoom: 0.93; }"
+      ".mtk-prequal-letter { box-shadow: none !important; border-radius: 0 !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; }"
     ].join(" ");
     const baseHref = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
     const win = window.open("", "_blank", "width=900,height=750");
@@ -1128,10 +1153,7 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
                   )
                 : React.createElement("div", null),
               React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } },
-                isInternal && React.createElement(Button, { label: "🖨️ Print", small: true, onClick: () => printLetter() }),
-                React.createElement(Button, { label: pdfLoading ? "Generating..." : "Download PDF", small: true, primary: true, onClick: downloadPDF, disabled: pdfLoading }),
-                isInternal && letterPage2Content(activeData) && React.createElement(Button, { label: "Print Concerns", small: true, onClick: () => printHeartburnLetter() }),
-                isInternal && letterPage2Content(activeData) && React.createElement(Button, { label: "Concerns PDF", small: true, onClick: () => downloadHeartburnPDF() }),
+                !isInternal && React.createElement(Button, { label: pdfLoading ? "Generating..." : "⬇️ Download PDF", small: true, primary: true, onClick: downloadPDF, disabled: pdfLoading }),
                 displaySnap && React.createElement(Button, { label: "Back to Live", small: true, onClick: () => { setDisplaySnap(null); } })
               )
             )
@@ -1147,8 +1169,8 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
           },
             React.createElement("div", { id: "pq-letter-page1" }, letterContent(activeData))
           ),
-          // SAMPLE overlay — shown until Generate is clicked
-          !showLetter && React.createElement("div", {
+          // SAMPLE overlay — shown when params not set OR letter not yet generated
+          (!showLetter || !paramsReady) && React.createElement("div", {
             style: {
               position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
               display: "flex", alignItems: "center", justifyContent: "center",

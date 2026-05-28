@@ -16,9 +16,10 @@ const ROLE_COLORS = {
   branch_admin: { bg: "#E0E7FF", text: "#3730A3", border: "#6366F1" },
   internal:     { bg: "#DBEAFE", text: "#1E40AF", border: "#3B82F6" },
   realtor:      { bg: "#F3E8FF", text: "#6B21A8", border: "#A855F7" },
+  builder:      { bg: "#FFF7ED", text: "#C2410C", border: "#FB923C" },
   borrower:     { bg: "#F3F4F6", text: "#4B5563", border: "#D1D5DB" },
 };
-const ROLE_LABELS = { super_admin: "Super Admin", admin: "Admin", branch_admin: "Branch Admin", internal: "Internal", realtor: "Realtor", borrower: "Borrower" };
+const ROLE_LABELS = { super_admin: "Super Admin", admin: "Admin", branch_admin: "Branch Admin", internal: "Internal", realtor: "Realtor", builder: "Builder", borrower: "Borrower" };
 
 function RoleBadge({ role }) {
   const rc = ROLE_COLORS[role] || ROLE_COLORS.borrower;
@@ -235,7 +236,7 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }
 
 // ── Main UsersPanel ──────────────────────────────────────────────────────────
 function UsersPanel({ user, onBack, onLogout }) {
-  const [activeTab, setActiveTab] = useState("team");
+  const [activeTab, setActiveTab] = useState("directory");
 
   // ── Supabase profile data ────
   const [allProfiles,     setAllProfiles]     = useState([]);
@@ -277,11 +278,22 @@ function UsersPanel({ user, onBack, onLogout }) {
   // ── Local roster ────
   const [roster,          setRoster]          = useLocalStorage("roster", []);
   const [showAddForm,     setShowAddForm]     = useState(false);
+
+  // ── Activity tab ────
+  const [actSessions,   setActSessions]   = useState(null);   // null=not-fetched, []=empty
+  const [actLoading,    setActLoading]    = useState(false);
+  const [actLoaded,     setActLoaded]     = useState(false);
+  const [actSearch,     setActSearch]     = useState("");
+  const [actRoleFilter, setActRoleFilter] = useState("all");
+  const [actSort,       setActSort]       = useState({ col: "lastSeen", dir: "desc" });
   const [editingMember,   setEditingMember]   = useState(null);
   const [memberForm,      setMemberForm]      = useState({});
   const [memberFormError, setMemberFormError] = useState("");
   const [confirmDeact,    setConfirmDeact]    = useState(null);
   const [rosterSearch,    setRosterSearch]    = useState("");
+  const [dirSearch, setDirSearch] = useState("");
+  const [dirRoleFilter, setDirRoleFilter] = useState("all");
+  const [dirSort, setDirSort] = useState({ col: "name", dir: "asc" });
 
   const isAdmin      = user && ["super_admin", "admin"].includes(user.role);
   const isSuperAdmin = user && user.role === "super_admin";
@@ -341,7 +353,7 @@ function UsersPanel({ user, onBack, onLogout }) {
 
   // ── Load branches lazily when Branches tab is opened ────
   useEffect(function() {
-    if (activeTab !== "branches" || branchesLoaded || !supabase) return;
+    if ((activeTab !== "branches" && activeTab !== "directory") || branchesLoaded || !supabase) return;
     setBranchesLoading(true);
     supabase.from("branches").select("*").order("name").then(function(res) {
       setBranchesLoading(false);
@@ -350,7 +362,20 @@ function UsersPanel({ user, onBack, onLogout }) {
     });
   }, [activeTab, branchesLoaded]);
 
-  const ROLE_ORDER  = { super_admin: 0, admin: 1, branch_admin: 2, internal: 3, realtor: 4, borrower: 5 };
+  // ── Lazy-load activity sessions when Activity tab opens ────
+  useEffect(function() {
+    if ((activeTab !== "activity" && activeTab !== "directory") || actLoaded || !supabase || !isAdmin) return;
+    var fetchFn = window.fetchUserSessions;
+    if (!fetchFn) { setActLoaded(true); return; }
+    setActLoading(true);
+    fetchFn(15).then(function(res) {
+      setActLoading(false);
+      setActLoaded(true);
+      if (!res.error) setActSessions(res.data || []);
+    }).catch(function() { setActLoading(false); setActLoaded(true); });
+  }, [activeTab, actLoaded, isAdmin]);
+
+  const ROLE_ORDER  = { super_admin: 0, admin: 1, branch_admin: 2, internal: 3, realtor: 4, builder: 5, borrower: 6 };
   const teamProfiles     = allProfiles.filter(function(p) { return p.role !== "borrower"; });
   const borrowerProfiles = allProfiles.filter(function(p) { return p.role === "borrower"; });
 
@@ -562,6 +587,175 @@ function UsersPanel({ user, onBack, onLogout }) {
     setRoster(roster.map(function(m) { return m.id === id ? Object.assign({}, m, { active: true }) : m; }));
   }
 
+  // ── Activity tab helpers ────
+  function actDotColor(daysSince) {
+    if (daysSince === null) return "#D1D5DB";
+    if (daysSince <= 3)  return "#22C55E";
+    if (daysSince <= 7)  return "#F59E0B";
+    return "#F97316";
+  }
+  function actRelDate(daysSince) {
+    if (daysSince === null) return "Never";
+    if (daysSince === 0)    return "Today";
+    if (daysSince === 1)    return "Yesterday";
+    return daysSince + "d ago";
+  }
+  function actExactDate(isoStr) {
+    if (!isoStr) return "—";
+    var d = new Date(isoStr);
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  }
+  function toggleActSort(col) {
+    setActSort(function(prev) {
+      if (prev.col === col) return { col: col, dir: prev.dir === "asc" ? "desc" : "asc" };
+      return { col: col, dir: (col === "sessions") ? "desc" : (col === "lastSeen" ? "desc" : "asc") };
+    });
+  }
+  function refreshActivity() {
+    var fetchFn = window.fetchUserSessions;
+    if (!fetchFn || !supabase || !isAdmin) return;
+    setActLoading(true);
+    fetchFn(15).then(function(res) {
+      setActLoading(false);
+      if (!res.error) setActSessions(res.data || []);
+    }).catch(function() { setActLoading(false); });
+  }
+
+  // ── Activity merged data ────
+  var actMerged = React.useMemo(function() {
+    var byUser = {};
+    (actSessions || []).forEach(function(s) {
+      if (!byUser[s.user_id]) byUser[s.user_id] = [];
+      byUser[s.user_id].push(s.logged_in_at);
+    });
+    return allProfiles.map(function(p) {
+      var sessions = byUser[p.id] || [];
+      var lastSeen = sessions.length > 0
+        ? sessions.reduce(function(a, b) { return a > b ? a : b; }, "")
+        : null;
+      var daysSince = lastSeen
+        ? Math.floor((Date.now() - new Date(lastSeen).getTime()) / 86400000)
+        : null;
+      return Object.assign({}, p, { sessionCount: sessions.length, lastSeen: lastSeen, daysSince: daysSince });
+    });
+  }, [actSessions, allProfiles]);
+
+  var actFiltered = React.useMemo(function() {
+    var result = actMerged;
+    if (actRoleFilter !== "all") {
+      result = result.filter(function(u) {
+        if (actRoleFilter === "lo") return ["admin","super_admin","branch_admin","internal"].includes(u.role);
+        return u.role === actRoleFilter;
+      });
+    }
+    if (actSearch.trim()) {
+      var q = actSearch.toLowerCase();
+      result = result.filter(function(u) {
+        return (u.display_name || "").toLowerCase().includes(q) || (u.email || "").toLowerCase().includes(q);
+      });
+    }
+    result = result.slice().sort(function(a, b) {
+      // Never-logged-in always at bottom regardless of sort direction
+      if (a.lastSeen === null && b.lastSeen === null) return (a.display_name || "").localeCompare(b.display_name || "");
+      if (a.lastSeen === null) return 1;
+      if (b.lastSeen === null) return -1;
+      var mul = actSort.dir === "asc" ? 1 : -1;
+      if (actSort.col === "name")     return mul * (a.display_name || a.email || "").localeCompare(b.display_name || b.email || "");
+      if (actSort.col === "role")     return mul * (a.role || "").localeCompare(b.role || "");
+      if (actSort.col === "sessions") return mul * (a.sessionCount - b.sessionCount);
+      // lastSeen default
+      return mul * a.lastSeen.localeCompare(b.lastSeen);
+    });
+    return result;
+  }, [actMerged, actRoleFilter, actSearch, actSort]);
+
+  var ACT_ROLE_FILTERS = [
+    { id: "all",     label: "All" },
+    { id: "lo",      label: "LO / Admin" },
+    { id: "borrower",label: "Clients" },
+    { id: "builder", label: "Builders" },
+    { id: "realtor", label: "Realtors" },
+  ];
+  var actActiveCount = actLoaded ? actMerged.filter(function(u) { return u.sessionCount > 0; }).length : null;
+
+  // ── Directory tab helpers ────
+  var branchById = React.useMemo(function() {
+    var map = {};
+    branches.forEach(function(b) { map[b.id] = b; });
+    return map;
+  }, [branches]);
+
+  var DIR_ROLE_FILTERS = [
+    { id: "all",     label: "All" },
+    { id: "lo",      label: "LO / Admin" },
+    { id: "builder", label: "Builders" },
+    { id: "realtor", label: "Realtors" },
+    { id: "borrower",label: "Clients" },
+  ];
+
+  var dirRoleCounts = React.useMemo(function() {
+    var counts = { all: allProfiles.length, lo: 0, builder: 0, realtor: 0, borrower: 0 };
+    allProfiles.forEach(function(p) {
+      if (["admin","super_admin","branch_admin","internal"].includes(p.role)) counts.lo++;
+      else if (p.role === "builder") counts.builder++;
+      else if (p.role === "realtor") counts.realtor++;
+      else counts.borrower++;
+    });
+    return counts;
+  }, [allProfiles]);
+
+  var dirFiltered = React.useMemo(function() {
+    var sessionByUser = {};
+    (actSessions || []).forEach(function(s) {
+      if (!sessionByUser[s.user_id]) sessionByUser[s.user_id] = [];
+      sessionByUser[s.user_id].push(s.logged_in_at);
+    });
+    var result = allProfiles.map(function(p) {
+      var branch = branchById[p.branch_id] || null;
+      var sessions = sessionByUser[p.id] || [];
+      var lastSeen = sessions.length > 0 ? sessions.reduce(function(a, b) { return a > b ? a : b; }, "") : null;
+      var daysSince = lastSeen ? Math.floor((Date.now() - new Date(lastSeen).getTime()) / 86400000) : null;
+      return Object.assign({}, p, { branchName: branch ? branch.name : "", sessionCount: sessions.length, lastSeen: lastSeen, daysSince: daysSince });
+    });
+    if (dirRoleFilter !== "all") {
+      var filterRolesMap = { lo: ["admin","super_admin","branch_admin","internal"], builder: ["builder"], realtor: ["realtor"], borrower: ["borrower"] };
+      var filterRoles = filterRolesMap[dirRoleFilter] || [];
+      result = result.filter(function(p) { return filterRoles.includes(p.role); });
+    }
+    if (dirSearch.trim()) {
+      var q = dirSearch.toLowerCase();
+      result = result.filter(function(p) {
+        return (p.display_name || "").toLowerCase().includes(q) ||
+               (p.email || "").toLowerCase().includes(q) ||
+               (p.company || "").toLowerCase().includes(q) ||
+               (p.branchName || "").toLowerCase().includes(q) ||
+               (p.nmls || "").toLowerCase().includes(q);
+      });
+    }
+    result = result.slice().sort(function(a, b) {
+      var mul = dirSort.dir === "asc" ? 1 : -1;
+      if (dirSort.col === "name")    return mul * (a.display_name || a.email || "").localeCompare(b.display_name || b.email || "");
+      if (dirSort.col === "role")    return mul * (a.role || "").localeCompare(b.role || "");
+      if (dirSort.col === "branch")  return mul * (a.branchName || "").localeCompare(b.branchName || "");
+      if (dirSort.col === "company") return mul * (a.company || "").localeCompare(b.company || "");
+      if (dirSort.col === "lastSeen") {
+        if (a.lastSeen === null && b.lastSeen === null) return 0;
+        if (a.lastSeen === null) return 1;
+        if (b.lastSeen === null) return -1;
+        return mul * a.lastSeen.localeCompare(b.lastSeen);
+      }
+      return 0;
+    });
+    return result;
+  }, [allProfiles, actSessions, branchById, dirRoleFilter, dirSearch, dirSort]);
+
+  function toggleDirSort(col) {
+    setDirSort(function(prev) {
+      if (prev.col === col) return { col: col, dir: prev.dir === "asc" ? "desc" : "asc" };
+      return { col: col, dir: col === "lastSeen" ? "desc" : "asc" };
+    });
+  }
+
   // ── Tab bar item ────
   function tabBtn(key, label, count) {
     const active = activeTab === key;
@@ -613,14 +807,16 @@ function UsersPanel({ user, onBack, onLogout }) {
 
       {/* Tab bar */}
       <div style={{ background: "#fff", borderBottom: "1px solid #E0E8E8", display: "flex", padding: "0 24px", overflowX: "auto" }}>
+        {isAdmin && tabBtn("directory", "Directory", allProfiles.length)}
         {tabBtn("team",      "Internal Team", teamProfiles.length)}
         {tabBtn("borrowers", "Borrowers",     borrowerProfiles.length)}
         {tabBtn("roster",    "Local Roster",  roster.length)}
         {isAdmin && tabBtn("branches", "Branches", branches.length)}
+        {isAdmin && tabBtn("activity",  "Activity",  actActiveCount !== null ? actActiveCount + " active" : "…")}
       </div>
 
       {/* Body */}
-      <div style={{ maxWidth: 900, margin: "28px auto", padding: "0 20px", paddingBottom: 60 }}>
+      <div style={{ maxWidth: activeTab === "directory" ? 1300 : 900, margin: "28px auto", padding: "0 20px", paddingBottom: 60 }}>
 
         {/* Loading / error */}
         {profilesLoading && activeTab !== "roster" && (
@@ -673,6 +869,7 @@ function UsersPanel({ user, onBack, onLogout }) {
                           >
                             <option value="borrower">Borrower</option>
                             <option value="realtor">Realtor</option>
+                            <option value="builder">Builder</option>
                             <option value="internal">Internal</option>
                             <option value="branch_admin">Branch Admin</option>
                             <option value="admin">Admin</option>
@@ -1105,6 +1302,379 @@ function UsersPanel({ user, onBack, onLogout }) {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ── ACTIVITY TAB ── */}
+        {activeTab === "activity" && isAdmin && (
+          <div>
+
+            {/* Toolbar */}
+            <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+              <input
+                type="text"
+                value={actSearch}
+                onChange={function(e) { setActSearch(e.target.value); }}
+                placeholder="Search name or email…"
+                style={Object.assign({}, INPUT_ST, { maxWidth: 240, flex: "1 1 180px" })}
+              />
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", flex: "1 1 auto" }}>
+                {ACT_ROLE_FILTERS.map(function(f) {
+                  var active = actRoleFilter === f.id;
+                  return (
+                    <button key={f.id} onClick={function() { setActRoleFilter(f.id); }} style={{
+                      padding: "6px 14px", borderRadius: 99, fontSize: 12, fontWeight: 600,
+                      fontFamily: UP_FONT, cursor: "pointer",
+                      border: "1.5px solid " + (active ? "#0C4160" : "#D1D9E6"),
+                      background: active ? "#0C4160" : "#F0F4F8",
+                      color: active ? "#fff" : "#0C4160",
+                    }}>{f.label}</button>
+                  );
+                })}
+              </div>
+              <button
+                onClick={refreshActivity}
+                disabled={actLoading}
+                style={Object.assign({}, BTN_GHOST, actLoading ? { opacity: 0.6, cursor: "wait" } : {})}
+              >
+                {actLoading ? "Loading…" : "↺ Refresh"}
+              </button>
+            </div>
+
+            {/* Legend */}
+            <div style={{ display: "flex", gap: 16, marginBottom: 14, flexWrap: "wrap" }}>
+              {[
+                { color: "#22C55E", label: "Active ≤ 3 days" },
+                { color: "#F59E0B", label: "Active ≤ 7 days" },
+                { color: "#F97316", label: "Active ≤ 15 days" },
+                { color: "#D1D5DB", label: "Never / no data" },
+              ].map(function(item) {
+                return (
+                  <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ width: 9, height: 9, borderRadius: "50%", background: item.color, flexShrink: 0 }} />
+                    <span style={{ fontSize: 11, color: "#6B7D8A", fontFamily: UP_FONT }}>{item.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Summary strip */}
+            {actLoaded && (
+              <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+                {[
+                  { label: "Total Users",   value: actMerged.length },
+                  { label: "Active (15d)",  value: actMerged.filter(function(u) { return u.sessionCount > 0; }).length, hi: true },
+                  { label: "Not Active",    value: actMerged.filter(function(u) { return u.sessionCount === 0; }).length },
+                  { label: "Active Today",  value: actMerged.filter(function(u) { return u.daysSince === 0; }).length },
+                ].map(function(chip) {
+                  return (
+                    <div key={chip.label} style={{
+                      background: chip.hi ? "#EFF6FF" : "#fff",
+                      border: "1px solid " + (chip.hi ? "#BFDBFE" : "#E0E8E8"),
+                      borderRadius: 10, padding: "10px 18px", textAlign: "center", minWidth: 100,
+                    }}>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: chip.hi ? "#1E40AF" : "#0C4160", fontFamily: UP_FONT }}>{chip.value}</div>
+                      <div style={{ fontSize: 11, color: "#6B7D8A", fontFamily: UP_FONT, marginTop: 2 }}>{chip.label}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Loading spinner */}
+            {actLoading && !actLoaded && (
+              <div style={{ textAlign: "center", padding: 60, color: "#6B7D8A", fontSize: 14 }}>Loading activity data…</div>
+            )}
+
+            {/* Table */}
+            {actLoaded && (
+              <div style={{ background: "#fff", borderRadius: 12, overflow: "hidden", border: "1px solid #E0E8E8", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: "#F0F4F8", borderBottom: "2px solid #E0E8E8" }}>
+                      <th style={{ width: 28, padding: "10px 8px 10px 16px" }} />
+                      {[
+                        { col: "name",     label: "Name / Email" },
+                        { col: "role",     label: "Role" },
+                        { col: "lastSeen", label: "Last Login" },
+                        { col: "sessions", label: "Sessions (15d)" },
+                      ].map(function(h) {
+                        var isActive = actSort.col === h.col;
+                        return (
+                          <th key={h.col}
+                            onClick={function() { toggleActSort(h.col); }}
+                            style={{ padding: "10px 12px", textAlign: "left", fontSize: 11, fontWeight: 700,
+                              fontFamily: UP_FONT, color: isActive ? "#0C4160" : "#6B7D8A",
+                              textTransform: "uppercase", letterSpacing: "0.06em", cursor: "pointer",
+                              userSelect: "none", whiteSpace: "nowrap",
+                            }}>
+                            {h.label}
+                            <span style={{ marginLeft: 4, opacity: isActive ? 1 : 0.3 }}>
+                              {isActive ? (actSort.dir === "asc" ? " ↑" : " ↓") : " ↕"}
+                            </span>
+                          </th>
+                        );
+                      })}
+                      <th style={{ padding: "10px 16px 10px 12px", textAlign: "left", fontSize: 11, fontWeight: 700, fontFamily: UP_FONT, color: "#6B7D8A", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                        Date
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {actFiltered.length === 0 && (
+                      <tr>
+                        <td colSpan={6} style={{ padding: "40px 24px", textAlign: "center", color: "#6B7D8A", fontSize: 14, fontFamily: UP_FONT }}>
+                          No users match this filter.
+                        </td>
+                      </tr>
+                    )}
+                    {actFiltered.map(function(u, idx) {
+                      var isInactive = u.sessionCount === 0;
+                      var rc = ROLE_COLORS[u.role] || ROLE_COLORS.borrower;
+                      return (
+                        <tr key={u.id} style={{
+                          borderBottom: idx < actFiltered.length - 1 ? "1px solid #F0F4F8" : "none",
+                          background: isInactive ? "#FAFAFA" : "#fff",
+                          opacity: isInactive ? 0.75 : 1,
+                        }}>
+                          {/* Status dot */}
+                          <td style={{ padding: "12px 8px 12px 16px", verticalAlign: "middle" }}>
+                            <div style={{ width: 10, height: 10, borderRadius: "50%", background: actDotColor(u.daysSince) }} />
+                          </td>
+                          {/* Name */}
+                          <td style={{ padding: "12px 12px" }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: "#0C4160", fontFamily: UP_FONT }}>
+                              {u.display_name || <em style={{ opacity: 0.5 }}>No name</em>}
+                            </div>
+                            <div style={{ fontSize: 11, color: "#6B7D8A", fontFamily: UP_FONT, marginTop: 1 }}>{u.email}</div>
+                          </td>
+                          {/* Role */}
+                          <td style={{ padding: "12px 12px" }}>
+                            <span style={{ display: "inline-block", padding: "2px 10px", borderRadius: 99, fontSize: 10, fontWeight: 700, fontFamily: UP_FONT, background: rc.bg, color: rc.text, border: "1px solid " + rc.border, whiteSpace: "nowrap" }}>
+                              {ROLE_LABELS[u.role] || u.role}
+                            </span>
+                          </td>
+                          {/* Last login relative */}
+                          <td style={{ padding: "12px 12px", whiteSpace: "nowrap" }}>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: u.sessionCount > 0 ? "#0C4160" : "#D1D5DB", fontFamily: UP_FONT }}>
+                              {actRelDate(u.daysSince)}
+                            </span>
+                          </td>
+                          {/* Session count */}
+                          <td style={{ padding: "12px 12px" }}>
+                            {u.sessionCount > 0
+                              ? <span style={{ display: "inline-block", background: "#EFF6FF", color: "#1E40AF", border: "1px solid #BFDBFE", borderRadius: 99, padding: "2px 10px", fontSize: 12, fontWeight: 700, fontFamily: UP_FONT }}>{u.sessionCount}</span>
+                              : <span style={{ fontSize: 12, color: "#D1D5DB", fontFamily: UP_FONT }}>—</span>
+                            }
+                          </td>
+                          {/* Exact date */}
+                          <td style={{ padding: "12px 16px 12px 12px", fontSize: 12, color: "#6B7D8A", fontFamily: UP_FONT, whiteSpace: "nowrap" }}>
+                            {actExactDate(u.lastSeen)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                <div style={{ padding: "10px 16px", borderTop: "1px solid #F0F4F8", fontSize: 11, color: "#94A3B0", fontFamily: UP_FONT }}>
+                  Showing {actFiltered.length} of {actMerged.length} users · Last 15 days · Data collected since session tracking was enabled
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── DIRECTORY TAB ── */}
+        {activeTab === "directory" && isAdmin && !profilesLoading && !profilesError && (
+          <div>
+            {/* Toolbar */}
+            <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
+              <input
+                type="text"
+                value={dirSearch}
+                onChange={function(e) { setDirSearch(e.target.value); }}
+                placeholder="Search name, email, company, NMLS…"
+                style={Object.assign({}, INPUT_ST, { maxWidth: 300, flex: "1 1 200px" })}
+              />
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", flex: "1 1 auto" }}>
+                {DIR_ROLE_FILTERS.map(function(f) {
+                  var active = dirRoleFilter === f.id;
+                  var count = dirRoleCounts[f.id] !== undefined ? dirRoleCounts[f.id] : 0;
+                  return (
+                    <button key={f.id} onClick={function() { setDirRoleFilter(f.id); }} style={{
+                      padding: "6px 14px", borderRadius: 99, fontSize: 12, fontWeight: 600, fontFamily: UP_FONT, cursor: "pointer",
+                      border: "1.5px solid " + (active ? "#0C4160" : "#D1D9E6"),
+                      background: active ? "#0C4160" : "#F0F4F8",
+                      color: active ? "#fff" : "#0C4160",
+                      display: "flex", alignItems: "center", gap: 6,
+                    }}>
+                      {f.label}
+                      <span style={{ background: active ? "rgba(255,255,255,0.25)" : "#E0E8E8", color: active ? "#fff" : "#6B7D8A", borderRadius: 99, padding: "0 6px", fontSize: 10, fontWeight: 700 }}>{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Count hint */}
+            <div style={{ fontSize: 12, color: "#8A99A8", marginBottom: 10, fontFamily: UP_FONT }}>
+              Showing {dirFiltered.length} of {allProfiles.length} people · Click column headers to sort
+            </div>
+
+            {/* Table */}
+            <div style={{ background: "#fff", borderRadius: 12, overflow: "hidden", border: "1px solid #E0E8E8", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 920 }}>
+                  <thead>
+                    <tr style={{ background: "#F0F4F8", borderBottom: "2px solid #E0E8E8" }}>
+                      <th style={{ width: 12, padding: "10px 0 10px 14px" }} />
+                      {[
+                        { col: "name",     label: "Name" },
+                        { col: null,       label: "Email" },
+                        { col: "role",     label: "Role" },
+                        { col: "branch",   label: "Branch" },
+                        { col: "company",  label: "Company" },
+                        { col: null,       label: "NMLS" },
+                        { col: "lastSeen", label: "Last Login" },
+                      ].map(function(h, i) {
+                        var isActive = h.col && dirSort.col === h.col;
+                        return (
+                          <th key={i}
+                            onClick={h.col ? function() { toggleDirSort(h.col); } : undefined}
+                            style={{
+                              padding: "10px 12px", textAlign: "left", fontSize: 11, fontWeight: 700,
+                              fontFamily: UP_FONT, color: isActive ? "#0C4160" : "#6B7D8A",
+                              textTransform: "uppercase", letterSpacing: "0.06em",
+                              cursor: h.col ? "pointer" : "default", userSelect: "none", whiteSpace: "nowrap",
+                            }}>
+                            {h.label}
+                            {h.col && (
+                              <span style={{ marginLeft: 4, opacity: isActive ? 1 : 0.3 }}>
+                                {isActive ? (dirSort.dir === "asc" ? "↑" : "↓") : "↕"}
+                              </span>
+                            )}
+                          </th>
+                        );
+                      })}
+                      <th style={{ padding: "10px 14px 10px 12px", textAlign: "left", fontSize: 11, fontWeight: 700, fontFamily: UP_FONT, color: "#6B7D8A", textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dirFiltered.length === 0 && (
+                      <tr>
+                        <td colSpan={9} style={{ padding: "40px 24px", textAlign: "center", color: "#6B7D8A", fontSize: 14, fontFamily: UP_FONT }}>
+                          No people match this filter.
+                        </td>
+                      </tr>
+                    )}
+                    {dirFiltered.map(function(p, idx) {
+                      var isSelf = p.id === user.id;
+                      var selRole = editRoles[p.id] || p.role || "borrower";
+                      var hasChanged = selRole !== (p.role || "borrower");
+                      var resetResult = pwResult[p.id];
+                      var resetSending = pwSending[p.id];
+                      var avatarColors = { admin: "#0C4160", super_admin: "#0C4160", branch_admin: "#3730A3", internal: "#1A5E8A", realtor: "#7C3AED", builder: "#D97706", borrower: "#6B7D8A" };
+                      var avatarBg = avatarColors[p.role] || "#6B7D8A";
+                      return (
+                        <tr key={p.id} style={{ borderBottom: idx < dirFiltered.length - 1 ? "1px solid #F0F4F8" : "none", background: isSelf ? "rgba(12,65,96,0.03)" : "#fff" }}>
+                          {/* Login dot */}
+                          <td style={{ padding: "12px 0 12px 14px", verticalAlign: "middle" }}>
+                            <div style={{ width: 8, height: 8, borderRadius: "50%", background: actLoaded ? actDotColor(p.daysSince) : "#E0E8E8" }} />
+                          </td>
+                          {/* Name + title */}
+                          <td style={{ padding: "10px 12px", verticalAlign: "middle" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                              <div style={{ width: 32, height: 32, borderRadius: "50%", background: avatarBg, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
+                                {(p.display_name || p.email || "?").charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: "#0C4160", fontFamily: UP_FONT, whiteSpace: "nowrap" }}>
+                                  {p.display_name || "(no name)"}
+                                  {isSelf && <span style={{ marginLeft: 6, fontSize: 9, color: "#1B8A5A", fontWeight: 700, background: "#E8F5E9", borderRadius: 99, padding: "1px 6px" }}>YOU</span>}
+                                </div>
+                                {p.title && <div style={{ fontSize: 11, color: "#8A99A8", fontFamily: UP_FONT }}>{p.title}</div>}
+                              </div>
+                            </div>
+                          </td>
+                          {/* Email */}
+                          <td style={{ padding: "10px 12px", fontSize: 12, color: "#6B7D8A", fontFamily: UP_FONT, whiteSpace: "nowrap" }}>{p.email || "—"}</td>
+                          {/* Role */}
+                          <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                            <RoleBadge role={p.role} />
+                            {isAdmin && !isSelf && (
+                              <div style={{ display: "flex", gap: 5, alignItems: "center", marginTop: 5 }}>
+                                <select
+                                  value={selRole}
+                                  onChange={function(e) { var v = e.target.value; setEditRoles(function(prev) { return Object.assign({}, prev, { [p.id]: v }); }); }}
+                                  style={{ padding: "3px 6px", borderRadius: 5, border: "1px solid #E0E8E8", fontSize: 11, fontFamily: UP_FONT, background: "#fff", color: "#0C4160", cursor: "pointer" }}
+                                >
+                                  <option value="borrower">Borrower</option>
+                                  <option value="realtor">Realtor</option>
+                                  <option value="builder">Builder</option>
+                                  <option value="internal">Internal</option>
+                                  <option value="branch_admin">Branch Admin</option>
+                                  <option value="admin">Admin</option>
+                                  {isSuperAdmin && <option value="super_admin">Super Admin</option>}
+                                </select>
+                                <button onClick={function() { saveRole(p.id); }} disabled={!hasChanged || roleSaving[p.id]}
+                                  style={Object.assign({}, BTN_SM, { padding: "3px 8px", fontSize: 10 }, !hasChanged ? { opacity: 0.3, cursor: "default" } : {}, roleSaved[p.id] ? { background: "#1B8A5A" } : {})}>
+                                  {roleSaved[p.id] ? "✓" : roleSaving[p.id] ? "…" : "Save"}
+                                </button>
+                              </div>
+                            )}
+                            {roleError[p.id] && <div style={{ fontSize: 10, color: "#B91C1C", marginTop: 2 }}>⚠ {roleError[p.id]}</div>}
+                          </td>
+                          {/* Branch */}
+                          <td style={{ padding: "10px 12px", fontSize: 12, color: "#6B7D8A", fontFamily: UP_FONT, whiteSpace: "nowrap" }}>{p.branchName || <span style={{ color: "#D1D5DB" }}>—</span>}</td>
+                          {/* Company */}
+                          <td style={{ padding: "10px 12px", fontSize: 12, color: "#6B7D8A", fontFamily: UP_FONT, whiteSpace: "nowrap" }}>{p.company || <span style={{ color: "#D1D5DB" }}>—</span>}</td>
+                          {/* NMLS */}
+                          <td style={{ padding: "10px 12px", fontSize: 12, color: "#8A99A8", fontFamily: UP_FONT, whiteSpace: "nowrap" }}>{p.nmls ? "#" + p.nmls : <span style={{ color: "#D1D5DB" }}>—</span>}</td>
+                          {/* Last Login */}
+                          <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                            {actLoaded ? (
+                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                <div>
+                                  <div style={{ fontSize: 12, fontWeight: 600, color: p.sessionCount > 0 ? "#0C4160" : "#D1D5DB", fontFamily: UP_FONT }}>{actRelDate(p.daysSince)}</div>
+                                  {p.lastSeen && <div style={{ fontSize: 10, color: "#94A3B0", fontFamily: UP_FONT }}>{actExactDate(p.lastSeen)}</div>}
+                                </div>
+                                {p.sessionCount > 0 && (
+                                  <span style={{ background: "#EFF6FF", color: "#1E40AF", border: "1px solid #BFDBFE", borderRadius: 99, padding: "1px 7px", fontSize: 10, fontWeight: 700, fontFamily: UP_FONT }}>{p.sessionCount}</span>
+                                )}
+                              </div>
+                            ) : (
+                              <span style={{ fontSize: 11, color: "#D1D5DB", fontFamily: UP_FONT }}>—</span>
+                            )}
+                          </td>
+                          {/* Actions */}
+                          <td style={{ padding: "10px 14px 10px 12px", whiteSpace: "nowrap" }}>
+                            <div style={{ display: "flex", gap: 5 }}>
+                              {isAdmin && (
+                                <button onClick={function() { setEditingProfile(p); }} style={Object.assign({}, BTN_GHOST, { padding: "4px 10px", fontSize: 11 })}>✏️ Edit</button>
+                              )}
+                              {p.email && (
+                                <button onClick={function() { sendPwReset(p); }} disabled={resetSending}
+                                  style={Object.assign({}, BTN_GHOST, { padding: "4px 10px", fontSize: 11 },
+                                    resetResult === "sent"  ? { background: "#E8F5E9", color: "#1B8A5A", border: "1px solid #A7F3D0" } : {},
+                                    resetResult === "error" ? { background: "#FEE2E2", color: "#B91C1C", border: "1px solid #FECACA" } : {},
+                                    resetSending ? { opacity: 0.6, cursor: "wait" } : {}
+                                  )}>
+                                  {resetResult === "sent" ? "✓ Sent" : resetResult === "error" ? "✗" : resetSending ? "…" : "🔑"}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ padding: "10px 16px", borderTop: "1px solid #F0F4F8", fontSize: 11, color: "#94A3B0", fontFamily: UP_FONT, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
+                <span>{dirFiltered.length} of {allProfiles.length} people shown</span>
+                <span>{actLoaded ? "✓ Login data loaded" : "Login data loads when Activity tab is opened"}</span>
+              </div>
+            </div>
           </div>
         )}
 

@@ -1462,26 +1462,71 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: c.bg, color: c.text }}>
+    <div style={{ minHeight: "100vh", background: c.bg, color: c.text, display: "flex", alignItems: "flex-start" }}>
 
-      {/* ── Header ─────────────────────────────────────────────────── */}
+      {/* ── Left Sidebar ─────────────────────────────────────────── */}
       <div style={{
+        width: 180, flexShrink: 0, height: "100vh",
         background: "linear-gradient(135deg, #1e3a5f 0%, #2d5a8e 100%)",
-        padding: "20px 32px",
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        color: "#fff",
+        display: "flex", flexDirection: "column",
+        position: "sticky", top: 0,
       }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: "24px", fontWeight: 700 }}>
-            {pageTitle || ((user && (user.role === "admin" || user.role === "internal"))
-              ? "Scenario Dashboard" : "My Scenarios")}
-          </h1>
-          <p style={{ margin: "4px 0 0", opacity: 0.8, fontSize: "14px" }}>
-            Welcome back, {displayName}
-          </p>
+        {/* App name strip */}
+        <div style={{ padding: "16px 14px 10px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", color: "rgba(255,255,255,0.5)", textTransform: "uppercase" }}>
+            {pageTitle || (user.isInternal ? "Scenario Dashboard" : "My Scenarios")}
+          </div>
         </div>
-        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-          {AppHeader && (
+
+        {/* ── "To Do" section label ── */}
+        <div style={{ padding: "14px 14px 4px", fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)" }}>
+          To Do
+        </div>
+
+        {/* ── Lead Group tabs ── */}
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {(user.isInternal ? LEAD_GROUPS : ["active", "archived"]).map(function(tab) {
+            const isActive = groupFilter === tab;
+            return (
+              <button
+                key={tab}
+                onClick={function() { setClosingFilter(false); setGroupFilter(tab); }}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  width: "100%", padding: "9px 14px 9px 11px", boxSizing: "border-box",
+                  background: isActive ? "rgba(255,255,255,0.18)" : "transparent",
+                  color: isActive ? "#fff" : "rgba(255,255,255,0.6)",
+                  border: "none",
+                  borderLeft: isActive ? "3px solid rgba(255,255,255,0.85)" : "3px solid transparent",
+                  cursor: "pointer", fontSize: 13, fontWeight: isActive ? 700 : 400,
+                  textAlign: "left", transition: "all 0.15s",
+                }}
+              >
+                <span>{LEAD_GROUP_LABELS[tab]}</span>
+                <span style={{
+                  background: isActive ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.1)",
+                  color: isActive ? "#fff" : "rgba(255,255,255,0.5)",
+                  borderRadius: 10, padding: "1px 6px",
+                  fontSize: 11, fontWeight: 700, minWidth: 18, textAlign: "center",
+                }}>
+                  {groupCounts[tab] || 0}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Spacer pushes profile to bottom */}
+        <div style={{ flex: 1 }} />
+
+        {/* ── Profile icon — pinned to bottom ── */}
+        {AppHeader && (
+          <div style={{
+            flexShrink: 0,
+            borderTop: "1px solid rgba(255,255,255,0.12)",
+            padding: "8px 14px",
+            display: "flex", alignItems: "center",
+          }}>
             <AppHeader
               user={user}
               darkMode={darkMode}
@@ -1495,12 +1540,12 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
               isInternal={!!(user && user.isInternal)}
               isAdmin={!!(user && user.role === "admin")}
             />
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* ── Main Content ──────────────────────────────────────────── */}
-      <div style={{ maxWidth: "1400px", margin: "0 auto", padding: "24px" }}>
+      <div style={{ flex: 1, minWidth: 0, maxWidth: "1400px", padding: "24px" }}>
 
         {/* Action Bar */}
         <div style={{
@@ -1576,42 +1621,6 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
           </div>
         )}
 
-        {/* Lead Group Filter Tabs */}
-        <div style={{
-          display: "flex", gap: "4px", marginBottom: "20px",
-          borderBottom: "2px solid " + c.border,
-        }}>
-          {(user.isInternal ? LEAD_GROUPS : ["active", "archived"]).map(function(tab) {
-            const isActive = groupFilter === tab;
-            return (
-              <button
-                key={tab}
-                onClick={function() { setClosingFilter(false); setGroupFilter(tab); }}
-                style={{
-                  background: "transparent", border: "none",
-                  borderBottom: isActive ? "2px solid #2563eb" : "2px solid transparent",
-                  marginBottom: "-2px", padding: "8px 16px",
-                  fontSize: "14px", fontWeight: isActive ? 700 : 400,
-                  color: isActive ? "#2563eb" : (c.textSecondary || "#888"),
-                  cursor: "pointer",
-                  display: "flex", alignItems: "center", gap: "6px",
-                  transition: "color 0.15s",
-                }}
-              >
-                {LEAD_GROUP_LABELS[tab]}
-                <span style={{
-                  background: isActive ? "rgba(37,99,235,0.12)" : (c.cardBg || "rgba(0,0,0,0.06)"),
-                  color: isActive ? "#2563eb" : (c.textSecondary || "#888"),
-                  borderRadius: "10px", padding: "1px 7px",
-                  fontSize: "12px", fontWeight: 600,
-                  minWidth: "20px", textAlign: "center",
-                }}>
-                  {groupCounts[tab] || 0}
-                </span>
-              </button>
-            );
-          })}
-        </div>
 
         {/* ── New Scenario Form ────────────────────────────────────── */}
         {showNewForm && (
