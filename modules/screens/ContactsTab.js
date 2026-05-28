@@ -558,6 +558,7 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
       background: "linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)",
       fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
       color: "#f8fafc",
+      display: "flex", alignItems: "flex-start",
     },
     header: {
       background: "rgba(255,255,255,0.08)",
@@ -589,7 +590,7 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
       cursor: "pointer",
       fontSize: "13px",
     },
-    body: { padding: "24px", maxWidth: "1400px", margin: "0 auto" },
+    body: { padding: "24px", maxWidth: "1400px", flex: 1, minWidth: 0 },
     toolbar: {
       display: "flex",
       flexWrap: "wrap",
@@ -707,18 +708,77 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
   // ── Main render ───────────────────────────────────────────────────────
   return React.createElement("div", { style: S.page },
 
-    // ── Header ─────────────────────────────────────────────────────────
-    React.createElement("div", { style: S.header },
-      React.createElement("div", { style: S.headerLeft },
-        React.createElement("div", null,
-          React.createElement("h1", { style: Object.assign({}, S.title, { marginBottom: 0 }) }, pageTitle || "Contacts"),
-          user && React.createElement("div", {
-            style: { fontSize: "12px", color: "#94a3b8", marginTop: "2px" }
-          }, user.name || user.email || "")
-        )
+    // ── Left Sidebar ────────────────────────────────────────────────────
+    React.createElement("div", {
+      style: {
+        width: 180, flexShrink: 0, height: "100vh",
+        background: "linear-gradient(135deg, #1e3a5f 0%, #2d5a8e 100%)",
+        display: "flex", flexDirection: "column",
+        position: "sticky", top: 0,
+      }
+    },
+
+      // App name strip
+      React.createElement("div", {
+        style: { padding: "16px 14px 10px", borderBottom: "1px solid rgba(255,255,255,0.1)" }
+      },
+        React.createElement("div", {
+          style: { fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", color: "rgba(255,255,255,0.5)", textTransform: "uppercase" }
+        }, pageTitle || "Contacts")
       ),
-      React.createElement("div", { style: { display: "flex", alignItems: "center", gap: "12px" } },
-        AppHeader && React.createElement(AppHeader, {
+
+      // "View" section label
+      React.createElement("div", {
+        style: { padding: "14px 14px 4px", fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)" }
+      }, "View"),
+
+      // Type filter tabs (All / Business / Client)
+      React.createElement("div", { style: { display: "flex", flexDirection: "column" } },
+        TYPE_TABS_CT.map(function(tab) {
+          var isActive = typeFilter === tab.key;
+          var count = contacts.filter(function(c) {
+            return (tab.key === "all" || c.contact_type === tab.key) && c.status === statusFilter;
+          }).length;
+          return React.createElement("button", {
+            key: tab.key,
+            onClick: function() { setTypeFilter(tab.key); setCategoryFilter(null); },
+            style: {
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              width: "100%", padding: "9px 14px 9px 11px", boxSizing: "border-box",
+              background: isActive ? "rgba(255,255,255,0.18)" : "transparent",
+              color: isActive ? "#fff" : "rgba(255,255,255,0.6)",
+              border: "none",
+              borderLeft: isActive ? "3px solid rgba(255,255,255,0.85)" : "3px solid transparent",
+              cursor: "pointer", fontSize: 13, fontWeight: isActive ? 700 : 400,
+              textAlign: "left", transition: "all 0.15s",
+            },
+          },
+            React.createElement("span", null, tab.label),
+            React.createElement("span", {
+              style: {
+                background: isActive ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.1)",
+                color: isActive ? "#fff" : "rgba(255,255,255,0.5)",
+                borderRadius: 10, padding: "1px 6px",
+                fontSize: 11, fontWeight: 700, minWidth: 18, textAlign: "center",
+              }
+            }, count)
+          );
+        })
+      ),
+
+      // Spacer — pushes profile to bottom
+      React.createElement("div", { style: { flex: 1 } }),
+
+      // Profile icon pinned to bottom
+      AppHeader && React.createElement("div", {
+        style: {
+          flexShrink: 0,
+          borderTop: "1px solid rgba(255,255,255,0.12)",
+          padding: "8px 14px",
+          display: "flex", alignItems: "center",
+        }
+      },
+        React.createElement(AppHeader, {
           user: user,
           darkMode: darkMode,
           setDarkMode: setDarkMode,
@@ -736,13 +796,6 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
 
     // ── Body ────────────────────────────────────────────────────────────
     React.createElement("div", { style: S.body },
-
-      // Type tabs
-      React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "8px" } },
-        TYPE_TABS_CT.map(function(tab) {
-          return React.createElement(TypeTab, { key: tab.key, tab: tab });
-        })
-      ),
 
       // Category sub-pills (only when a specific type is selected)
       typeFilter !== "all" && React.createElement("div", {
