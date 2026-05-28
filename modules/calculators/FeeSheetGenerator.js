@@ -1035,6 +1035,11 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
   // LO info read directly from localStorage (set by propagation)
   const loName = localStorage.getItem("mtk_lo_name") || "";
   const loNmls = localStorage.getItem("mtk_lo_nmls") || "";
+  // Borrower & scenario info for PDF header
+  const pdfBorrowerFirst = localStorage.getItem("abt_c1fn") || "";
+  const pdfBorrowerLast  = localStorage.getItem("abt_c1ln") || "";
+  const pdfBorrowerName  = [pdfBorrowerFirst, pdfBorrowerLast].filter(Boolean).join(" ");
+  const pdfScenarioName  = (() => { try { const s = JSON.parse(localStorage.getItem("mtk_active_scenario") || "null"); return (s && s.name) ? s.name : ""; } catch { return ""; } })();
 
   // PDF computed values (used in both the download function and the hidden print div)
   const pdfDP = fees.isPurchase ? Math.max(0, (parseFloat(purchasePrice)||0) - (parseFloat(loanAmount)||0)) : 0;
@@ -1539,27 +1544,28 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
           <SectionCard title="CONTRACT DETAILS" accent={COLORS.green}>
             {selectedState === "TX" && <LabeledInput label="Option Money"  prefix="$" value={optionMoney}  onChange={setOptionMoney}  useCommas />}
             <LabeledInput label="Earnest Money" prefix="$" value={earnestMoney} onChange={setEarnestMoney} useCommas />
-            {/* Realtor Commissions: Buyer Paid */}
-            <div style={{ marginBottom: 6 }}>
-              <label style={{ display:"block", fontSize:11, fontWeight:600, color:COLORS.grayLight, marginBottom:4, fontFamily:font, letterSpacing:"0.04em" }}>Realtor Commissions: Buyer Paid</label>
-              <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                {rcBuyerMode === "dollar" && <span style={{ fontSize:15, fontWeight:700, color:COLORS.navy }}>$</span>}
-                <input
-                  type="number"
-                  value={rcBuyerVal}
-                  onChange={e => {
-                    const v = e.target.value;
-                    if (rcBuyerMode === "pct") {
-                      const n = parseFloat(v);
-                      if (!isNaN(n) && n > 8) return;
-                    }
-                    setRcBuyerVal(v);
-                  }}
-                  placeholder=""
-                  style={{ flex:1, padding:"6px 10px", border:`1px solid ${COLORS.border}`, borderRadius:6, fontSize:13, fontFamily:font, color:COLORS.navy, outline:"none", minWidth:0 }}
-                />
-                {rcBuyerMode === "pct" && <span style={{ fontSize:15, fontWeight:700, color:COLORS.navy }}>%</span>}
-                <div style={{ display:"flex", gap:0, borderRadius:6, overflow:"hidden", border:`1px solid ${COLORS.border}`, flexShrink:0 }}>
+            <LabeledInput
+              label="Realtor Commissions: Buyer Paid"
+              value={rcBuyerVal}
+              prefix={rcBuyerMode === "dollar" ? "$" : undefined}
+              suffix={rcBuyerMode === "pct" ? "%" : undefined}
+              onChange={v => {
+                if (rcBuyerMode === "pct") {
+                  const n = parseFloat(v);
+                  if (!isNaN(n) && n > 8) return;
+                }
+                setRcBuyerVal(v);
+              }}
+              hint={(() => {
+                const num = parseFloat(rcBuyerVal) || 0;
+                const pp2 = parseFloat(purchasePrice) || 0;
+                if (num <= 0) return undefined;
+                if (rcBuyerMode === "pct" && pp2 > 0) return fmt(Math.round(pp2 * num / 100)) + " based on " + fmt(pp2) + " purchase price";
+                if (rcBuyerMode === "dollar" && pp2 > 0) return (num / pp2 * 100).toFixed(3) + "% of purchase price";
+                return undefined;
+              })()}
+              rightAddon={
+                <div style={{ display:"flex", borderRadius:8, overflow:"hidden", border:`1.5px solid ${COLORS.border}`, flexShrink:0 }}>
                   {[{v:"pct",label:"%"},{v:"dollar",label:"$"}].map(({v,label}) => (
                     <button key={v} tabIndex={-1} onClick={() => {
                       if (v === rcBuyerMode) return;
@@ -1572,7 +1578,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                       }
                       setRcBuyerMode(v);
                     }} style={{
-                      padding:"6px 12px", fontSize:12, fontWeight:700,
+                      padding:"0 14px", fontSize:12, fontWeight:700, height:"100%",
                       cursor:"pointer", border:"none", fontFamily:font,
                       background: rcBuyerMode === v ? COLORS.navy : "#fff",
                       color: rcBuyerMode === v ? "#fff" : COLORS.navy,
@@ -1580,18 +1586,8 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                     }}>{label}</button>
                   ))}
                 </div>
-              </div>
-              {(() => {
-                const num = parseFloat(rcBuyerVal) || 0;
-                const pp2 = parseFloat(purchasePrice) || 0;
-                if (num <= 0) return null;
-                if (rcBuyerMode === "pct" && pp2 > 0)
-                  return <div style={{ fontSize:10, color:COLORS.grayLight, marginTop:3, fontFamily:font, fontStyle:"italic" }}>{fmt(Math.round(pp2 * num / 100))} based on {fmt(pp2)} purchase price</div>;
-                if (rcBuyerMode === "dollar" && pp2 > 0)
-                  return <div style={{ fontSize:10, color:COLORS.grayLight, marginTop:3, fontFamily:font, fontStyle:"italic" }}>{(num / pp2 * 100).toFixed(3)}% of purchase price</div>;
-                return null;
-              })()}
-            </div>
+              }
+            />
           </SectionCard>
           )}
 
@@ -2497,12 +2493,17 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
             <div style={{ fontSize:11, color:"rgba(255,255,255,0.7)", marginTop:4, letterSpacing:"0.07em" }}>
               {stateName.toUpperCase()} · {fees.isPurchase ? "PURCHASE" : "REFINANCE"} · {loanTypeLabel.toUpperCase()}
             </div>
+            {pdfBorrowerName && <div style={{ fontSize:12, color:"rgba(255,255,255,0.85)", marginTop:5, fontWeight:600 }}>Borrower: {pdfBorrowerName}</div>}
+            {pdfScenarioName  && <div style={{ fontSize:11, color:"rgba(255,255,255,0.65)", marginTop:2 }}>Scenario: {pdfScenarioName}</div>}
           </div>
           <div style={{ textAlign:"right" }}>
             {loName && <div style={{ fontSize:14, fontWeight:700, color:"#fff" }}>{loName}</div>}
             {loNmls && <div style={{ fontSize:11, color:"rgba(255,255,255,0.7)" }}>NMLS # {loNmls}</div>}
             <div style={{ fontSize:11, color:"rgba(255,255,255,0.6)", marginTop:2 }}>
               {new Date().toLocaleDateString("en-US", { month:"long", day:"numeric", year:"numeric" })}
+            </div>
+            <div style={{ fontSize:10, color:"rgba(255,255,255,0.5)", marginTop:1 }}>
+              {new Date().toLocaleTimeString("en-US", { hour:"numeric", minute:"2-digit", hour12:true })}
             </div>
           </div>
         </div>
