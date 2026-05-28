@@ -691,19 +691,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
           } : undefined}
         >
 
-        {activeView === "contact" && (
-          <React.Fragment>
-
-        {saveError && (
-          <div style={{
-            background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: "8px",
-            padding: "12px 16px", color: "#dc2626", fontSize: "14px", marginBottom: "16px",
-          }}>
-            {saveError}
-          </div>
-        )}
-
-        {/* Tab bar + Create Login + Edit button on same row */}
+        {/* Tab bar + Create Login + Edit button — always visible regardless of active tab */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", marginBottom: "12px" }}>
           {/* Left: Contact Info / Internal Notes tabs (internal users only) */}
           {isInternal ? (
@@ -738,7 +726,8 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
           ) : (
             <div />
           )}
-          {!editMode && (
+          {/* Create Login + Edit buttons — only relevant on the Contact Info tab */}
+          {activeView === "contact" && !editMode && (
             <div style={{ display: "flex", gap: "8px", alignItems: "center", flexShrink: 0 }}>
               {canManage && (portalCreated || contact.auth_user_id ||
                 contact.email_personal || contact.email || contact.email_work) && (
@@ -789,6 +778,18 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
             </div>
           )}
         </div>
+
+        {activeView === "contact" && (
+          <React.Fragment>
+
+        {saveError && (
+          <div style={{
+            background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: "8px",
+            padding: "12px 16px", color: "#dc2626", fontSize: "14px", marginBottom: "16px",
+          }}>
+            {saveError}
+          </div>
+        )}
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
         {/* CARD 1 — Linked Scenarios                                          */}
