@@ -165,7 +165,8 @@ function addCommasLocal(v) {
 }
 function stripCommasLocal(v) { return String(v).replace(/,/g, ""); }
 
-function PaymentCalculator({ isInternal }) {
+function PaymentCalculator({ isInternal, user }) {
+  const isAdmin = user?.role === "admin";
   const c = useThemeColors();
   const [loanAmount, setLoanAmount] = useLocalStorage("pc_la", "350000");
   const [homePrice, setHomePrice] = useLocalStorage("pc_hp", "437500");
@@ -620,10 +621,12 @@ function PaymentCalculator({ isInternal }) {
     const taxBasis = homesteadExemption ? hp * 0.70 : hp;
     const monthlyTaxInput = parseFloat(propertyTax) || 0;
     const annualTax = taxMode === "rate" ? taxBasis * ((parseFloat(propertyTaxRate) || 0) / 100) : monthlyTaxInput * 12;
-    const monthlyTax = taxMode === "rate" ? annualTax / 12 : monthlyTaxInput;
+    const monthlyTaxRaw = taxMode === "rate" ? annualTax / 12 : monthlyTaxInput;
+    const monthlyTax = taxMode === "rate" ? Math.round(monthlyTaxRaw / 50) * 50 : monthlyTaxRaw;
     const monthlyInsInput = parseFloat(homeInsurance) || 0;
     const annualIns = insMode === "rate" ? hp * ((parseFloat(homeInsuranceRate) || 0) / 100) : monthlyInsInput * 12;
-    const monthlyIns = insMode === "rate" ? annualIns / 12 : monthlyInsInput;
+    const monthlyInsRaw = insMode === "rate" ? annualIns / 12 : monthlyInsInput;
+    const monthlyIns = insMode === "rate" ? Math.round(monthlyInsRaw / 50) * 50 : monthlyInsRaw;
     // ── Piggyback early — needed for 1st-lien LTV/PMI calc ───────────────────
     const s2On  = s2Enabled === "true";
     const s2LA  = s2On ? Math.round(hp * (parseFloat(s2Amt) || 0) / 100) : 0;
@@ -1106,8 +1109,8 @@ function PaymentCalculator({ isInternal }) {
                 { value: "va",           label: "VA" },
               ]}
             />
-            {/* ── Construction & Renovation overlay ── */}
-            {["conventional","homeready","homeposs","hfa_fannie","hfa_freddie","fha"].includes(loanProgram) && loanType !== "heloc" && (
+            {/* ── Construction & Renovation overlay — admin only ── */}
+            {isAdmin && ["conventional","homeready","homeposs","hfa_fannie","hfa_freddie","fha"].includes(loanProgram) && loanType !== "heloc" && (
               <Select label="Construction & Renovation"
                 value={renovationProg === "fha_203k" ? "fha_203k" : ["homeready","homeposs"].includes(loanProgram) ? loanProgram : "none"}
                 onChange={v => {
@@ -1645,7 +1648,14 @@ function PaymentCalculator({ isInternal }) {
                     </div>
                   );
                 })()}
-                <LabeledInput label="2nd Lien Rate" value={s2Rate} onChange={setS2Rate} suffix="%" step="0.125" />
+                <LabeledInput label="2nd Lien Rate" value={s2Rate} onChange={setS2Rate} suffix="%" step="0.125"
+                  onBlur={v => {
+                    const n = parseFloat(v);
+                    if (!v || isNaN(n)) return;
+                    const currentDecimals = (v.split(".")[1] || "").length;
+                    setS2Rate(n.toFixed(Math.max(1, Math.min(3, currentDecimals))));
+                  }}
+                />
                 {/* Summary */}
                 <div style={{ marginTop: 8, padding: "10px 14px", background: c.bgAlt || "#faf9f7", borderRadius: 8, border: `1px solid ${c.border}` }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
@@ -2079,7 +2089,8 @@ function PaymentCalculator({ isInternal }) {
           const hp = parseFloat(homePrice) || 0;
           const basis = homesteadExemption ? hp * 0.70 : hp;
           const rate = parseFloat(propertyTaxRate) || 0;
-          const monthly = basis > 0 ? basis * rate / 100 / 12 : 0;
+          const monthlyRaw = basis > 0 ? basis * rate / 100 / 12 : 0;
+          const monthly = monthlyRaw > 0 ? Math.round(monthlyRaw / 50) * 50 : 0;
           const inputStyle = { flex: 1, border: "none", outline: "none", background: "transparent", padding: "10px 12px", fontSize: 15, fontWeight: 500, color: c.text || c.navy, fontFamily: font, width: "100%", minWidth: 0 };
           const wrapStyle = { display: "flex", alignItems: "center", background: c.bg, border: `1.5px solid ${c.border}`, borderRadius: 8, overflow: "hidden", flex: 1 };
           return (
@@ -2134,8 +2145,8 @@ function PaymentCalculator({ isInternal }) {
             {(() => {
               const hp = parseFloat(homePrice) || 0;
               const rate = parseFloat(propertyTaxRate) || 0;
-              const withExemption = hp > 0 && rate > 0 ? fmt2(hp * 0.70 * rate / 100 / 12) : null;
-              const withoutExemption = hp > 0 && rate > 0 ? fmt2(hp * rate / 100 / 12) : null;
+              const withExemption    = hp > 0 && rate > 0 ? fmt2(Math.round(hp * 0.70 * rate / 100 / 12 / 50) * 50) : null;
+              const withoutExemption = hp > 0 && rate > 0 ? fmt2(Math.round(hp * rate / 100 / 12 / 50) * 50) : null;
               return (
                 <>
                   Homestead exemption applied; tax basis reduced to approx. <strong style={{ color: c.text || c.navy }}>70% of value ({fmt(hp)} × 70% = {fmt(Math.round(hp * 0.70))})</strong>. Actual exemption varies by county.
@@ -2154,7 +2165,8 @@ function PaymentCalculator({ isInternal }) {
         {(() => {
           const hp = parseFloat(homePrice) || 0;
           const rate = Math.max(0, parseFloat(homeInsuranceRate) || 0);
-          const monthly = hp > 0 ? hp * rate / 100 / 12 : 0;
+          const monthlyRaw = hp > 0 ? hp * rate / 100 / 12 : 0;
+          const monthly = monthlyRaw > 0 ? Math.round(monthlyRaw / 50) * 50 : 0;
           const inputStyle = { flex: 1, border: "none", outline: "none", background: "transparent", padding: "10px 12px", fontSize: 15, fontWeight: 500, color: c.text || c.navy, fontFamily: font, width: "100%", minWidth: 0 };
           const wrapStyle = { display: "flex", alignItems: "center", background: c.bg, border: `1.5px solid ${c.border}`, borderRadius: 8, overflow: "hidden", flex: 1 };
           return (
