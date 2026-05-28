@@ -1535,7 +1535,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
 
           {/* HOA */}
           {fees.isPurchase && (
-            <SectionCard title="Homeowners Association (HOA)" accent={COLORS.blue}>
+            <SectionCard title="HOMEOWNERS ASSOCIATION (HOA)" accent={COLORS.blue}>
               <LabeledInput label="HOA Transfer Fee"   prefix="$" value={hoaTransferFee} onChange={setHoaTransferFee} useCommas />
               <LabeledInput label="HOA Dues (monthly)" prefix="$" value={hoaDues} onChange={setHoaDues} useCommas />
               {fees.hoaMonthly > 0 && (

@@ -566,6 +566,9 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
     const r = JSON.parse(localStorage.getItem("mtk_roster") || "[]");
     return r.some(function(m) { return m.id === user.id && m.active; });
   })();
+  // When an LO/admin simulates "Client View" via the role switcher, treat them as
+  // non-internal for all UI visibility checks so the preview matches what clients see.
+  const effectiveIsInternal = isInternal && userRole !== "client";
   const currentUserRole = user && user.role ? user.role : "lo";
   const isAdmin = currentUserRole === "admin";
   // Admin-only features (second row, purpose filter bypass) only active when admin is in Admin View
@@ -1034,7 +1037,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
             </div>
         </div>
         {/* ── LO Contact Strip (borrower/client view only) ── */}
-        {!isInternal && (loName || loPhone || loEmail || loWebsite) && (
+        {!effectiveIsInternal && (loName || loPhone || loEmail || loWebsite) && (
           <div style={{
             display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap",
             marginTop: 10, paddingTop: 10,
@@ -1114,7 +1117,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
         )}
 
         {/* ── Contact Lender panel (borrower only) ── */}
-        {showLenderPanel && !isInternal && (
+        {showLenderPanel && !effectiveIsInternal && (
           <div
             onClick={() => setShowLenderPanel(false)}
             style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
@@ -1257,7 +1260,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                 <React.Fragment>
                   {!navCollapsed && <div style={{ height: 6 }} />}
                   {/* ── Contacts + Scenarios shortcuts ── */}
-                  {!isInternal
+                  {!effectiveIsInternal
                     ? navBtn(false, () => { setShowLenderPanel(true); setSidebarOpen(false); }, "📞", "Contact Lender")
                     : (onOpenContact && navBtn(false, () => { onOpenContact(null); setSidebarOpen(false); }, <span style={{filter:"grayscale(1) invert(1) opacity(0.7)"}}>👥</span>, "Contacts"))
                   }
@@ -1364,8 +1367,8 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                   isAdmin={isAdmin}
                 />
                 {!navCollapsed && (
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.75)", fontFamily: window.font, marginLeft: 4, userSelect: "none" }}>
-                    Profile
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.65)", fontFamily: window.font, marginLeft: 4, userSelect: "none" }}>
+                    {({ admin: "Admin View", lo: "LO View", client: "Client View", realtor: "Realtor View", builder: "Builder View" })[userRole] || "LO View"}
                   </span>
                 )}
               </div>
@@ -1489,7 +1492,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
         ) : activeModule === "contact_tab" && isInternal && activeScenario && activeScenario.contact_id
           ? <ScenarioContactPanel key={activeScenario.contact_id} contactId={activeScenario.contact_id} scenarioId={activeScenario.id} scenario={activeScenario} darkMode={darkMode} colors={colors} onOpenContact={onOpenContact} />
           : <div key={activeModule} className="mtk-fade-in" style={syncReadOnly ? { pointerEvents: "none", userSelect: "none", opacity: 0.93 } : {}}>
-              <ActiveComponent isInternal={isInternal} user={user} scenario={activeScenario} contact={headerContact} />
+              <ActiveComponent isInternal={effectiveIsInternal} user={user} scenario={activeScenario} contact={headerContact} />
             </div>
         }
       </div>

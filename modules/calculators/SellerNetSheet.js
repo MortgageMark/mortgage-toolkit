@@ -1,5 +1,5 @@
 // modules/calculators/SellerNetSheet.js
-const { useState, useEffect, useMemo } = React;
+const { useState, useEffect, useMemo, useRef } = React;
 const useLocalStorage = window.useLocalStorage;
 const SectionCard = window.SectionCard;
 const Select = window.Select;
@@ -143,6 +143,9 @@ function SellerNetSheet({ isInternal = false, user = null }) {
   const [otherLabel3, setOtherLabel3] = useLocalStorage("sns_oth_lbl3", "");
   const [otherAmt3,   setOtherAmt3]   = useLocalStorage("sns_oth_amt3", "");
 
+  // Seller name (for PDF header)
+  const [sellerName, setSellerName] = useLocalStorage("sns_seller_name", "");
+
   // Reset seller-pays-title to state default when state changes
   useEffect(() => {
     const stF = getSNSFees(selectedState);
@@ -276,6 +279,32 @@ function SellerNetSheet({ isInternal = false, user = null }) {
     </div>
   );
 
+  // ── PDF export ───────────────────────────────────────────────────────────
+  const rightColRef = useRef(null);
+
+  const downloadPDF = () => {
+    const el = rightColRef.current;
+    if (!el) return;
+    window.html2canvas(el, { scale: 2, useCORS: true, backgroundColor: "#ffffff", logging: false }).then(canvas => {
+      const imgData = canvas.toDataURL("image/png");
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "letter" });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const margin = 30;
+      const maxW = pageW - margin * 2;
+      const maxH = pageH - margin * 2;
+      const ratio = canvas.width / canvas.height;
+      let imgW = maxW;
+      let imgH = imgW / ratio;
+      if (imgH > maxH) { imgH = maxH; imgW = imgH * ratio; }
+      const cx = margin + (maxW - imgW) / 2;
+      pdf.addImage(imgData, "PNG", cx, margin, imgW, imgH);
+      const safeName = sellerName ? sellerName.replace(/[^a-zA-Z0-9 ]/g, "").replace(/\s+/g, "_") : "Net_Sheet";
+      pdf.save(`Seller_Net_Sheet_${safeName}.pdf`);
+    });
+  };
+
   // ── Render ───────────────────────────────────────────────────────────────
   return (
     <div>
@@ -286,6 +315,7 @@ function SellerNetSheet({ isInternal = false, user = null }) {
 
           {/* SALE DETAILS */}
           <SectionCard title="SALE DETAILS" accent={COLORS.navy}>
+            <LabeledInput label="Seller Name" value={sellerName} onChange={setSellerName} />
             <Select label="State" value={selectedState} onChange={setSelectedState}
               options={STATE_LIST.map(s => ({ value: s.value, label: `${s.label} (${s.value})` }))} />
             <LabeledInput label="Sale Price" prefix="$" value={salePrice} onChange={setSalePrice} useCommas />
@@ -309,7 +339,7 @@ function SellerNetSheet({ isInternal = false, user = null }) {
             <LabeledInput label="1st Mortgage Payoff" prefix="$" value={mort1} onChange={setMort1} useCommas />
             <LabeledInput label="2nd Mortgage Payoff" prefix="$" value={mort2} onChange={setMort2} useCommas />
             <div style={{ margin: "2px 0 10px", padding: "9px 12px", borderRadius: 7, background: "#FFF8E7", border: "1px solid #F0D080", borderLeft: "3px solid #E6A817", fontSize: 11, color: "#7A5800", fontFamily: font, lineHeight: 1.6 }}>
-              <span style={{ fontWeight: 700 }}>Your payoff ≠ your balance.</span> Your payoff includes your remaining principal + accrued daily interest through the closing date + any lender payoff processing fees (~$25–$75). Log in to your servicer's portal or call them to request an official payoff quote — it's typically valid for 30 days.
+              <span style={{ fontWeight: 700 }}>Your payoff is not the same as your balance.</span> Your payoff includes your remaining principal + accrued daily interest through the closing date + lender payoff processing fees ($150–$175). If you don't have the exact number, add $1,500–$2,000 to your current balance as a buffer — it's better to overestimate here than come up short at closing.
             </div>
             <LabeledInput label="Current Escrow Balance (add-back)" prefix="$" value={escrowBal} onChange={setEscrowBal} useCommas
               hint="Returned to seller at closing" />
@@ -319,10 +349,24 @@ function SellerNetSheet({ isInternal = false, user = null }) {
           <SectionCard title="COMMISSION & CREDITS" accent={COLORS.gold || "#C9A84C"}>
             <LabeledInput label="Realtor Commission(s)" value={commissionPct} onChange={setCommissionPct} suffix="%"
               hint={salePrice ? fmt(Math.round((parseFloat(salePrice) || 0) * (parseFloat(commissionPct) || 0) / 100)) : ""} />
-            <LabeledInput label="Realtor Credit Paid to Seller" prefix="$" value={realtorCredit} onChange={setRealtorCredit} useCommas
-              hint="Add-back — returned to seller" />
-            <LabeledInput label="Seller Concessions Paid to Buyer" prefix="$" value={sellerConc} onChange={setSellerConc} useCommas />
+            <LabeledInput label="Seller Concessions" prefix="$" value={sellerConc} onChange={setSellerConc} useCommas />
+            <div style={{ fontSize: 11, color: COLORS.grayLight, marginTop: -8, marginBottom: 10, fontFamily: font, fontStyle: "italic", paddingLeft: 2 }}>
+              Money paid to the buyer at closing
+            </div>
             <LabeledInput label="Repair Costs" prefix="$" value={repairCredits} onChange={setRepairCredits} useCommas />
+            {(isInternal || (user && user.role === "realtor") || !!realtorCredit) && (
+              <LabeledInput label="Realtor Credit (paid to Seller)" prefix="$" value={realtorCredit} onChange={setRealtorCredit} useCommas />
+            )}
+            {!!realtorCredit && (
+              <div style={{ fontSize: 11, color: "#2A9150", marginTop: -8, marginBottom: 4, fontFamily: font, fontStyle: "italic", paddingLeft: 2 }}>
+                ↑ Add-back — this amount is returned to the seller at closing
+              </div>
+            )}
+            {(isInternal || (user && user.role === "realtor")) && (
+              <div style={{ fontSize: 11, color: "#5A6FA8", marginBottom: 10, fontFamily: font, paddingLeft: 2 }}>
+                🔒 Realtor Credit is hidden from the client until a dollar amount is entered.
+              </div>
+            )}
           </SectionCard>
 
           {/* PROPERTY & HOA */}
@@ -408,6 +452,25 @@ function SellerNetSheet({ isInternal = false, user = null }) {
 
         {/* ── RIGHT COLUMN ── */}
         <div>
+
+          {/* PDF capture zone */}
+          <div ref={rightColRef} style={{ background: "#fff", borderRadius: 10, padding: 4 }}>
+
+          {/* Prepared-for header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12, padding: "10px 14px", borderRadius: 8, background: "#F5F8FA", border: `1px solid ${COLORS.border}`, fontFamily: font }}>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", color: COLORS.grayLight, textTransform: "uppercase" }}>Prepared For</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.navy, marginTop: 2 }}>
+                {sellerName ? sellerName : <span style={{ color: COLORS.grayLight, fontStyle: "italic", fontWeight: 400, fontSize: 12 }}>Add seller name in Sale Details →</span>}
+              </div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", color: COLORS.grayLight, textTransform: "uppercase" }}>Date</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.navy, marginTop: 2 }}>
+                {new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+              </div>
+            </div>
+          </div>
 
           {/* Net Proceeds Banner */}
           <div style={{ background: `linear-gradient(135deg, ${COLORS.navy}, ${COLORS.navyLight || "#1E3A5F"})`, borderRadius: 12, padding: 20, color: "#fff", marginBottom: 16, textAlign: "center" }}>
@@ -555,12 +618,19 @@ function SellerNetSheet({ isInternal = false, user = null }) {
             </div>
           </SectionCard>
 
-          {/* Reset Fees button */}
-          <div style={{ marginTop: 8, textAlign: "right" }}>
+          </div>{/* end PDF capture zone */}
+
+          {/* Action buttons */}
+          <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <button
               onClick={() => { setOvSettlement(""); setOvDocPrep(""); setOvCourier(""); setOvTaxCert(""); setOvRecording(""); setOvTransfer(""); setOvAttorney(""); setOvGuaranty(""); }}
               style={{ padding: "7px 16px", background: "#fff", color: COLORS.navy, border: `1.5px solid ${COLORS.border}`, borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: font }}>
               ↺ Reset Fees to Defaults
+            </button>
+            <button
+              onClick={downloadPDF}
+              style={{ padding: "7px 16px", background: COLORS.navy, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: font, display: "flex", alignItems: "center", gap: 6 }}>
+              🖨 Print to PDF
             </button>
           </div>
 

@@ -165,7 +165,7 @@ function addCommasLocal(v) {
 }
 function stripCommasLocal(v) { return String(v).replace(/,/g, ""); }
 
-function PaymentCalculator() {
+function PaymentCalculator({ isInternal }) {
   const c = useThemeColors();
   const [loanAmount, setLoanAmount] = useLocalStorage("pc_la", "350000");
   const [homePrice, setHomePrice] = useLocalStorage("pc_hp", "437500");
@@ -1271,9 +1271,7 @@ function PaymentCalculator() {
               </div>
             )}
             {/* ── Down Payment Assistance (DPA) — internal only ── */}
-            {(isConvType || loanProgram === "fha") && loanProgram !== "jumbo" && loanType !== "heloc" && occupancy === "primary" && (() => {
-              const _u = (() => { try { return JSON.parse(localStorage.getItem("mtk_app_user") || "null"); } catch { return null; } })();
-              if (!_u?.isInternal) return null;
+            {(isConvType || loanProgram === "fha") && loanProgram !== "jumbo" && loanType !== "heloc" && occupancy === "primary" && isInternal && (() => {
               const dpaOptions = (window.DPA_PROGRAMS || []).filter(p => p.dpa || p.id === "none");
               const activeDpa = (window.DPA_PROGRAMS || []).find(p => p.id === dpaProgram) || { dpa: false };
               const dpaAmt = parseFloat(dpaAmount) || 0;
@@ -1770,8 +1768,7 @@ function PaymentCalculator() {
 
           {/* ── MORTGAGE INSURANCE ── */}
           {showMISection && (() => {
-            const _mu = (() => { try { const u = localStorage.getItem("mtk_app_user"); return u ? JSON.parse(u) : null; } catch { return null; } })();
-            const _miInt = _mu?.isInternal === true;
+            const _miInt = !!isInternal;
             return (
             <div style={{ marginTop: 0 }}>
               {/* Borrower-facing MI summary */}
