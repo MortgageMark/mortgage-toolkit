@@ -10,6 +10,7 @@ const DonutChart = window.DonutChart;
 const COLORS = window.COLORS;
 const fmt = window.fmt;
 const font = window.font;
+const InfoTip = window.InfoTip;
 
 function ClosingCostEstimator() {
   const c = useThemeColors();
@@ -112,13 +113,13 @@ function ClosingCostEstimator() {
     <div>
       <SectionCard title="Closing Cost Estimator" subtitle="TRID-style itemized breakdown">
         <div className="mtk-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <LabeledInput label="Purchase Price" value={purchPrice} onChange={setPurchPrice} prefix="$" useCommas />
-          <LabeledInput label="Loan Amount" value={loanAmt} onChange={setLoanAmt} prefix="$" useCommas />
-          <LabeledInput label="Interest Rate" value={rate} onChange={setRate} suffix="%" step="0.125" />
-          <LabeledInput label="Property Tax Rate" value={propTaxRate} onChange={setPropTaxRate} suffix="%" step="0.1" />
-          <LabeledInput label="Annual Home Insurance" value={homeIns} onChange={setHomeIns} prefix="$" useCommas />
+          <LabeledInput label="Purchase Price" value={purchPrice} onChange={setPurchPrice} prefix="$" useCommas infoTip="The contract sales price. All percentage-based closing costs — title insurance, transfer taxes — are calculated from this number. Use the full purchase price, not the loan amount." />
+          <LabeledInput label="Loan Amount" value={loanAmt} onChange={setLoanAmt} prefix="$" useCommas infoTip="The amount you're borrowing. Lender fees, the lender's title policy, and MIP/VA fees are based on the loan amount, not the purchase price." />
+          <LabeledInput label="Interest Rate" value={rate} onChange={setRate} suffix="%" step="0.125" infoTip="Used to calculate the prepaid interest (per diem) owed at closing. You pay interest from the closing date through the end of the month — the fewer days remaining in the month, the less you pay at closing." />
+          <LabeledInput label="Property Tax Rate" value={propTaxRate} onChange={setPropTaxRate} suffix="%" step="0.1" infoTip="Used to estimate your initial escrow deposit. Lenders typically require 2-3 months of property taxes upfront to fund your escrow account at closing." />
+          <LabeledInput label="Annual Home Insurance" value={homeIns} onChange={setHomeIns} prefix="$" useCommas infoTip="Your annual insurance premium. At closing, the lender typically requires the first year paid in full plus 2-3 months into escrow. Get an insurance quote before running this estimate." />
           <div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: c.textSecondary || COLORS.gray, marginBottom: 4, fontFamily: font }}>State</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: c.textSecondary || COLORS.gray, marginBottom: 4, fontFamily: font }}>State</div>
             <Select value={state} onChange={setState} options={[
               { value: "TX", label: "Texas" }, { value: "CA", label: "California" }, { value: "FL", label: "Florida" },
               { value: "NY", label: "New York" }, { value: "IL", label: "Illinois" }, { value: "OTHER", label: "Other" },

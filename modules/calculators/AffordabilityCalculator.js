@@ -12,6 +12,7 @@ const Select = window.Select;
 const DonutChart = window.DonutChart;
 const COLORS = window.COLORS;
 const font = window.font;
+const InfoTip = window.InfoTip;
 
 function AffordabilityCalculator() {
   const c = useThemeColors();
@@ -67,20 +68,20 @@ function AffordabilityCalculator() {
       </div>
       <div className="mtk-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <SectionCard title="INCOME & DEBTS" accent={c.green || COLORS.green}>
-          <LabeledInput label="Annual Income" prefix="$" value={annualIncome} onChange={setAnnualIncome} useCommas />
+          <LabeledInput label="Annual Income" prefix="$" value={annualIncome} onChange={setAnnualIncome} useCommas infoTip="Your gross (pre-tax) income. This is the foundation of affordability — lenders use your gross monthly income to calculate your debt-to-income ratio (DTI). Include all qualifying income sources." />
           <LabeledInput label="Co-Borrower Annual Income" prefix="$" value={coIncome} onChange={setCoIncome} useCommas />
-          <LabeledInput label="Monthly Debt Payments" prefix="$" value={monthlyDebts} onChange={setMonthlyDebts} useCommas info="Car, student loans, credit card minimums, etc." />
+          <LabeledInput label="Monthly Debt Payments" prefix="$" value={monthlyDebts} onChange={setMonthlyDebts} useCommas info="Car, student loans, credit card minimums, etc." infoTip="All recurring minimum monthly debt payments that appear on your credit report — car loans, student loans, credit card minimums, personal loans. Utilities, subscriptions, and insurance are NOT counted." />
         </SectionCard>
         <SectionCard title="LOAN PARAMETERS" accent={c.blue || COLORS.blue}>
-          <LabeledInput label="Interest Rate" value={rate} onChange={setRate} suffix="%" />
+          <LabeledInput label="Interest Rate" value={rate} onChange={setRate} suffix="%" infoTip="The estimated mortgage rate used to calculate your maximum payment. Even small changes in rate significantly affect how much home you can afford. A 1% rate increase can reduce buying power by roughly 10%." />
           <Select label="Loan Term" value={term} onChange={setTerm} options={[{ value: "30", label: "30-Year" }, { value: "20", label: "20-Year" }, { value: "15", label: "15-Year" }]} />
-          <LabeledInput label="Down Payment" value={downPct} onChange={setDownPct} suffix="%" />
-          <LabeledInput label="Property Tax Rate" value={taxRate} onChange={setTaxRate} suffix="% / yr" />
-          <LabeledInput label="Homeowner's Insurance" value={insRate} onChange={setInsRate} suffix="% / yr" />
+          <LabeledInput label="Down Payment" value={downPct} onChange={setDownPct} suffix="%" infoTip="The total cash you have available for a down payment. Remember to set aside money for closing costs (typically 2-4% of the loan amount) — don't put all your savings toward the down payment." />
+          <LabeledInput label="Property Tax Rate" value={taxRate} onChange={setTaxRate} suffix="% / yr" infoTip="Annual property taxes as a percentage of home value. This is included in your monthly payment calculation as part of PITI. Texas rates typically range from 1.5-2.5%." />
+          <LabeledInput label="Homeowner's Insurance" value={insRate} onChange={setInsRate} suffix="% / yr" infoTip="Annual homeowners insurance as a percentage of home value. Used to estimate the insurance portion of your monthly PITI payment. Typically 0.5-1.0% annually." />
         </SectionCard>
         <SectionCard title="DTI LIMITS" accent={c.gold || COLORS.gold}>
           <LabeledInput label="Max Front-End DTI" value={frontDTI} onChange={setFrontDTI} suffix="%" info="Housing payment / gross income" />
-          <LabeledInput label="Max Back-End DTI" value={backDTI} onChange={setBackDTI} suffix="%" info="(Housing + debts) / gross income" />
+          <LabeledInput label="Max Back-End DTI" value={backDTI} onChange={setBackDTI} suffix="%" info="(Housing + debts) / gross income" infoTip="The maximum back-end DTI ratio you want to stay within. 43% is a common conventional loan limit, 45% with strong credit, up to 50% for FHA with compensating factors. A lower target gives you more breathing room in your budget." />
           <div style={{ padding: 10, borderRadius: 8, background: calc.limitedBy === "back" ? (c.redLight || COLORS.redLight) : (c.blueLight || COLORS.blueLight), marginTop: 8 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: calc.limitedBy === "back" ? (c.red || COLORS.red) : (c.blue || COLORS.blue), fontFamily: font }}>
               {calc.limitedBy === "back" ? "⚠ Limited by back-end DTI (debts)" : "ℹ Limited by front-end DTI (housing)"}

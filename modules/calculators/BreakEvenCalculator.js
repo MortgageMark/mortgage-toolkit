@@ -11,6 +11,7 @@ const fmt2 = window.fmt2;
 const SectionCard = window.SectionCard;
 const LabeledInput = window.LabeledInput;
 const MetricCard = window.MetricCard;
+const InfoTip = window.InfoTip;
 
 function BreakEvenCalculator() {
   const [currentPayment, setCurrentPayment] = useLocalStorage("be_cp", "2450");
@@ -43,14 +44,14 @@ function BreakEvenCalculator() {
     <div>
       <div className="mtk-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr", gap: 16 }}>
         <SectionCard title="INPUTS" accent={COLORS.navy}>
-          <LabeledInput label="Current Monthly P&I" prefix="$" value={currentPayment} onChange={setCurrentPayment} useCommas />
+          <LabeledInput label="Current Monthly P&I" prefix="$" value={currentPayment} onChange={setCurrentPayment} useCommas infoTip="Your current principal and interest payment (P&I only — not including taxes and insurance). This is your baseline for calculating monthly savings." />
           <LabeledInput label="New Monthly P&I" prefix="$" value={newPayment} onChange={setNewPayment} useCommas />
-          <LabeledInput label="Total Closing Costs" prefix="$" value={closingCosts} onChange={setClosingCosts} useCommas />
+          <LabeledInput label="Total Closing Costs" prefix="$" value={closingCosts} onChange={setClosingCosts} useCommas infoTip="The total cost to complete the refinance — lender fees, title fees, appraisal, etc. Typically 2-4% of the loan amount. Divide this by your monthly savings to find the break-even point in months." />
           <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 14, marginTop: 8 }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.gray, marginBottom: 8, fontFamily: font }}>FOR TRUE BREAK-EVEN (OPTIONAL)</div>
-            <LabeledInput label="Loan Balance" prefix="$" value={loanBalance} onChange={setLoanBalance} useCommas />
-            <LabeledInput label="Current Rate" value={currentRate} onChange={setCurrentRate} suffix="%" />
-            <LabeledInput label="New Rate" value={newRate} onChange={setNewRate} suffix="%" />
+            <LabeledInput label="Loan Balance" prefix="$" value={loanBalance} onChange={setLoanBalance} useCommas infoTip="Your current loan payoff amount — how much you still owe. Check your most recent mortgage statement or call your servicer for an exact payoff figure." />
+            <LabeledInput label="Current Rate" value={currentRate} onChange={setCurrentRate} suffix="%" infoTip="Your existing mortgage interest rate. This is what you're trying to beat with a refinance. Even reducing your rate by 0.5% can save tens of thousands in interest over the remaining loan life." />
+            <LabeledInput label="New Rate" value={newRate} onChange={setNewRate} suffix="%" infoTip="The rate you'd get on the refinanced loan. Closing costs of a refinance are only worth it if you'll stay in the home long enough to recoup them through the monthly savings." />
           </div>
         </SectionCard>
         <div>

@@ -1,37 +1,71 @@
 // modules/screens/LOSelector.js
 const { useState, useEffect } = React;
-const useLocalStorage = window.useLocalStorage;
-const useThemeColors = window.useThemeColors;
+const useLocalStorage      = window.useLocalStorage;
+const useThemeColors       = window.useThemeColors;
 const propagateLOToPreQual = window.propagateLOToPreQual;
+const supabase             = window._supabaseClient;
+
+// Map a Supabase profile row to the shape propagateLOToPreQual expects
+function profileToMember(p) {
+  return {
+    id:          p.id,
+    name:        p.display_name || p.email || "",
+    nmls:        p.nmls         || "",
+    phone:       p.phone        || "",
+    cell:        p.cell_phone   || "",
+    fax:         p.fax          || "",
+    email:       p.email        || "",
+    email_display: p.email_display || p.email || "",
+    title:       p.title        || "",
+    company:     p.company      || "",
+    companyNMLS: p.company_nmls || "",
+    branchNmls:  p.branch_nmls  || "",
+    website:     p.website      || "",
+    address:     p.address      || "",
+    city:        p.city         || "",
+    state:       p.state        || "",
+    zip:         p.zip          || "",
+  };
+}
 
 function LOSelector() {
-  const c = useThemeColors();
+  const c    = useThemeColors();
   const font = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-  const [roster] = useLocalStorage("roster", []);
+
+  const [members,    setMembers]    = useState([]);
   const [selectedLO, setSelectedLO] = useLocalStorage("lo_selected", "");
-  const eligibleLOs = roster.filter(function(m) {
-    return m.active && (m.role === "admin" || m.role === "lo" || m.role === "internal");
-  });
 
-  // Re-propagate LO contact fields on mount so they're always populated from
-  // the roster — even after restoreCalculatorData clears pq_ fields on scenario entry.
+  // Fetch LO-eligible profiles from Supabase on mount
   useEffect(function() {
-    if (!selectedLO || !roster.length) return;
-    const member = roster.find(function(m) { return m.id === selectedLO; });
-    if (member) propagateLOToPreQual(member);
-  }, [selectedLO, roster]);
+    if (!supabase) return;
+    supabase
+      .from("profiles")
+      .select("id, display_name, email, email_display, nmls, branch_nmls, company_nmls, phone, cell_phone, title, company, website, address, city, state, zip")
+      .in("role", ["admin", "super_admin", "branch_admin", "internal"])
+      .order("display_name", { ascending: true })
+      .then(function(res) {
+        if (!res.error && res.data) {
+          setMembers(res.data.map(profileToMember));
+        }
+      });
+  }, []);
 
-  const handleChange = function(e) {
+  // Re-propagate on mount so LO fields are always populated after scenario restore
+  useEffect(function() {
+    if (!selectedLO || members.length === 0) return;
+    const member = members.find(function(m) { return m.id === selectedLO; });
+    if (member) propagateLOToPreQual(member);
+  }, [selectedLO, members]);
+
+  function handleChange(e) {
     const memberId = e.target.value;
-    // Write to localStorage immediately so mtk_propagated doesn't revert the selection
     try { localStorage.setItem("mtk_lo_selected", JSON.stringify(memberId)); } catch {}
     setSelectedLO(memberId);
     if (!memberId) return;
-    const member = roster.find(function(m) { return m.id === memberId; });
+    const member = members.find(function(m) { return m.id === memberId; });
     if (member) propagateLOToPreQual(member);
-    // Persist LO selection to Supabase immediately
     window.dispatchEvent(new Event("mtk_save_scenario"));
-  };
+  }
 
   return React.createElement("div", {
     style: {
@@ -43,12 +77,12 @@ function LOSelector() {
       display: "flex",
       alignItems: "center",
       gap: 12,
-      flexWrap: "wrap"
+      flexWrap: "wrap",
     }
   },
     React.createElement("span", {
       style: { fontSize: 12, fontWeight: 700, color: c.navy, fontFamily: font, textTransform: "uppercase", letterSpacing: "0.06em" }
-    }, "\uD83D\uDC64 LO of Record:"),
+    }, "LO of Record:"),
     React.createElement("select", {
       value: selectedLO,
       onChange: handleChange,
@@ -62,16 +96,16 @@ function LOSelector() {
         color: c.text || c.navy,
         background: c.white,
         cursor: "pointer",
-        minWidth: 200
+        minWidth: 200,
       }
     },
       React.createElement("option", { value: "" }, "-- Select LO --"),
-      eligibleLOs.map(function(m) {
+      members.map(function(m) {
         return React.createElement("option", { key: m.id, value: m.id },
           m.name + (m.nmls ? " (NMLS #" + m.nmls + ")" : "")
         );
       })
-    ),
+    )
   );
 }
 

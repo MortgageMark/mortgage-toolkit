@@ -30,6 +30,7 @@ const getHolidayName = window.getHolidayName;
 const useWarnings         = window.useWarnings;
 const WarningBanner       = window.WarningBanner;
 const fetchWarningRules   = window.fetchWarningRules;
+const InfoTip = window.InfoTip;
 
 const PRESET_TERMS_PC = ["30", "25", "20", "15", "10"];
 
@@ -148,7 +149,7 @@ function EquityProjectionChart({ timeline, milestones }) {
           milestones.yr30 && { label: "Value at Payoff", val: fmt(Math.round(milestones.yr30.homeValue)), color: c.navy },
         ].filter(Boolean).map((m, i) => (
           <div key={i} style={{ flex: "1 1 140px", padding: "8px 10px", borderRadius: 8, border: `1px solid ${m.color}33`, background: m.color + "0d" }}>
-            <div style={{ fontSize: 10, color: c.gray, fontFamily: font }}>{m.label}</div>
+            <div style={{ fontSize: 12, color: c.gray, fontFamily: font }}>{m.label}</div>
             <div style={{ fontSize: 13, fontWeight: 800, color: m.color, fontFamily: font }}>{m.val}</div>
           </div>
         ))}
@@ -264,6 +265,8 @@ function PaymentCalculator({ isInternal, user }) {
   const [fhaMipAuto, setFhaMipAuto] = useLocalStorage("pc_fha_mipauto", "true");
   const [fhaMipOverride, setFhaMipOverride] = useLocalStorage("pc_fha_mip", "0.55");
   const [upfrontMode] = useLocalStorage("pc_upfront_mode", "rolled_in");
+  const [monthlyMiOvr, setMonthlyMiOvr] = useLocalStorage("pc_monthly_mi_ovr", "");
+  const [upfrontMiOvr, setUpfrontMiOvr] = useLocalStorage("pc_upfront_mi_ovr", "");
 
   // DPA program
   const [dpaProgram, setDpaProgram] = useLocalStorage("pc_dpa_prog",  "none");
@@ -401,7 +404,7 @@ function PaymentCalculator({ isInternal, user }) {
   }, [pcState, propType, occupancy]);
 
   // Appreciation rate for equity projection
-  const [pcAppr, setPcAppr] = useLocalStorage("pc_appr", "3.5");
+  const [pcAppr, setPcAppr] = useLocalStorage("pc_appr", "3");
   const apprStateInitRef = React.useRef(true);
   useEffect(() => {
     if (apprStateInitRef.current) { apprStateInitRef.current = false; return; }
@@ -742,7 +745,7 @@ function PaymentCalculator({ isInternal, user }) {
 
     // ── Piggyback / 2nd Lien — P&I calc (s2On + s2LA already computed above) ──
     const s2R   = (parseFloat(s2Rate) || 0) / 100 / 12;
-    const s2N   = (parseFloat(s2Term) || 20) * 12;
+    const s2N   = (s2Term === "balloon" ? 30 : (parseFloat(s2Term) || 20)) * 12;
     const s2PI  = (s2On && s2R > 0 && s2LA > 0)
       ? Math.round(s2LA * s2R * Math.pow(1 + s2R, s2N) / (Math.pow(1 + s2R, s2N) - 1))
       : 0;
@@ -765,12 +768,20 @@ function PaymentCalculator({ isInternal, user }) {
       ? calcAPR(baseLA, annualRate, termYrs, aprFees)
       : annualRate;
 
+    // ── LO overrides (applied after all auto calcs) ───────────────────────
+    const _monthlyMiOvr  = parseFloat(monthlyMiOvr)  || 0;
+    const _upfrontMiOvr  = parseFloat(upfrontMiOvr)  || 0;
+    const effMonthlyMI   = _monthlyMiOvr  > 0 ? _monthlyMiOvr  : monthlyMI;
+    const effUpfrontFee  = _upfrontMiOvr  > 0 ? _upfrontMiOvr  : upfrontFee;
+    const effTotal       = monthlyPI + effectiveMonthlyTax + monthlyIns + effMonthlyMI;
+
     return {
       noRate: !rate || parseFloat(rate) === 0,
-      monthlyPI, monthlyTax: effectiveMonthlyTax, monthlyIns, monthlyPMI: monthlyMI,
-      totalMonthly, totalInterest, ltv, la, baseLA, n, loanType,
-      upfrontFee, vaFundingFee, vaFeeRate, fhaUfmip, usdaUpfront,
-      fhaMipRatePct, monthlyFhaMip, monthlyUsdaFee, monthlyMI, isConvPMI,
+      monthlyPI, monthlyTax: effectiveMonthlyTax, monthlyIns, monthlyPMI: effMonthlyMI,
+      totalMonthly: effTotal, totalInterest, ltv, la, baseLA, n, loanType,
+      upfrontFee: effUpfrontFee, vaFundingFee, vaFeeRate, fhaUfmip, usdaUpfront,
+      fhaMipRatePct, monthlyFhaMip, monthlyUsdaFee, monthlyMI: effMonthlyMI, isConvPMI,
+      autoMonthlyMI: monthlyMI, autoUpfrontFee: upfrontFee,
       apr, aprFees,
       qualFico, lpmiAdjPct, singlePremRate, convSingleAmt, splitUpfrontAmt, convUpfrontPremium,
       vaExemptBool, vaDisNum, is100PctDisabledTX,
@@ -780,7 +791,7 @@ function PaymentCalculator({ isInternal, user }) {
   }, [loanAmount, homePrice, rate, term, propertyTax, homeInsurance, propertyTaxRate, homeInsuranceRate, taxMode, insMode, downPaymentPct, pmiRate, pmiAuto, pmiInfo, loanType, armFixedYears, armCap, armLifeCap, armMargin, ioPeriod, helocDrawYears, helocRepayYears, pcState, occupancy, loanProgram, purpose, vaFirstUse, vaExempt, vaServiceType, vaDisabilityPct, fhaMipAuto, fhaMipOverride,
     borrowerCount, coBorroFico, b3Fico, b4Fico, miPremiumType, dtiBackRatio, ficoScore, dpaProgram,
     fsOrigPct, fsDpPts, fsOvUw, fsDefUw, fsOvProc, fsDefProc, fsOvFlood, fsDefFlood, fsOvTaxsvc, fsDefTaxsvc, fsOvDocprep, fsDefDocprep, fsState,
-    s2Enabled, s2Rate, s2Term, s2Amt, s2Mode, upfrontMode]);
+    s2Enabled, s2Rate, s2Term, s2Amt, s2Mode, upfrontMode, monthlyMiOvr, upfrontMiOvr]);
 
   // ── Write authoritative monthly MI to a dedicated key ────────────────────
   // Must live AFTER the calc useMemo so calc is defined when the dep array runs.
@@ -810,7 +821,8 @@ function PaymentCalculator({ isInternal, user }) {
     // 2nd lien — track in parallel so total balance is correct
     const s2la = calc.s2On ? calc.s2LA : 0;
     const s2r  = calc.s2On ? (parseFloat(s2Rate) || 0) / 100 / 12 : 0;
-    const s2termYrs = calc.s2On ? (parseInt(s2Term) || 20) : 0;
+    const s2isBalloon = s2Term === "balloon";
+    const s2termYrs = calc.s2On ? (s2isBalloon ? 30 : (parseInt(s2Term) || 20)) : 0;
     const s2monthly = (s2la > 0 && s2r > 0 && s2termYrs > 0) ? pmt(s2r, s2termYrs * 12, s2la) : 0;
     let s2balance = s2la;
     const timeline = [];
@@ -825,6 +837,8 @@ function PaymentCalculator({ isInternal, user }) {
           s2balance = Math.max(0, s2balance - s2prin);
         }
       }
+      // Balloon: 2nd lien is paid off at year 15 (balloon due), remove from equity calc going forward
+      if (s2isBalloon && y + 1 >= 15) s2balance = 0;
       const homeValue = hp * Math.pow(1 + appr, y + 1);
       const totalBalance = balance + s2balance;
       const equity = homeValue - totalBalance;
@@ -881,13 +895,15 @@ function PaymentCalculator({ isInternal, user }) {
     if (s2Enabled !== "true") return [];
     const la = calc.s2LA;
     const r  = (parseFloat(s2Rate) || 0) / 100 / 12;
-    const termYrs = parseInt(s2Term) || 20;
-    if (la <= 0 || r <= 0 || termYrs <= 0) return [];
-    const monthlyPI = pmt(r, termYrs * 12, la);
+    const isBalloon = s2Term === "balloon";
+    const amortYrs  = isBalloon ? 30 : (parseInt(s2Term) || 20); // amortize over this many years
+    const displayYrs = isBalloon ? 15 : amortYrs;                // show this many years in charts
+    if (la <= 0 || r <= 0 || amortYrs <= 0) return [];
+    const monthlyPI = pmt(r, amortYrs * 12, la);
     let balance = la;
     const years = [];
     let cumulInt = 0;
-    for (let y = 0; y < termYrs; y++) {
+    for (let y = 0; y < displayYrs; y++) {
       let yPrin = 0, yInt = 0;
       for (let m = 0; m < 12 && balance > 0.005; m++) {
         const intPmt = balance * r;
@@ -898,8 +914,17 @@ function PaymentCalculator({ isInternal, user }) {
         yInt  += intPmt;
       }
       cumulInt += yInt;
-      years.push({ year: y + 1, principal: yPrin, interest: yInt, totalPayment: yPrin + yInt, endBalance: balance, totalInterest: cumulInt });
-      if (balance <= 0.005) break;
+      const isBalloonYear = isBalloon && y === displayYrs - 1;
+      years.push({
+        year: y + 1,
+        principal: yPrin,
+        interest: yInt,
+        totalPayment: yPrin + yInt,
+        endBalance: balance,
+        totalInterest: cumulInt,
+        ...(isBalloonYear ? { balloonBalance: Math.round(balance) } : {}),
+      });
+      if (!isBalloon && balance <= 0.005) break;
     }
     return years;
   }, [s2Enabled, calc.s2LA, s2Rate, s2Term]);
@@ -1060,10 +1085,10 @@ function PaymentCalculator({ isInternal, user }) {
                   <div key={d.label} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: c.bg, borderRadius: 8, border: `1px solid ${c.border}` }}>
                     <div style={{ width: 10, height: 10, borderRadius: 5, background: d.color, flexShrink: 0 }} />
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 10, color: c.gray, fontWeight: 600, fontFamily: font }}>{d.label}</div>
+                      <div style={{ fontSize: 12, color: c.gray, fontWeight: 600, fontFamily: font }}>{d.label}</div>
                       <div style={{ fontSize: 13, fontWeight: 700, color: c.text || c.navy, fontFamily: font }}>{fmt2(d.value)}</div>
                     </div>
-                    <div style={{ fontSize: 11, color: c.grayLight, fontFamily: font }}>{total > 0 ? Math.round(d.value / total * 100) : 0}%</div>
+                    <div style={{ fontSize: 12, color: c.grayLight, fontFamily: font }}>{total > 0 ? Math.round(d.value / total * 100) : 0}%</div>
                   </div>
                 ))}
               </div>
@@ -1089,10 +1114,8 @@ function PaymentCalculator({ isInternal, user }) {
               { value: "4plex", label: "4-Plex" },
               { value: "other", label: "Other" },
             ]} />
-            <div style={{ borderTop: `1px solid ${c.border}`, marginTop: 6, marginBottom: 14, paddingTop: 14 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: c.gray, fontFamily: font, marginBottom: 10 }}>Loan Program</div>
-            </div>
-            <Select label="Loan Program"
+            <div style={{ borderTop: `1px solid ${c.border}`, marginTop: 6, marginBottom: 14, paddingTop: 14 }} />
+            <Select label=""
               value={["homeready","homeposs","hfa_fannie","hfa_freddie"].includes(loanProgram) ? "conventional" : loanProgram}
               onChange={v => {
                 setLoanProgram(v);
@@ -1135,12 +1158,12 @@ function PaymentCalculator({ isInternal, user }) {
               />
             )}
             {renovationProg === "fha_203k" && (
-              <div style={{ fontSize: 10, color: c.blue, fontFamily: font, marginTop: -4, marginBottom: 4, fontStyle: "italic" }}>
+              <div style={{ fontSize: 12, color: c.blue, fontFamily: font, marginTop: -4, marginBottom: 4, fontStyle: "italic" }}>
                 ℹ️ FHA 203k uses standard FHA rates and MIP. Renovation costs are included in the loan amount.
               </div>
             )}
             {useReducedMI && (
-              <div style={{ fontSize: 10, color: c.green, fontFamily: font, marginTop: -4, marginBottom: 4, fontStyle: "italic" }}>
+              <div style={{ fontSize: 12, color: c.green, fontFamily: font, marginTop: -4, marginBottom: 4, fontStyle: "italic" }}>
                 ✓ Reduced MI coverage (25%) — {loanProgram === "homeready" ? "HomeReady" : loanProgram === "homeposs" ? "Home Possible" : "HFA"} program
               </div>
             )}
@@ -1166,7 +1189,7 @@ function PaymentCalculator({ isInternal, user }) {
                   {warnings.map((w, i) => (
                     <div key={i} style={{ background: w.bg, border: `1px solid ${w.border}`, borderRadius: 8, padding: "8px 10px", display: "flex", alignItems: "flex-start", gap: 8 }}>
                       <span style={{ fontSize: 14, lineHeight: 1 }}>{w.icon}</span>
-                      <span style={{ fontSize: 11, color: w.color, fontWeight: 600, fontFamily: font, lineHeight: 1.4 }}>
+                      <span style={{ fontSize: 12, color: w.color, fontWeight: 600, fontFamily: font, lineHeight: 1.4 }}>
                         {w.text}
                         {w.link && <> — <a href={w.link} target="_blank" rel="noopener noreferrer" style={{ color: w.color, textDecoration: "underline" }}>{w.link}</a></>}
                       </span>
@@ -1181,15 +1204,15 @@ function PaymentCalculator({ isInternal, user }) {
               <div style={{ background: c.bgAlt, border: `1px solid ${c.border}`, borderRadius: 10, padding: 12, marginBottom: 8 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: c.blue, fontFamily: font, marginBottom: 8 }}>VA FUNDING FEE</div>
                 <div style={{ marginBottom: 8 }}>
-                  <div style={{ fontSize: 11, color: c.gray, fontFamily: font, marginBottom: 4 }}>Service Type</div>
+                  <div style={{ fontSize: 12, color: c.gray, fontFamily: font, marginBottom: 4 }}>Service Type</div>
                   <div style={{ display: "flex", gap: 0, borderRadius: 8, overflow: "hidden", border: `1px solid ${c.border}` }}>
                     {[{ v: "active", l: "Active Duty / Veteran" }, { v: "reserves", l: "Reserves / Nat'l Guard" }].map(o => (
-                      <button key={o.v} onClick={() => setVaServiceType(o.v)} style={{ flex: 1, padding: "7px 4px", fontSize: 11, fontWeight: 700, fontFamily: font, border: "none", cursor: "pointer", background: vaServiceType === o.v ? c.blue : "transparent", color: vaServiceType === o.v ? "#fff" : c.gray, transition: "all 0.2s" }}>{o.l}</button>
+                      <button key={o.v} onClick={() => setVaServiceType(o.v)} style={{ flex: 1, padding: "7px 4px", fontSize: 12, fontWeight: 700, fontFamily: font, border: "none", cursor: "pointer", background: vaServiceType === o.v ? c.blue : "transparent", color: vaServiceType === o.v ? "#fff" : c.gray, transition: "all 0.2s" }}>{o.l}</button>
                     ))}
                   </div>
                 </div>
                 <div style={{ marginBottom: 8 }}>
-                  <div style={{ fontSize: 11, color: c.gray, fontFamily: font, marginBottom: 4 }}>Usage</div>
+                  <div style={{ fontSize: 12, color: c.gray, fontFamily: font, marginBottom: 4 }}>Usage</div>
                   <div style={{ display: "flex", gap: 0, borderRadius: 8, overflow: "hidden", border: `1px solid ${c.border}` }}>
                     {[{ v: "true", l: "First Use" }, { v: "false", l: "Subsequent Use" }].map(o => (
                       <button key={o.v} onClick={() => setVaFirstUse(o.v)} style={{ flex: 1, padding: "7px 0", fontSize: 12, fontWeight: 700, fontFamily: font, border: "none", cursor: "pointer", background: vaFirstUse === o.v ? c.blue : "transparent", color: vaFirstUse === o.v ? "#fff" : c.gray, transition: "all 0.2s" }}>{o.l}</button>
@@ -1215,17 +1238,17 @@ function PaymentCalculator({ isInternal, user }) {
                   ]}
                 />
                 {calc.vaExemptBool && calc.vaDisNum >= 10 && (
-                  <div style={{ fontSize: 10, color: c.green, fontFamily: font, marginTop: 4, marginBottom: 4, lineHeight: 1.4 }}>
+                  <div style={{ fontSize: 12, color: c.green, fontFamily: font, marginTop: 4, marginBottom: 4, lineHeight: 1.4 }}>
                     ✓ Funding fee automatically waived — service-connected disability (10%+)
                   </div>
                 )}
                 {calc.is100PctDisabledTX && (
-                  <div style={{ fontSize: 10, color: c.gold, fontFamily: font, marginTop: 4, marginBottom: 4, lineHeight: 1.4, background: c.bg, borderRadius: 6, padding: "5px 8px", border: `1px solid ${c.border}` }}>
+                  <div style={{ fontSize: 12, color: c.gold, fontFamily: font, marginTop: 4, marginBottom: 4, lineHeight: 1.4, background: c.bg, borderRadius: 6, padding: "5px 8px", border: `1px solid ${c.border}` }}>
                     ★ TX Tax Code §11.131 — 100% disabled veterans receive a full property tax exemption on their primary residence. Property tax set to $0 in this estimate.
                   </div>
                 )}
                 {loanProgram === "va" && pcState === "TX" && calc.vaDisNum >= 30 && (
-                  <div style={{ fontSize: 10, color: c.blue, fontFamily: font, marginTop: 4, marginBottom: 4, lineHeight: 1.4, background: c.bg, borderRadius: 6, padding: "5px 8px", border: `1px solid ${c.border}` }}>
+                  <div style={{ fontSize: 12, color: c.blue, fontFamily: font, marginTop: 4, marginBottom: 4, lineHeight: 1.4, background: c.bg, borderRadius: 6, padding: "5px 8px", border: `1px solid ${c.border}` }}>
                     ★ Texas Veterans Land Board (VLB) — Veterans with 30%+ service-connected disability may qualify for a 0.50% rate reduction. Ask about the VLB home loan program.
                   </div>
                 )}
@@ -1243,7 +1266,7 @@ function PaymentCalculator({ isInternal, user }) {
                     <span style={{ color: c.navy, fontWeight: 800 }}>{fmt(calc.la)}</span>
                   </div>
                 </div>
-                <div style={{ fontSize: 10, color: c.gray, fontFamily: font, marginTop: 6, lineHeight: 1.4 }}>
+                <div style={{ fontSize: 12, color: c.gray, fontFamily: font, marginTop: 6, lineHeight: 1.4 }}>
                   {upfrontMode === "paid_closing" ? "Funding fee paid at closing — not included in loan amount." : "Funding fee is rolled into the loan."} VA loans have <strong>no monthly MI</strong>.
                 </div>
               </div>
@@ -1273,8 +1296,8 @@ function PaymentCalculator({ isInternal, user }) {
                 </div>
               </div>
             )}
-            {/* ── Down Payment Assistance (DPA) — internal only ── */}
-            {(isConvType || loanProgram === "fha") && loanProgram !== "jumbo" && loanType !== "heloc" && occupancy === "primary" && isInternal && (() => {
+            {/* ── Down Payment Assistance (DPA) — admin only ── */}
+            {(isConvType || loanProgram === "fha") && loanProgram !== "jumbo" && loanType !== "heloc" && occupancy === "primary" && isAdmin && (() => {
               const dpaOptions = (window.DPA_PROGRAMS || []).filter(p => p.dpa || p.id === "none");
               const activeDpa = (window.DPA_PROGRAMS || []).find(p => p.id === dpaProgram) || { dpa: false };
               const dpaAmt = parseFloat(dpaAmount) || 0;
@@ -1322,7 +1345,7 @@ function PaymentCalculator({ isInternal, user }) {
                                 }
                                 setDpaMode(o.v);
                               }} style={{
-                                padding: "3px 10px", fontSize: 11, fontWeight: 700, fontFamily: font,
+                                padding: "3px 10px", fontSize: 12, fontWeight: 700, fontFamily: font,
                                 border: "none", cursor: "pointer",
                                 background: dpaMode === o.v ? c.blue : "transparent",
                                 color: dpaMode === o.v ? "#fff" : c.gray,
@@ -1346,7 +1369,7 @@ function PaymentCalculator({ isInternal, user }) {
                           <LabeledInput prefix="$" value={dpaAmount} onChange={setDpaAmount} useCommas />
                         )}
                         {effectiveDollar > 0 && (
-                          <div style={{ fontSize: 11, color: c.textSecondary || c.gray, fontFamily: font, marginBottom: 6, paddingLeft: 2 }}>
+                          <div style={{ fontSize: 12, color: c.textSecondary || c.gray, fontFamily: font, marginBottom: 6, paddingLeft: 2 }}>
                             {dpaMode === "pct"
                               ? `= ${fmt(effectiveDollar)} of ${fmt(la)} loan`
                               : `${effectivePct.toFixed(3)}% of loan`}
@@ -1358,7 +1381,7 @@ function PaymentCalculator({ isInternal, user }) {
                           { value: "deferred",   label: "Deferred 2nd Lien (0% / due on sale)" },
                         ]} />
                         {effectiveDollar > 0 && (
-                          <div style={{ fontSize: 11, color: c.green, fontFamily: font, marginTop: 4, padding: "6px 8px", background: c.greenLight || "#e8f5ee", borderRadius: 6 }}>
+                          <div style={{ fontSize: 12, color: c.green, fontFamily: font, marginTop: 4, padding: "6px 8px", background: c.greenLight || "#e8f5ee", borderRadius: 6 }}>
                             {dpaType === "grant" ? `Grant: ${fmt(effectiveDollar)} covers down payment — no repayment required.` : dpaType === "forgivable" ? `Forgivable 2nd lien of ${fmt(effectiveDollar)} — forgiven over time.` : `Deferred 2nd lien of ${fmt(effectiveDollar)} — 0% interest, due on sale/refi.`}
                           </div>
                         )}
@@ -1366,7 +1389,7 @@ function PaymentCalculator({ isInternal, user }) {
                     );
                   })()}
                   {activeDpa.reducedMI && !useReducedMI && (
-                    <div style={{ fontSize: 10, color: c.green, fontFamily: font, marginTop: 6, fontStyle: "italic" }}>
+                    <div style={{ fontSize: 12, color: c.green, fontFamily: font, marginTop: 6, fontStyle: "italic" }}>
                       ✓ {activeDpa.label} uses reduced MI coverage (25%) when paired with a conventional first mortgage.
                     </div>
                   )}
@@ -1377,7 +1400,7 @@ function PaymentCalculator({ isInternal, user }) {
 
           {/* ── PROPERTY INFO ── */}
           {purpose !== "refinance" && <SectionCard title="PROPERTY INFO" accent={c.navy}>
-            {loanType !== "heloc" && purpose !== "refinance" && <LabeledInput label="Purchase Price" prefix="$" value={homePrice} onChange={(v) => { if (parseFloat(String(v).replace(/,/g, '')) > 99999999) return; setHomePrice(v); if (purpose === "purchase") syncDown(v, downPaymentPct); }} useCommas />}
+            {loanType !== "heloc" && purpose !== "refinance" && <LabeledInput label="Purchase Price" prefix="$" value={homePrice} onChange={(v) => { if (parseFloat(String(v).replace(/,/g, '')) > 99999999) return; setHomePrice(v); if (purpose === "purchase") syncDown(v, downPaymentPct); }} useCommas infoTip="The agreed-upon sale price of the home. For a refinance, use the current appraised value. This drives your loan-to-value ratio (LTV), which affects your interest rate, PMI requirement, and loan program eligibility." />}
             {loanType !== "heloc" && purpose !== "purchase" && purpose !== "refinance" && <Select label="Value Based On" value={valBasis} onChange={setValBasis} options={[
               { value: "", label: "— Select —" },
               { value: "guess", label: "Homeowner's Estimate" },
@@ -1438,10 +1461,10 @@ function PaymentCalculator({ isInternal, user }) {
                 </span>
                 <div style={{ padding: "10px 14px", background: c.bgAlt || "#faf9f7", border: `1px solid ${c.border}`, borderRadius: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: 15, fontWeight: 500, color: c.navy, fontFamily: font }}>{fmt(calc.la)}</span>
-                  <span style={{ fontSize: 10, color: c.gray, fontFamily: font, fontStyle: "italic" }}>auto-calculated</span>
+                  <span style={{ fontSize: 12, color: c.gray, fontFamily: font, fontStyle: "italic" }}>auto-calculated</span>
                 </div>
                 {calc.upfrontFee > 0 && (
-                  <div style={{ fontSize: 10, color: c.gray, fontFamily: font, marginTop: 3 }}>
+                  <div style={{ fontSize: 12, color: c.gray, fontFamily: font, marginTop: 3 }}>
                     {upfrontMode === "paid_closing"
                       ? `${loanProgram === "va" ? "VA funding fee" : loanProgram === "fha" ? "FHA UFMIP" : loanProgram === "usda" ? "USDA guarantee fee" : "Upfront fee"} (${fmt(calc.upfrontFee)}) — paid at closing`
                       : `Base ${fmt(calc.baseLA)} + ${fmt(calc.upfrontFee)} ${loanProgram === "va" ? "VA funding fee" : loanProgram === "fha" ? "FHA UFMIP" : loanProgram === "usda" ? "USDA guarantee fee" : "financed fee"} (financed)`
@@ -1455,7 +1478,7 @@ function PaymentCalculator({ isInternal, user }) {
                   if (rpp <= 0 || la <= 0 || n <= 0) return null;
                   const per5k = Math.round(pmt(rpp, n, 5000));
                   return (
-                    <div style={{ fontSize: 11, color: c.gray, fontFamily: font, marginTop: 6 }}>
+                    <div style={{ fontSize: 12, color: c.gray, fontFamily: font, marginTop: 6 }}>
                       FYI: Every $5,000 financed ≈ <strong style={{ color: c.navy }}>${per5k}/mo</strong>
                     </div>
                   );
@@ -1478,7 +1501,7 @@ function PaymentCalculator({ isInternal, user }) {
                   {dpWarnings.map((w, i) => (
                     <div key={i} style={{ background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 8, padding: "8px 10px", display: "flex", alignItems: "flex-start", gap: 8 }}>
                       <span style={{ fontSize: 14, lineHeight: 1 }}>⚠️</span>
-                      <span style={{ fontSize: 11, color: "#d97706", fontWeight: 600, fontFamily: font, lineHeight: 1.4 }}>{w.text}</span>
+                      <span style={{ fontSize: 12, color: "#d97706", fontWeight: 600, fontFamily: font, lineHeight: 1.4 }}>{w.text}</span>
                     </div>
                   ))}
                 </div>
@@ -1517,7 +1540,7 @@ function PaymentCalculator({ isInternal, user }) {
             )}
             {loanType === "arm" && (
               <div style={{ background: c.bgAlt || c.blueLight, borderRadius: 8, padding: 12, marginTop: 4, border: `1px solid ${c.border}` }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: c.blue, marginBottom: 8, fontFamily: font }}>ARM PARAMETERS</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: c.blue, marginBottom: 8, fontFamily: font }}>ARM PARAMETERS</div>
                 <Select label="Fixed Period" value={armFixedYears} onChange={setArmFixedYears} options={[
                   { value: "3", label: "3 Years" }, { value: "5", label: "5 Years" },
                   { value: "7", label: "7 Years" }, { value: "10", label: "10 Years" },
@@ -1529,17 +1552,17 @@ function PaymentCalculator({ isInternal, user }) {
             )}
             {loanType === "io" && (
               <div style={{ background: c.bgAlt || c.blueLight, borderRadius: 8, padding: 12, marginTop: 4, border: `1px solid ${c.border}` }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: c.blue, marginBottom: 8, fontFamily: font }}>INTEREST-ONLY PERIOD</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: c.blue, marginBottom: 8, fontFamily: font }}>INTEREST-ONLY PERIOD</div>
                 <Select label="IO Period" value={ioPeriod} onChange={setIoPeriod} options={[
                   { value: "5", label: "5 Years" }, { value: "7", label: "7 Years" },
                   { value: "10", label: "10 Years" },
                 ]} />
-                <div style={{ fontSize: 11, color: c.gray, fontFamily: font, marginTop: 4 }}>After {ioPeriod} years, payments become fully amortizing for the remaining {(parseFloat(term) || 30) - (parseFloat(ioPeriod) || 10)} years.</div>
+                <div style={{ fontSize: 12, color: c.gray, fontFamily: font, marginTop: 4 }}>After {ioPeriod} years, payments become fully amortizing for the remaining {(parseFloat(term) || 30) - (parseFloat(ioPeriod) || 10)} years.</div>
               </div>
             )}
             {loanType === "heloc" && (
               <div style={{ background: c.bgAlt || c.blueLight, borderRadius: 8, padding: 12, marginTop: 4, border: `1px solid ${c.border}` }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: c.blue, marginBottom: 8, fontFamily: font }}>HELOC TERMS</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: c.blue, marginBottom: 8, fontFamily: font }}>HELOC TERMS</div>
                 <Select label="Draw Period" value={helocDrawYears} onChange={setHelocDrawYears} options={[
                   { value: "5", label: "5 Years" }, { value: "10", label: "10 Years" },
                   { value: "15", label: "15 Years" },
@@ -1548,12 +1571,12 @@ function PaymentCalculator({ isInternal, user }) {
                   { value: "10", label: "10 Years" }, { value: "15", label: "15 Years" },
                   { value: "20", label: "20 Years" },
                 ]} />
-                <div style={{ fontSize: 11, color: c.gray, fontFamily: font, marginTop: 4 }}>Interest-only during draw period, then fully amortizing during repayment.</div>
+                <div style={{ fontSize: 12, color: c.gray, fontFamily: font, marginTop: 4 }}>Interest-only during draw period, then fully amortizing during repayment.</div>
               </div>
             )}
-            <LabeledInput label="Interest Rate" value={rate} onChange={(v) => { if (!/^(\d*\.?\d*)$/.test(String(v))) return; setRate(v); }} onBlur={handleRateBlur} suffix="%" type="text" />
+            <LabeledInput label="Interest Rate" value={rate} onChange={(v) => { if (!/^(\d*\.?\d*)$/.test(String(v))) return; setRate(v); }} onBlur={handleRateBlur} suffix="%" type="text" infoTip="Your annual mortgage interest rate — not to be confused with APR, which includes fees. Even a 0.125% difference in rate can meaningfully change your monthly payment and total interest paid over the life of the loan." />
             {calc.apr > 0 && calc.apr !== (parseFloat(rate) || 0) && (
-              <div style={{ fontSize: 10, color: c.gray, fontFamily: font, marginTop: -4, marginBottom: 6, paddingLeft: 2 }}>
+              <div style={{ fontSize: 12, color: c.gray, fontFamily: font, marginTop: -4, marginBottom: 6, paddingLeft: 2 }}>
                 APR {calc.apr.toFixed((() => { const s = String(rate || "").trim(); const d = s.indexOf("."); return d === -1 ? 2 : Math.max(2, s.length - d - 1); })())}%
                 <span style={{ marginLeft: 6, fontSize: 9, opacity: 0.7 }}>(based on Fee Sheet charges)</span>
               </div>
@@ -1565,7 +1588,7 @@ function PaymentCalculator({ isInternal, user }) {
               if (r <= 0 || la <= 0 || n <= 0) return null;
               const bump = Math.round(pmt((parseFloat(rate) + 0.125) / 100 / 12, n, la) - pmt(r, n, la));
               return (
-                <div style={{ fontSize: 11, color: c.gray, fontFamily: font, marginTop: 2, paddingLeft: 2 }}>
+                <div style={{ fontSize: 12, color: c.gray, fontFamily: font, marginTop: 2, paddingLeft: 2 }}>
                   FYI: A 0.125% rate change ≈ <strong style={{ color: c.navy }}>${bump}/mo</strong> on this loan
                 </div>
               );
@@ -1586,7 +1609,7 @@ function PaymentCalculator({ isInternal, user }) {
                   const dollarAmt = hp > 0 ? Math.round(hp * (parseFloat(s2Amt) || 0) / 100) : 0;
                   if (!dollarAmt) return null;
                   return (
-                    <span style={{ fontSize: 11, fontWeight: 600, color: c.gray, fontFamily: font, background: c.border, borderRadius: 4, padding: "2px 7px", whiteSpace: "nowrap", flexShrink: 0 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: c.gray, fontFamily: font, background: c.border, borderRadius: 4, padding: "2px 7px", whiteSpace: "nowrap", flexShrink: 0 }}>
                       Paused ({fmt(dollarAmt)})
                     </span>
                   );
@@ -1600,11 +1623,17 @@ function PaymentCalculator({ isInternal, user }) {
               <div style={{ padding: 18 }}>
                 <Select label="2nd Lien Term" value={s2Term} onChange={setS2Term} options={[
                   { value: "", label: "— Select —" },
+                  { value: "balloon", label: "30/15 Balloon" },
                   { value: "30", label: "30 Years" },
                   { value: "20", label: "20 Years" },
                   { value: "15", label: "15 Years" },
                   { value: "10", label: "10 Years" },
                 ]} />
+                {s2Term === "balloon" && (
+                  <div style={{ fontSize: 12, color: c.gray, fontFamily: font, marginTop: -8, marginBottom: 12, lineHeight: 1.5 }}>
+                    Amortized over 30 yrs · Full balance due at Month 180 (Year 15)
+                  </div>
+                )}
                 {/* 2nd Lien Amount — dual % and $ fields (mirrors Down Payment) */}
                 {(() => {
                   const hp = parseFloat(homePrice) || 0;
@@ -1659,17 +1688,29 @@ function PaymentCalculator({ isInternal, user }) {
                 {/* Summary */}
                 <div style={{ marginTop: 8, padding: "10px 14px", background: c.bgAlt || "#faf9f7", borderRadius: 8, border: `1px solid ${c.border}` }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                    <span style={{ fontSize: 11, color: c.gray, fontFamily: font }}>2nd Lien Balance</span>
+                    <span style={{ fontSize: 12, color: c.gray, fontFamily: font }}>2nd Lien Balance</span>
                     <span style={{ fontSize: 13, fontWeight: 700, color: c.navy, fontFamily: font }}>{fmt(calc.s2LA)}</span>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: 11, color: c.gray, fontFamily: font }}>2nd Lien Monthly P&I</span>
+                    <span style={{ fontSize: 12, color: c.gray, fontFamily: font }}>2nd Lien Monthly P&I</span>
                     <span style={{ fontSize: 15, fontWeight: 800, color: "#f97316", fontFamily: font }}>{calc.s2PI > 0 ? fmt2(calc.s2PI) : "—"}</span>
                   </div>
+                  {s2Term === "balloon" && (() => {
+                    const bb = s2AmortYears.length > 0 ? (s2AmortYears[s2AmortYears.length - 1].balloonBalance || 0) : 0;
+                    if (bb <= 0) return null;
+                    return (
+                      <div style={{ marginTop: 6, paddingTop: 6, borderTop: `1px solid ${c.border}` }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: "#C0392B", fontFamily: font }}>⚠ Balloon Due Month 180</span>
+                          <span style={{ fontSize: 13, fontWeight: 800, color: "#C0392B", fontFamily: font }}>{fmt(bb)}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   {calc.s2PI > 0 && calc.s2LA > 0 && (
                     <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${c.border}` }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: c.gray, fontFamily: font }}>Combined 1st + 2nd P&I</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: c.gray, fontFamily: font }}>Combined 1st + 2nd P&I</span>
                         <span style={{ fontSize: 15, fontWeight: 800, color: c.navy, fontFamily: font }}>{fmt2(calc.monthlyPI + calc.s2PI)}</span>
                       </div>
                       {/* Weighted blended rate */}
@@ -1684,10 +1725,10 @@ function PaymentCalculator({ isInternal, user }) {
                         return (
                           <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${c.border}` }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                              <span style={{ fontSize: 11, fontWeight: 700, color: c.gray, fontFamily: font }}>Weighted Blended Rate</span>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: c.gray, fontFamily: font }}>Weighted Blended Rate</span>
                               <span style={{ fontSize: 14, fontWeight: 800, color: c.navy, fontFamily: font }}>{blended.toFixed(3)}%</span>
                             </div>
-                            <div style={{ fontSize: 10, color: c.gray, fontFamily: font, marginTop: 4, lineHeight: 1.55 }}>
+                            <div style={{ fontSize: 12, color: c.gray, fontFamily: font, marginTop: 4, lineHeight: 1.55 }}>
                               One effective rate across both liens — each loan's rate is weighted by its balance relative to the total. Use this to compare your piggyback structure against a single loan offered at one rate.
                             </div>
                           </div>
@@ -1697,7 +1738,7 @@ function PaymentCalculator({ isInternal, user }) {
                   )}
                 </div>
                 {calc.s2LA > 0 && (parseFloat(homePrice) || 0) > 0 && (
-                  <div style={{ marginTop: 6, fontSize: 10, color: c.gray, fontFamily: font, fontStyle: "italic" }}>
+                  <div style={{ marginTop: 6, fontSize: 12, color: c.gray, fontFamily: font, fontStyle: "italic" }}>
                     {(() => {
                       const hp = parseFloat(homePrice) || 1;
                       const firstPct = Math.round(calc.baseLA / hp * 100);
@@ -1725,6 +1766,7 @@ function PaymentCalculator({ isInternal, user }) {
               onChange={v => setFicoScore(v.replace(/[^0-9]/g, ''))}
               onBlur={() => { const n = parseInt(ficoScore); if (!isNaN(n)) setFicoScore(String(Math.min(900, Math.max(400, n)))); }}
               hint={`Bucket: ${qualifyingFico >= 760 ? "760+" : qualifyingFico >= 740 ? "740–759" : qualifyingFico >= 720 ? "720–739" : qualifyingFico >= 700 ? "700–719" : qualifyingFico >= 680 ? "680–699" : qualifyingFico >= 660 ? "660–679" : qualifyingFico >= 640 ? "640–659" : "620–639"}${pmiInfo ? " · PMI coverage: " + pmiInfo.coverage + "%" : ""}`}
+              infoTip="Your middle credit score from the three bureaus (Equifax, Experian, TransUnion). This is one of the biggest factors in determining your interest rate and PMI rate. On a joint application, lenders use the lower of the qualifying scores."
             />
             {borrowerCount !== "1" && (
               <>
@@ -1759,7 +1801,7 @@ function PaymentCalculator({ isInternal, user }) {
                   ].filter(Boolean);
                   const coBorrowerIsLower = minScore < b1;
                   return (
-                    <div style={{ fontSize: 10, padding: "4px 8px", background: c.bgAlt || c.bg, borderRadius: 4, marginTop: 2, fontFamily: font, display: "flex", justifyContent: "space-between" }}>
+                    <div style={{ fontSize: 12, padding: "4px 8px", background: c.bgAlt || c.bg, borderRadius: 4, marginTop: 2, fontFamily: font, display: "flex", justifyContent: "space-between" }}>
                       <span style={{ color: c.gray }}>Qualifying Score:</span>
                       <strong style={{ color: coBorrowerIsLower ? c.gold : c.green }}>
                         {minScore} ({lowestLabels.join("/") + " lowest"})
@@ -1770,7 +1812,7 @@ function PaymentCalculator({ isInternal, user }) {
               </>
             )}
             {borrowerCount !== "1" && (
-              <div style={{ marginTop: 8, fontSize: 10, color: c.gray, fontFamily: font, fontStyle: "italic", lineHeight: 1.5 }}>
+              <div style={{ marginTop: 8, fontSize: 12, color: c.gray, fontFamily: font, fontStyle: "italic", lineHeight: 1.5 }}>
                 ℹ️ Interest rates and MI factors are based on the lowest midscore of all borrowers.
               </div>
             )}
@@ -1801,7 +1843,7 @@ function PaymentCalculator({ isInternal, user }) {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                       <div>
                         <div style={{ fontSize: 12, fontWeight: 600, color: c.gray, fontFamily: font, textTransform: "uppercase", letterSpacing: "0.05em" }}>Monthly MIP</div>
-                        <div style={{ fontSize: 11, color: c.grayLight, fontFamily: font }}>{calc.fhaMipRatePct.toFixed(2)}% annual rate</div>
+                        <div style={{ fontSize: 12, color: c.grayLight, fontFamily: font }}>{calc.fhaMipRatePct.toFixed(2)}% annual rate</div>
                       </div>
                       <div style={{ fontSize: 24, fontWeight: 800, color: c.gold, fontFamily: font }}>{fmt2(calc.monthlyFhaMip)}/mo</div>
                     </div>
@@ -1822,7 +1864,7 @@ function PaymentCalculator({ isInternal, user }) {
                         <span style={{ color: c.navy, fontWeight: 800 }}>{fmt(calc.la)}</span>
                       </div>
                     </div>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: c.gray, fontFamily: font, marginBottom: 4 }}>Annual MIP Rate</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: c.gray, fontFamily: font, marginBottom: 4 }}>Annual MIP Rate</div>
                     <div style={{ display: "flex", gap: 0, borderRadius: 8, overflow: "hidden", border: `1px solid ${c.border}`, marginBottom: 6 }}>
                       {[{ v: "true", l: "Auto" }, { v: "false", l: "Manual" }].map(o => (
                         <button key={o.v} onClick={() => setFhaMipAuto(o.v)} style={{ flex: 1, padding: "7px 0", fontSize: 12, fontWeight: 700, fontFamily: font, border: "none", cursor: "pointer", background: fhaMipAuto === o.v ? c.blue : "transparent", color: fhaMipAuto === o.v ? "#fff" : c.gray, transition: "all 0.2s" }}>{o.l}</button>
@@ -1831,7 +1873,7 @@ function PaymentCalculator({ isInternal, user }) {
                     {fhaMipAuto !== "true" && (
                       <LabeledInput label="Annual MIP Rate" value={fhaMipOverride} onChange={setFhaMipOverride} suffix="%" hint={`${fmt2(calc.monthlyFhaMip)}/mo`} />
                     )}
-                    <div style={{ fontSize: 11, color: c.gray, fontFamily: font, marginTop: fhaMipAuto === "true" ? 0 : 4 }}>
+                    <div style={{ fontSize: 12, color: c.gray, fontFamily: font, marginTop: fhaMipAuto === "true" ? 0 : 4 }}>
                       Annual MIP: <strong style={{ color: c.navy }}>{calc.fhaMipRatePct.toFixed(2)}%</strong> = <strong style={{ color: c.navy }}>{fmt2(calc.monthlyFhaMip)}/mo</strong>
                       {fhaMipAuto === "true" && <span style={{ opacity: 0.7 }}> (auto: LTV {calc.ltv.toFixed(0)}%, {parseInt(term) || 30}yr term)</span>}
                     </div>
@@ -1842,7 +1884,7 @@ function PaymentCalculator({ isInternal, user }) {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                       <div>
                         <div style={{ fontSize: 12, fontWeight: 600, color: c.gray, fontFamily: font, textTransform: "uppercase", letterSpacing: "0.05em" }}>Monthly Annual Fee</div>
-                        <div style={{ fontSize: 11, color: c.grayLight, fontFamily: font }}>0.35% annual rate</div>
+                        <div style={{ fontSize: 12, color: c.grayLight, fontFamily: font }}>0.35% annual rate</div>
                       </div>
                       <div style={{ fontSize: 24, fontWeight: 800, color: c.gold, fontFamily: font }}>{fmt2(calc.monthlyUsdaFee)}/mo</div>
                     </div>
@@ -1857,11 +1899,14 @@ function PaymentCalculator({ isInternal, user }) {
                       <div style={{ fontSize: 24, fontWeight: 800, color: c.blue, fontFamily: font }}>{calc.noRate ? "—" : fmt2(calc.monthlyPMI)}/mo</div>
                       <div style={{ textAlign: "right" }}>
                         <div style={{ fontSize: 12, fontWeight: 600, color: c.gray, fontFamily: font, textTransform: "uppercase", letterSpacing: "0.05em" }}>Monthly PMI</div>
-                        <div style={{ fontSize: 11, color: c.grayLight, fontFamily: font }}>{calc.effPmiPct > 0 ? calc.effPmiPct.toFixed(2) : pmiRate}% annual · LTV: {calc.ltv.toFixed(1)}%</div>
+                        <div style={{ fontSize: 12, color: c.grayLight, fontFamily: font }}>{calc.effPmiPct > 0 ? calc.effPmiPct.toFixed(2) : pmiRate}% annual · LTV: {calc.ltv.toFixed(1)}%</div>
                       </div>
                     </div>
-                    <div style={{ fontSize: 12, color: c.gray, fontFamily: font, lineHeight: 1.6, background: c.bgAlt || "#f8f8f8", padding: "10px 12px", borderRadius: 8 }}>
+                    <div style={{ fontSize: 12, color: c.gray, fontFamily: font, lineHeight: 1.6, background: c.bgAlt || "#f8f8f8", padding: "10px 12px", borderRadius: 8, marginBottom: 8 }}>
                       PMI is required when your down payment is less than 20%. It's already included in your monthly payment above. <strong style={{ color: c.navy }}>Removal options:</strong> PMI automatically cancels when your scheduled balance reaches 78% of the original value. You can request cancellation at 80% of the original value. Using a new appraisal, removal may be requested at 75% LTV if the loan is 2–5 years old, or 80% LTV if the loan is over 5 years old.
+                    </div>
+                    <div style={{ fontSize: 12, color: c.gray, fontFamily: font, lineHeight: 1.7, background: c.bgAlt || "#f8f8f8", padding: "10px 12px", borderRadius: 8, borderLeft: `3px solid ${c.blue}` }}>
+                      <strong style={{ color: c.navy }}>Why does my MI rate vary?</strong> Your exact MI factor is determined by a combination of factors that lenders and MI companies evaluate together — including your credit score, loan-to-value ratio (LTV), debt-to-income ratio (DTI), number of borrowers on the loan, loan term, property type, and whether the loan is a purchase or refinance. Small changes in any of these can shift your rate. Your Loan Officer can run the exact quote once your full profile is in.
                     </div>
                   </div>
                 )}
@@ -1886,7 +1931,7 @@ function PaymentCalculator({ isInternal, user }) {
                         <span style={{ fontSize: 12, fontWeight: 700, color: c.text || c.navy, fontFamily: font }}>PMI Rate</span>
                         <div style={{ display: "flex", gap: 0, borderRadius: 6, overflow: "hidden", border: `1px solid ${c.border}` }}>
                           {[{ v: true, l: "Auto" }, { v: false, l: "Manual" }].map(o => (
-                            <button key={String(o.v)} onClick={() => setPmiAuto(o.v)} style={{ padding: "2px 10px", fontSize: 10, fontWeight: 700, fontFamily: font, border: "none", cursor: "pointer", background: pmiAuto === o.v ? c.blue : "transparent", color: pmiAuto === o.v ? "#fff" : c.gray, transition: "all 0.15s" }}>{o.l}</button>
+                            <button key={String(o.v)} onClick={() => setPmiAuto(o.v)} style={{ padding: "2px 10px", fontSize: 12, fontWeight: 700, fontFamily: font, border: "none", cursor: "pointer", background: pmiAuto === o.v ? c.blue : "transparent", color: pmiAuto === o.v ? "#fff" : c.gray, transition: "all 0.15s" }}>{o.l}</button>
                           ))}
                         </div>
                       </div>
@@ -1898,7 +1943,7 @@ function PaymentCalculator({ isInternal, user }) {
                           { v: "lpmi",    l: "Lender Paid"  },
                         ].map(o => (
                           <button key={o.v} onClick={() => setMiPremiumType(o.v)} style={{
-                            padding: "3px 10px", fontSize: 10, fontWeight: 700, fontFamily: font,
+                            padding: "3px 10px", fontSize: 12, fontWeight: 700, fontFamily: font,
                             border: `1px solid ${miPremiumType === o.v ? c.blue : c.border}`,
                             borderRadius: 4, cursor: "pointer",
                             background: miPremiumType === o.v ? c.blue : "transparent",
@@ -1912,29 +1957,29 @@ function PaymentCalculator({ isInternal, user }) {
                       ) : miPremiumType === "lpmi" ? (
                         <div style={{ fontSize: 12, fontFamily: font, color: c.textSecondary || c.gray, marginTop: 4, padding: "6px 8px", background: c.bgAlt || "#f0f4fa", borderRadius: 6 }}>
                           <div style={{ fontWeight: 700, color: c.text || c.navy, marginBottom: 2 }}>Lender Paid MI — No Monthly Premium</div>
-                          <div style={{ fontSize: 11 }}>Rate increase: <strong style={{ color: c.gold }}>+{calc.lpmiAdjPct.toFixed(3)}%</strong> added to note rate</div>
-                          <div style={{ fontSize: 10, marginTop: 2, opacity: 0.7 }}>Lender absorbs MI cost via higher rate. MI never cancels (rate stays elevated).</div>
+                          <div style={{ fontSize: 12 }}>Rate increase: <strong style={{ color: c.gold }}>+{calc.lpmiAdjPct.toFixed(3)}%</strong> added to note rate</div>
+                          <div style={{ fontSize: 12, marginTop: 2, opacity: 0.7 }}>Lender absorbs MI cost via higher rate. MI never cancels (rate stays elevated).</div>
                         </div>
                       ) : miPremiumType === "single" ? (
                         <div style={{ fontSize: 12, fontFamily: font, color: c.textSecondary || c.gray, marginTop: 4, padding: "6px 8px", background: c.bgAlt || "#f0f4fa", borderRadius: 6 }}>
                           <div style={{ fontWeight: 700, color: c.text || c.navy, marginBottom: 2 }}>Single Premium — No Monthly MI</div>
-                          <div style={{ fontSize: 11 }}>Upfront: <strong style={{ color: c.navy }}>{calc.singlePremRate ? `${(calc.singlePremRate * 100).toFixed(2)}% = ` : ""}{fmt(calc.convSingleAmt)}</strong> financed into loan</div>
-                          <div style={{ fontSize: 10, marginTop: 2, opacity: 0.7 }}>One-time premium eliminates monthly MI. Ideal if staying long-term.</div>
+                          <div style={{ fontSize: 12 }}>Upfront: <strong style={{ color: c.navy }}>{calc.singlePremRate ? `${(calc.singlePremRate * 100).toFixed(2)}% = ` : ""}{fmt(calc.convSingleAmt)}</strong> financed into loan</div>
+                          <div style={{ fontSize: 12, marginTop: 2, opacity: 0.7 }}>One-time premium eliminates monthly MI. Ideal if staying long-term.</div>
                         </div>
                       ) : miPremiumType === "split" ? (
                         <div style={{ fontSize: 12, fontFamily: font, color: c.textSecondary || c.gray, marginTop: 4, padding: "6px 8px", background: c.bgAlt || "#f0f4fa", borderRadius: 6 }}>
                           <div style={{ fontWeight: 700, color: c.text || c.navy, marginBottom: 2 }}>Split Premium</div>
-                          <div style={{ fontSize: 11 }}>Upfront: <strong style={{ color: c.navy }}>{fmt(calc.splitUpfrontAmt)}</strong> (0.50% financed) + Monthly: <strong style={{ color: c.navy }}>{fmt2(calc.monthlyPMI)}/mo</strong></div>
-                          <div style={{ fontSize: 10, marginTop: 2, opacity: 0.7 }}>Reduces monthly MI by ~40%. Cancels at 80% LTV.</div>
+                          <div style={{ fontSize: 12 }}>Upfront: <strong style={{ color: c.navy }}>{fmt(calc.splitUpfrontAmt)}</strong> (0.50% financed) + Monthly: <strong style={{ color: c.navy }}>{fmt2(calc.monthlyPMI)}/mo</strong></div>
+                          <div style={{ fontSize: 12, marginTop: 2, opacity: 0.7 }}>Reduces monthly MI by ~40%. Cancels at 80% LTV.</div>
                         </div>
                       ) : (
                         <div style={{ fontSize: 12, fontFamily: font, color: c.textSecondary || c.gray, marginTop: 4 }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                             <span>Rate: <strong style={{ color: c.text || c.navy, fontSize: 14 }}>{calc.effPmiPct > 0 ? calc.effPmiPct.toFixed(2) : pmiRate}%</strong> annual</span>
-                            <span style={{ fontSize: 11 }}>{fmt2(calc.monthlyPMI)}/mo</span>
+                            <span style={{ fontSize: 12 }}>{fmt2(calc.monthlyPMI)}/mo</span>
                           </div>
-                          {pmiInfo && <div style={{ fontSize: 10, marginTop: 4, opacity: 0.7 }}>LTV {calc.ltv.toFixed(1)}% · {pmiInfo.tier} · Base {(pmiInfo.baseRate * 100).toFixed(2)}%{pmiInfo.totalAdj !== 0 ? ` · Adj ${pmiInfo.totalAdj > 0 ? "+" : ""}${(pmiInfo.totalAdj * 100).toFixed(2)}%` : ""}</div>}
-                          <div style={{ fontSize: 10, marginTop: 2, opacity: 0.6 }}>Auto-cancels at 78% LTV (HPA) · Request removal at 80%</div>
+                          {pmiInfo && <div style={{ fontSize: 12, marginTop: 4, opacity: 0.7 }}>LTV {calc.ltv.toFixed(1)}% · {pmiInfo.tier} · Base {(pmiInfo.baseRate * 100).toFixed(2)}%{pmiInfo.totalAdj !== 0 ? ` · Adj ${pmiInfo.totalAdj > 0 ? "+" : ""}${(pmiInfo.totalAdj * 100).toFixed(2)}%` : ""}</div>}
+                          <div style={{ fontSize: 12, marginTop: 2, opacity: 0.6 }}>Auto-cancels at 78% LTV (HPA) · Request removal at 80%</div>
                         </div>
                       )}
                     </div>
@@ -1968,7 +2013,7 @@ function PaymentCalculator({ isInternal, user }) {
                           ))}
                         </div>
                         {dtiBack > 0 && (
-                          <div style={{ fontSize: 11, color: c.gray, fontFamily: font, fontStyle: "italic", marginBottom: 10 }}>
+                          <div style={{ fontSize: 12, color: c.gray, fontFamily: font, fontStyle: "italic", marginBottom: 10 }}>
                             DTI sourced from DTI Calculator · update there to recalculate MI surcharge
                           </div>
                         )}
@@ -2047,7 +2092,7 @@ function PaymentCalculator({ isInternal, user }) {
 
                 return (
                   <SectionCard title="PMI BY DOWN PAYMENT (INTERNAL)" accent={c.blue}>
-                    <div style={{ fontSize: 11, color: c.gray, fontFamily: font, marginBottom: 10, lineHeight: 1.5 }}>
+                    <div style={{ fontSize: 12, color: c.gray, fontFamily: font, marginBottom: 10, lineHeight: 1.5 }}>
                       Shows how monthly PMI changes as the down payment increases — use this to illustrate the savings of putting more down.
                     </div>
                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -2077,6 +2122,49 @@ function PaymentCalculator({ isInternal, user }) {
                   </SectionCard>
                 );
               })()}
+
+              {/* ── MI OVERRIDES (LO ONLY) ── */}
+              {isInternal && (
+                <SectionCard title="MI OVERRIDES (LO ONLY)" accent={c.blue}>
+                  <div style={{ fontSize: 12, color: c.gray, fontFamily: font, lineHeight: 1.6, marginBottom: 14 }}>
+                    Enter a dollar amount to override the system-calculated MI. Leave blank to use the auto value.
+                    {(parseFloat(monthlyMiOvr) > 0 || parseFloat(upfrontMiOvr) > 0) && (
+                      <span style={{ marginLeft: 8, color: "#b45309", fontWeight: 700 }}>⚠ Override active</span>
+                    )}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    <div>
+                      <LabeledInput
+                        label="Monthly MI Override"
+                        value={monthlyMiOvr}
+                        onChange={setMonthlyMiOvr}
+                        prefix="$"
+                        type="number"
+                        hint={monthlyMiOvr ? `Replaces auto: ${fmt2(calc.autoMonthlyMI)}/mo` : `Auto: ${fmt2(calc.autoMonthlyMI)}/mo`}
+                      />
+                    </div>
+                    <div>
+                      <LabeledInput
+                        label="Upfront MI Override"
+                        value={upfrontMiOvr}
+                        onChange={setUpfrontMiOvr}
+                        prefix="$"
+                        type="number"
+                        hint={upfrontMiOvr ? `Replaces auto: ${fmt(calc.autoUpfrontFee)}` : `Auto: ${fmt(calc.autoUpfrontFee)}`}
+                      />
+                    </div>
+                  </div>
+                  {(parseFloat(monthlyMiOvr) > 0 || parseFloat(upfrontMiOvr) > 0) && (
+                    <button
+                      onClick={() => { setMonthlyMiOvr(""); setUpfrontMiOvr(""); }}
+                      style={{ marginTop: 10, background: "none", border: `1px solid ${c.border}`, borderRadius: 6, padding: "5px 14px", fontSize: 12, color: c.gray, fontFamily: font, cursor: "pointer" }}
+                    >
+                      ✕ Clear overrides
+                    </button>
+                  )}
+                </SectionCard>
+              )}
+
             </div>
             );
           })()}
@@ -2123,7 +2211,7 @@ function PaymentCalculator({ isInternal, user }) {
                 </div>
               </div>
               {monthly > 0 && (
-                <div style={{ fontSize: 10, color: c.grayLight || c.gray, fontFamily: font, marginBottom: 14, textAlign: "right" }}>
+                <div style={{ fontSize: 12, color: c.grayLight || c.gray, fontFamily: font, marginBottom: 14, textAlign: "right" }}>
                   {fmt(Math.round(monthly * 12))} / year
                 </div>
               )}
@@ -2131,17 +2219,17 @@ function PaymentCalculator({ isInternal, user }) {
           );
         })()}
         {STATE_TAX_RATES[pcState] != null && (
-          <div style={{ fontSize: 10, color: c.grayLight || c.gray, fontFamily: font, marginTop: 6, lineHeight: 1.5, fontStyle: "italic", padding: "6px 10px", background: c.bgAlt || "#f8f8f8", borderRadius: 6 }}>
+          <div style={{ fontSize: 12, color: c.grayLight || c.gray, fontFamily: font, marginTop: 6, lineHeight: 1.5, fontStyle: "italic", padding: "6px 10px", background: c.bgAlt || "#f8f8f8", borderRadius: 6 }}>
             {(window.STATE_LIST||[]).find(s=>s.value===pcState)?.label || pcState} state average ≈ {STATE_TAX_RATES[pcState]}%; actual rates vary significantly by county and taxing district. Override the rate above as needed.
           </div>
         )}
         {pcState === "TX" && (
-          <div style={{ fontSize: 10, color: c.navy, fontFamily: font, marginTop: 6, lineHeight: 1.5, padding: "6px 10px", background: `${c.blue}12`, border: `1px solid ${c.blue}33`, borderRadius: 6 }}>
+          <div style={{ fontSize: 12, color: c.navy, fontFamily: font, marginTop: 6, lineHeight: 1.5, padding: "6px 10px", background: `${c.blue}12`, border: `1px solid ${c.blue}33`, borderRadius: 6 }}>
             Our recommendation for North Texas: <strong style={{ color: c.navy }}>2.3%</strong>. Actual rates vary by city and taxing district; verify with the county appraisal district for the specific property.
           </div>
         )}
         {homesteadExemption && (
-          <div style={{ marginTop: 6, fontSize: 10, color: c.textSecondary || c.gray, fontFamily: font, lineHeight: 1.5, padding: "6px 10px", background: c.bgAlt || "#f8f8f8", borderRadius: 6 }}>
+          <div style={{ marginTop: 6, fontSize: 12, color: c.textSecondary || c.gray, fontFamily: font, lineHeight: 1.5, padding: "6px 10px", background: c.bgAlt || "#f8f8f8", borderRadius: 6 }}>
             {(() => {
               const hp = parseFloat(homePrice) || 0;
               const rate = parseFloat(propertyTaxRate) || 0;
@@ -2199,12 +2287,12 @@ function PaymentCalculator({ isInternal, user }) {
                 </div>
               </div>
               {monthly > 0 && (
-                <div style={{ fontSize: 10, color: c.grayLight || c.gray, fontFamily: font, marginBottom: 14, textAlign: "right" }}>
+                <div style={{ fontSize: 12, color: c.grayLight || c.gray, fontFamily: font, marginBottom: 14, textAlign: "right" }}>
                   {fmt(Math.round(monthly * 12))} / year
                 </div>
               )}
               {rate > 0 && rate < 0.25 && (
-                <div style={{ marginBottom: 8, fontSize: 10, color: "#b45309", fontFamily: font, lineHeight: 1.4, background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 5, padding: "6px 10px" }}>
+                <div style={{ marginBottom: 8, fontSize: 12, color: "#b45309", fontFamily: font, lineHeight: 1.4, background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 5, padding: "6px 10px" }}>
                   Homeowners insurance is required on all mortgage loans. Minimum floored at <strong>0.25%</strong> of home value.
                 </div>
               )}
@@ -2212,7 +2300,7 @@ function PaymentCalculator({ isInternal, user }) {
           );
         })()}
         {STATE_INS_RATES[pcState] != null && (
-          <div style={{ fontSize: 10, color: c.grayLight || c.gray, fontFamily: font, marginTop: 6, lineHeight: 1.5, fontStyle: "italic", padding: "6px 10px", background: c.bgAlt || "#f8f8f8", borderRadius: 6 }}>
+          <div style={{ fontSize: 12, color: c.grayLight || c.gray, fontFamily: font, marginTop: 6, lineHeight: 1.5, fontStyle: "italic", padding: "6px 10px", background: c.bgAlt || "#f8f8f8", borderRadius: 6 }}>
             {(window.STATE_LIST||[]).find(s=>s.value===pcState)?.label || pcState} avg ≈ {STATE_INS_RATES[pcState]}%{
               (() => {
                 const propMult = INS_PROP_MULTIPLIERS[propType] || 1.00;
@@ -2234,7 +2322,7 @@ function PaymentCalculator({ isInternal, user }) {
           </div>
         )}
         {pcState === "TX" && (
-          <div style={{ fontSize: 10, color: c.navy, fontFamily: font, marginTop: 6, lineHeight: 1.5, padding: "6px 10px", background: `${c.blue}12`, border: `1px solid ${c.blue}33`, borderRadius: 6 }}>
+          <div style={{ fontSize: 12, color: c.navy, fontFamily: font, marginTop: 6, lineHeight: 1.5, padding: "6px 10px", background: `${c.blue}12`, border: `1px solid ${c.blue}33`, borderRadius: 6 }}>
             Our recommendation for North Texas: <strong style={{ color: c.navy }}>0.7%</strong> for existing homes. New construction may qualify for lower rates; verify with the insurance carrier.
           </div>
         )}
@@ -2279,10 +2367,10 @@ function PaymentCalculator({ isInternal, user }) {
               <div key={d.label} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: c.bg, borderRadius: 8, border: `1px solid ${c.border}` }}>
                 <div style={{ width: 10, height: 10, borderRadius: 5, background: d.color, flexShrink: 0 }} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 10, color: c.gray, fontWeight: 600, fontFamily: font }}>{d.label}</div>
+                  <div style={{ fontSize: 12, color: c.gray, fontWeight: 600, fontFamily: font }}>{d.label}</div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: c.text || c.navy, fontFamily: font }}>{fmt2(d.value)}</div>
                 </div>
-                <div style={{ fontSize: 11, color: c.grayLight, fontFamily: font }}>{total > 0 ? Math.round(d.value / total * 100) : 0}%</div>
+                <div style={{ fontSize: 12, color: c.grayLight, fontFamily: font }}>{total > 0 ? Math.round(d.value / total * 100) : 0}%</div>
               </div>
             ))}
           </div>
@@ -2306,7 +2394,7 @@ function PaymentCalculator({ isInternal, user }) {
                 <input type="date" value={fsInsRenew} onChange={e => setFsInsRenew(e.target.value)}
                   style={{ width: "100%", padding: "7px 10px", border: `1px solid ${fsInsRenew && fsInsRenew < new Date().toISOString().slice(0,10) ? "#f87171" : c.border}`, borderRadius: 6, fontSize: 13, fontFamily: font, color: c.navy, background: "#fff", outline: "none", boxSizing: "border-box" }} />
                 {fsInsRenew && fsInsRenew < new Date().toISOString().slice(0, 10) && (
-                  <div style={{ marginTop: 4, padding: "6px 10px", background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 6, fontSize: 11, color: "#b91c1c", fontFamily: font, fontWeight: 600 }}>
+                  <div style={{ marginTop: 4, padding: "6px 10px", background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 6, fontSize: 12, color: "#b91c1c", fontFamily: font, fontWeight: 600 }}>
                     ⚠ Insurance renewal date is in the past — policy may have lapsed or needs renewal before closing.
                   </div>
                 )}
@@ -2322,7 +2410,7 @@ function PaymentCalculator({ isInternal, user }) {
                     if (diffDays < 0 || diffDays > 90) return null;
                     return (
                       <div style={{ marginTop: 4 }}>
-                        <div style={{ padding:"8px 10px", background:"#fffbeb", border:"1px solid #fcd34d", borderRadius:6, fontSize:10, fontFamily:font, lineHeight:1.6, color:"#92400e", marginBottom:6 }}>
+                        <div style={{ padding:"8px 10px", background:"#fffbeb", border:"1px solid #fcd34d", borderRadius:6, fontSize:12, fontFamily:font, lineHeight:1.6, color:"#92400e", marginBottom:6 }}>
                           <strong>⚠ Internal:</strong> Insurance renews within 90 days of funding. When escrows are waived, most lenders require 90 days of prepaid insurance at closing to ensure coverage during new loan setup.
                         </div>
                         <Toggle label="Internal: Collect 90 Days of Insurance" checked={collect90Ins} onChange={setCollect90Ins} />
@@ -2339,11 +2427,11 @@ function PaymentCalculator({ isInternal, user }) {
                   <>
                     <LabeledInput label="Current Escrow Balance" prefix="$" value={rs2NetEscrow} onChange={setRs2NetEscrow} useCommas noNegative hint="Synced with Loan Sizing Worksheet" />
                     {rs2NetEscrow === "" || rs2NetEscrow === "0" || escBal === 0 ? (
-                      <div style={{ padding: "7px 10px", background: c.bgAlt, border: `1px solid ${c.border}`, borderRadius: 6, fontSize: 10, fontFamily: font, lineHeight: 1.5, color: c.gray, fontStyle: "italic" }}>
+                      <div style={{ padding: "7px 10px", background: c.bgAlt, border: `1px solid ${c.border}`, borderRadius: 6, fontSize: 12, fontFamily: font, lineHeight: 1.5, color: c.gray, fontStyle: "italic" }}>
                         If the balance is $0, the borrower may currently be self-escrowing (paying taxes and insurance directly).
                       </div>
                     ) : raNetEsc ? (
-                      <div style={{ padding: "8px 10px", background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 6, fontSize: 10, fontFamily: font, lineHeight: 1.6, color: c.navy }}>
+                      <div style={{ padding: "8px 10px", background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 6, fontSize: 12, fontFamily: font, lineHeight: 1.6, color: c.navy }}>
                         <div style={{ fontWeight: 700, color: "#92400e", marginBottom: 3 }}>⚠ Net Escrows are not always available — confirm with your LO.</div>
                         <div style={{ marginBottom: 4 }}>
                           <strong>If netting escrows:</strong> The escrow balance is credited against your payoff, reducing what you owe at closing. You will <strong>not</strong> receive a refund check after closing.
@@ -2353,7 +2441,7 @@ function PaymentCalculator({ isInternal, user }) {
                         </div>
                       </div>
                     ) : (
-                      <div style={{ padding: "8px 10px", background: c.bgAlt, border: `1px solid ${c.border}`, borderRadius: 6, fontSize: 10, fontFamily: font, lineHeight: 1.6, color: c.navy }}>
+                      <div style={{ padding: "8px 10px", background: c.bgAlt, border: `1px solid ${c.border}`, borderRadius: 6, fontSize: 12, fontFamily: font, lineHeight: 1.6, color: c.navy }}>
                         After your loan funds, your current servicer will refund any money held in your escrow account. This is typically done via a mailed check — timing varies by servicer, but it generally arrives sometime after funding. We have no control over the servicer's process or timeline.
                       </div>
                     )}
@@ -2376,14 +2464,14 @@ function PaymentCalculator({ isInternal, user }) {
                 const newTotal = newEsc + newMI;
                 const delta    = newTotal - oldTotal;
                 return (
-                  <div style={{ marginTop: 4, padding: "8px 10px", background: delta <= 0 ? (c.greenLight || "#f0fdf4") : `${c.gold}18`, border: `1px solid ${delta <= 0 ? (c.green || "#22c55e") + "44" : (c.gold || "#f59e0b") + "55"}`, borderRadius: 6, fontSize: 11, fontFamily: font, lineHeight: 1.6 }}>
+                  <div style={{ marginTop: 4, padding: "8px 10px", background: delta <= 0 ? (c.greenLight || "#f0fdf4") : `${c.gold}18`, border: `1px solid ${delta <= 0 ? (c.green || "#22c55e") + "44" : (c.gold || "#f59e0b") + "55"}`, borderRadius: 6, fontSize: 12, fontFamily: font, lineHeight: 1.6 }}>
                     <div style={{ fontWeight: 700, color: c.navy, marginBottom: 4 }}>📊 Escrow Comparison</div>
                     <div style={{ display: "flex", justifyContent: "space-between", color: c.gray }}>
-                      <span>Current escrow + MI <span style={{ fontSize: 10, opacity: 0.75 }}>({fmt2(existEsc)} tax & ins + {fmt2(existMI)} MI)</span></span>
+                      <span>Current escrow + MI <span style={{ fontSize: 12, opacity: 0.75 }}>({fmt2(existEsc)} tax & ins + {fmt2(existMI)} MI)</span></span>
                       <span style={{ fontWeight: 600, color: c.navy }}>{fmt2(oldTotal)}/mo</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", color: c.gray }}>
-                      <span>New escrow + MI <span style={{ fontSize: 10, opacity: 0.75 }}>({fmt2(calc.monthlyTax || 0)} tax + {fmt2(calc.monthlyIns || 0)} ins + {fmt2(newMI)} MI)</span></span>
+                      <span>New escrow + MI <span style={{ fontSize: 12, opacity: 0.75 }}>({fmt2(calc.monthlyTax || 0)} tax + {fmt2(calc.monthlyIns || 0)} ins + {fmt2(newMI)} MI)</span></span>
                       <span style={{ fontWeight: 600, color: c.navy }}>{fmt2(newTotal)}/mo</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, paddingTop: 4, borderTop: `1px solid ${c.border}`, fontWeight: 700 }}>
@@ -2418,7 +2506,7 @@ function PaymentCalculator({ isInternal, user }) {
             if (!term) missing.push("Term");
             if (!raNoteDate) missing.push("Original Loan Date");
             if (missing.length > 0) return (
-              <div style={{ fontSize: 11, color: COLORS.gray, padding: "7px 10px", background: "#f8fafc", border: `1px solid ${COLORS.border}`, borderRadius: 6, fontFamily: font, lineHeight: 1.6 }}>
+              <div style={{ fontSize: 12, color: COLORS.gray, padding: "7px 10px", background: "#f8fafc", border: `1px solid ${COLORS.border}`, borderRadius: 6, fontFamily: font, lineHeight: 1.6 }}>
                 💡 To auto-calculate an estimated balance, also enter: <strong>{missing.join(", ")}</strong>
               </div>
             );
@@ -2436,7 +2524,7 @@ function PaymentCalculator({ isInternal, user }) {
             const bg     = isHigh ? `${COLORS.gold}18`   : (isLow || isMatch) ? COLORS.greenLight : `${COLORS.blue}0d`;
             const border = isHigh ? `${COLORS.gold}55`   : (isLow || isMatch) ? `${COLORS.green}33` : `${COLORS.blue}33`;
             return (
-              <div style={{ fontSize: 11, color: COLORS.navy, padding: "8px 10px", background: bg, border: `1px solid ${border}`, borderRadius: 6, fontFamily: font, lineHeight: 1.7 }}>
+              <div style={{ fontSize: 12, color: COLORS.navy, padding: "8px 10px", background: bg, border: `1px solid ${border}`, borderRadius: 6, fontFamily: font, lineHeight: 1.7 }}>
                 Based on data entered, the estimated mortgage balance is <strong>{fmt(Math.round(eb))}</strong> after {timeStr} ({lbpMonthsPaid} payments).
                 {isLow && <span style={{ color: COLORS.green, fontWeight: 600, display: "block", marginTop: 3 }}>🎉 Your stated balance is <strong>{fmt(Math.round(absDiff))}</strong> lower than expected — extra payments have been made!</span>}
                 {isHigh && <span style={{ color: COLORS.gold, fontWeight: 600, display: "block", marginTop: 3 }}>⚠ Your stated balance is <strong>{fmt(Math.round(absDiff))}</strong> higher than expected — double-check the inputs above.</span>}
@@ -2454,13 +2542,13 @@ function PaymentCalculator({ isInternal, user }) {
               <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.grayLight, fontFamily: font, marginBottom: 4, letterSpacing: "0.05em" }}>DATE OF MOST RECENT MORTGAGE PAYMENT</div>
               <input type="date" value={rs2LastPmtDate} onChange={e => setRs2LastPmtDate(e.target.value)}
                 style={{ width: "100%", padding: "7px 10px", border: `1px solid ${COLORS.border}`, borderRadius: 6, fontSize: 13, fontFamily: font, color: COLORS.navy, background: "#fff", outline: "none", boxSizing: "border-box" }} />
-              <div style={{ fontSize: 10, color: COLORS.grayLight, fontFamily: font, marginTop: 3, fontStyle: "italic" }}>Synced with Refi Existing Loan tab.</div>
+              <div style={{ fontSize: 12, color: COLORS.grayLight, fontFamily: font, marginTop: 3, fontStyle: "italic" }}>Synced with Refi Existing Loan tab.</div>
             </div>
             <div>
               <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.grayLight, fontFamily: font, marginBottom: 4, letterSpacing: "0.05em" }}>CLOSING DATE</div>
               <input type="date" value={newClosingDate} onChange={e => setNewClosingDate(e.target.value)}
                 style={{ width: "100%", padding: "7px 10px", border: `1px solid ${COLORS.border}`, borderRadius: 6, fontSize: 13, fontFamily: font, color: COLORS.navy, background: "#fff", outline: "none", boxSizing: "border-box" }} />
-              <div style={{ fontSize: 10, color: COLORS.grayLight, fontFamily: font, marginTop: 3, fontStyle: "italic" }}>Synced with Fee Sheet closing date.</div>
+              <div style={{ fontSize: 12, color: COLORS.grayLight, fontFamily: font, marginTop: 3, fontStyle: "italic" }}>Synced with Fee Sheet closing date.</div>
               {/* Funding date — auto-calculated, displayed below closing date */}
               <div style={{ marginTop: 10 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.grayLight, fontFamily: font, marginBottom: 3, letterSpacing: "0.05em" }}>FUNDING DATE (AUTO-CALCULATED)</div>
@@ -2468,7 +2556,7 @@ function PaymentCalculator({ isInternal, user }) {
                   {new Date(lbpFundingDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "long", day: "numeric", year: "numeric" })}
                 </div>
                 {lbpFundingInfo.isTXRescission ? (
-                  <div style={{ fontSize: 10, color: COLORS.gray, fontFamily: font, marginTop: 3, lineHeight: 1.5 }}>
+                  <div style={{ fontSize: 12, color: COLORS.gray, fontFamily: font, marginTop: 3, lineHeight: 1.5 }}>
                     TX homestead refi — 3-day TILA right of rescission applied (Saturdays count; Sundays &amp; federal holidays excluded).
                     {lbpFundingInfo.holidays.length > 0 && (
                       <span style={{ display: "block", marginTop: 3, color: COLORS.gold, fontWeight: 600 }}>
@@ -2477,7 +2565,7 @@ function PaymentCalculator({ isInternal, user }) {
                     )}
                   </div>
                 ) : (
-                  <div style={{ fontSize: 10, color: COLORS.green, fontFamily: font, marginTop: 3, fontWeight: 600 }}>Funds same day as closing.</div>
+                  <div style={{ fontSize: 12, color: COLORS.green, fontFamily: font, marginTop: 3, fontWeight: 600 }}>Funds same day as closing.</div>
                 )}
               </div>
             </div>
@@ -2487,7 +2575,7 @@ function PaymentCalculator({ isInternal, user }) {
               const isEarlyFunding = fundingDay >= 1 && fundingDay <= 10;
               const isLateFunding = fundingDay >= 16;
               return (
-              <div style={{ padding: "10px 12px", background: "#fafafa", border: `1px solid ${COLORS.border}`, borderRadius: 7, fontSize: 11, fontFamily: font }}>
+              <div style={{ padding: "10px 12px", background: "#fafafa", border: `1px solid ${COLORS.border}`, borderRadius: 7, fontSize: 12, fontFamily: font }}>
                 <div style={{ fontWeight: 700, color: COLORS.navy, marginBottom: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span>📅 Payments Before Closing</span>
                   {lbpAutoPaymentDates.length > 0 && (
@@ -2497,7 +2585,7 @@ function PaymentCalculator({ isInternal, user }) {
 
                 {/* Instructions */}
                 {lbpAutoPaymentDates.length > 0 && (
-                  <div style={{ fontSize: 10, color: COLORS.gray, marginBottom: 8, lineHeight: 1.55 }}>
+                  <div style={{ fontSize: 12, color: COLORS.gray, marginBottom: 8, lineHeight: 1.55 }}>
                     Check the boxes for each monthly payment you plan to make before closing. This updates the projected loan balance used in the payoff estimate.
                   </div>
                 )}
@@ -2535,17 +2623,17 @@ function PaymentCalculator({ isInternal, user }) {
                             }}>{checked ? "✓" : ""}</span>
                             <span style={{ fontWeight: 600, color: COLORS.navy, minWidth: 52 }}>{pmtLabel}</span>
                             {projRow ? (
-                              <span style={{ color: COLORS.gray, fontSize: 10 }}>
+                              <span style={{ color: COLORS.gray, fontSize: 12 }}>
                                 Loan Balance: <strong style={{ color: COLORS.navy }}>{fmt(projRow.balance)}</strong>
                                 {projRow.escrow > 0 && <> · Escrow Balance: <strong style={{ color: COLORS.blue }}>{fmt(projRow.escrow)}</strong></>}
                               </span>
                             ) : (
-                              <span style={{ color: COLORS.gold, fontSize: 10, fontStyle: "italic" }}>skipped</span>
+                              <span style={{ color: COLORS.gold, fontSize: 12, fontStyle: "italic" }}>skipped</span>
                             )}
                           </div>
                           {/* Advisory note for the closing-month payment */}
                           {isClosingMonth && isEarlyFunding && (
-                            <div style={{ marginTop: 4, marginBottom: 2, padding: "7px 10px", background: `${COLORS.gold}14`, border: `1px solid ${COLORS.gold}55`, borderRadius: 6, fontSize: 10, color: COLORS.navy, lineHeight: 1.55, fontFamily: font }}>
+                            <div style={{ marginTop: 4, marginBottom: 2, padding: "7px 10px", background: `${COLORS.gold}14`, border: `1px solid ${COLORS.gold}55`, borderRadius: 6, fontSize: 12, color: COLORS.navy, lineHeight: 1.55, fontFamily: font }}>
                               <span style={{ fontWeight: 700, color: "#92651a" }}>⚠ Funding on the {fundingDay}{fundingDay===1?"st":fundingDay===2?"nd":fundingDay===3?"rd":"th"} — we recommend skipping this payment.</span> When closing and funding within the first 10 days of the month, making the payment can cause last-minute payoff figure issues as servicers may not update the balance in time. We've unchecked this by default.
                               <span style={{ display: "block", marginTop: 4, color: COLORS.gray }}>
                                 <strong>Will this hurt my credit?</strong> No. Mortgage lates are only reported when the payment is 30+ days past due.
@@ -2553,7 +2641,7 @@ function PaymentCalculator({ isInternal, user }) {
                             </div>
                           )}
                           {isClosingMonth && !isEarlyFunding && isLateFunding && (
-                            <div style={{ marginTop: 4, marginBottom: 2, padding: "7px 10px", background: `${COLORS.blue}0d`, border: `1px solid ${COLORS.blue}33`, borderRadius: 6, fontSize: 10, color: COLORS.navy, lineHeight: 1.55, fontFamily: font }}>
+                            <div style={{ marginTop: 4, marginBottom: 2, padding: "7px 10px", background: `${COLORS.blue}0d`, border: `1px solid ${COLORS.blue}33`, borderRadius: 6, fontSize: 12, color: COLORS.navy, lineHeight: 1.55, fontFamily: font }}>
                               <span style={{ fontWeight: 700 }}>💡 Consider making this payment.</span> Funding after the 10th generally gives the servicer enough time to update the payoff. Note: if funding falls after the 15th, your servicer may charge a late fee (~$100). <strong>This will NOT affect your credit</strong> — mortgage lates only report when 30+ days past due.
                             </div>
                           )}
@@ -2561,7 +2649,7 @@ function PaymentCalculator({ isInternal, user }) {
                       );
                     })}
                     {lbpCheckedPayments.length > 0 && (
-                      <div style={{ marginTop: 4, paddingTop: 6, borderTop: `1px solid ${COLORS.border}`, display: "flex", justifyContent: "space-between", fontSize: 10, color: COLORS.navy, fontWeight: 700 }}>
+                      <div style={{ marginTop: 4, paddingTop: 6, borderTop: `1px solid ${COLORS.border}`, display: "flex", justifyContent: "space-between", fontSize: 12, color: COLORS.navy, fontWeight: 700 }}>
                         <span>Loan Balance after the additional future payments</span>
                         <span style={{ color: COLORS.green }}>{fmt(lbpPaymentProjection.projectedBalance)}</span>
                       </div>
@@ -2570,7 +2658,7 @@ function PaymentCalculator({ isInternal, user }) {
                 )}
 
                 {/* Auto-draft tip */}
-                <div style={{ marginTop: 10, paddingTop: 8, borderTop: `1px solid ${COLORS.border}`, fontSize: 10, color: COLORS.navy, lineHeight: 1.55 }}>
+                <div style={{ marginTop: 10, paddingTop: 8, borderTop: `1px solid ${COLORS.border}`, fontSize: 12, color: COLORS.navy, lineHeight: 1.55 }}>
                   <span style={{ fontWeight: 700 }}>It's recommended to disable auto-draft once you start the refi.</span> An unexpected payment after the payoff is ordered can throw off the final payoff figure and cause last-minute delays.
                 </div>
               </div>
@@ -2586,7 +2674,7 @@ function PaymentCalculator({ isInternal, user }) {
               const balAtFunding = lbpPaymentProjection.rows.length > 0 ? lbpPaymentProjection.projectedBalance : cb;
               const netEscrowAmt = raNetEsc ? (parseFloat(String(rs2NetEscrow).replace(/,/g, "")) || 0) : 0;
               if (!cb || !rate || !lbpLastPmt) return (
-                <div style={{ padding: "12px 14px", background: "#f8fafc", border: `1px solid ${COLORS.border}`, borderRadius: 8, fontSize: 11, color: COLORS.gray, fontFamily: font, lineHeight: 1.6 }}>
+                <div style={{ padding: "12px 14px", background: "#f8fafc", border: `1px solid ${COLORS.border}`, borderRadius: 8, fontSize: 12, color: COLORS.gray, fontFamily: font, lineHeight: 1.6 }}>
                   💡 Enter Current Loan Balance, Interest Rate, and last payment date to calculate the estimated payoff.
                 </div>
               );
@@ -2644,7 +2732,7 @@ function PaymentCalculator({ isInternal, user }) {
                       <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.navy }}>Estimated Payoff Amount</span>
                       <span style={{ fontSize: 17, fontWeight: 800, color: COLORS.navy }}>{fmt(Math.round(estimatedPayoff))}</span>
                     </div>
-                    <div style={{ fontSize: 10, color: COLORS.grayLight, marginTop: 5, lineHeight: 1.5 }}>
+                    <div style={{ fontSize: 12, color: COLORS.grayLight, marginTop: 5, lineHeight: 1.5 }}>
                       Actual payoff must be ordered directly from your current servicer. This estimate is for planning purposes only. Good-through date on the official payoff will determine final per-diem days.
                     </div>
                   </div>
@@ -2696,7 +2784,7 @@ function PaymentCalculator({ isInternal, user }) {
               {/* Left column — Home Value + Value Based On */}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize:11, fontWeight:700, color:c.gray, fontFamily:font, marginBottom:8, textTransform:"uppercase", letterSpacing:"0.05em" }}>PROPERTY VALUE</div>
-                <LabeledInput label="Home Value" prefix="$" value={homePrice} onChange={(v) => { if (parseFloat(String(v).replace(/,/g,'')) > 99999999) return; setHomePrice(v); }} useCommas />
+                <LabeledInput label="Home Value" prefix="$" value={homePrice} onChange={(v) => { if (parseFloat(String(v).replace(/,/g,'')) > 99999999) return; setHomePrice(v); }} useCommas infoTip="The agreed-upon sale price of the home. For a refinance, use the current appraised value. This drives your loan-to-value ratio (LTV), which affects your interest rate, PMI requirement, and loan program eligibility." />
                 <Select label="Home Value Based On" value={valBasis} onChange={setValBasis} options={[
                   { value: "", label: "— Select —" },
                   { value: "guess", label: "Homeowner's Estimate" },
@@ -2712,7 +2800,7 @@ function PaymentCalculator({ isInternal, user }) {
                   { value: "moderate", label: "Moderate" },
                   { value: "conservative", label: "Conservative" },
                 ]} />
-                <LabeledInput label="Loan Amount" prefix="$" value={loanAmount} onChange={(v) => { if (parseFloat(String(v).replace(/,/g,'')) > 99999999) return; setLoanAmount(v); }} useCommas />
+                <LabeledInput label="Loan Amount" prefix="$" value={loanAmount} onChange={(v) => { if (parseFloat(String(v).replace(/,/g,'')) > 99999999) return; setLoanAmount(v); }} useCommas infoTip="The amount you're borrowing — typically the purchase price minus your down payment. For a refinance, this is your current payoff balance or the new loan amount. Keep in mind that financed fees (like the VA funding fee or FHA upfront MIP) may be added to this." />
                 {(() => {
                   const hp = parseFloat(String(homePrice).replace(/,/g,'')) || 0;
                   const la = parseFloat(String(loanAmount).replace(/,/g,'')) || 0;
@@ -2723,7 +2811,7 @@ function PaymentCalculator({ isInternal, user }) {
                   const nextMilestone = milestones.find(function(m) { return ltv > m; });
                   const amtToNext = nextMilestone ? Math.round(la - hp * (nextMilestone / 100)) : 0;
                   return (
-                    <div style={{ fontSize: 11, fontFamily: font, padding: "6px 10px", background: c.bgAlt, borderRadius: 6, border: `1px solid ${c.border}`, marginBottom: 8 }}>
+                    <div style={{ fontSize: 12, fontFamily: font, padding: "6px 10px", background: c.bgAlt, borderRadius: 6, border: `1px solid ${c.border}`, marginBottom: 8 }}>
                       <div style={{ display: "flex", justifyContent: "space-between" }}>
                         <span style={{ color: ltvColor, fontWeight: 700 }}>LTV {ltv.toFixed(1)}%</span>
                         <span style={{ color: c.gray }}>{fmt(Math.round(hp - la))} equity</span>
@@ -2742,7 +2830,7 @@ function PaymentCalculator({ isInternal, user }) {
                   if (rpp <= 0 || laNum <= 0 || n <= 0) return null;
                   const per5k = Math.round(pmt(rpp, n, 5000));
                   return (
-                    <div style={{ fontSize: 11, color: c.gray, fontFamily: font, marginTop: 4, paddingLeft: 2 }}>
+                    <div style={{ fontSize: 12, color: c.gray, fontFamily: font, marginTop: 4, paddingLeft: 2 }}>
                       FYI: Every $5,000 financed ≈ <strong style={{ color: c.navy }}>${per5k}/mo</strong>
                     </div>
                   );
@@ -2754,16 +2842,16 @@ function PaymentCalculator({ isInternal, user }) {
                 <div style={{ border:`1px solid ${c.border}`, borderRadius:8, overflow:"hidden" }}>
                   {laNum > 0
                     ? <div style={{ ...rowStyle, background: c.blueLight||"#e8f0fb" }}><span style={{ fontWeight:700, color:c.navy }}>Loan Amount</span><span style={{ fontWeight:800, color:c.blue }}>{fmt(laNum)}</span></div>
-                    : <div style={{ ...rowStyle, fontStyle:"italic", color:c.gray, fontSize:11 }}><span>Loan Amount</span><span>Enter amount at left</span></div>
+                    : <div style={{ ...rowStyle, fontStyle:"italic", color:c.gray, fontSize:12 }}><span>Loan Amount</span><span>Enter amount at left</span></div>
                   }
                   {estimatedPayoffAmt > 0
                     ? <div style={rowStyle}><span style={labelStyle}>Estimated Payoff Amount</span><span style={valStyle}>− {fmt(estimatedPayoffAmt)}</span></div>
-                    : <div style={{ ...rowStyle, fontStyle:"italic", color:c.gray, fontSize:11 }}><span>Estimated Payoff Amount</span><span>Complete Loan Balance &amp; Payoff above</span></div>
+                    : <div style={{ ...rowStyle, fontStyle:"italic", color:c.gray, fontSize:12 }}><span>Estimated Payoff Amount</span><span>Complete Loan Balance &amp; Payoff above</span></div>
                   }
                   {ccNum  > 0 && <div style={rowStyle}><span style={labelStyle}>Closing Costs <span style={{ fontStyle:"italic", fontWeight:400 }}>(from Fee Sheet)</span></span><span style={valStyle}>− {fmt(ccNum)}</span></div>}
                   {ppNum  > 0 && <div style={rowStyle}><span style={labelStyle}>Prepaids <span style={{ fontStyle:"italic", fontWeight:400 }}>(from Fee Sheet)</span></span><span style={valStyle}>− {fmt(ppNum)}</span></div>}
                   {(ccNum === 0 && ppNum === 0) && (
-                    <div style={{ ...rowStyle, fontStyle:"italic", color:c.gray, fontSize:11 }}><span>Closing Costs &amp; Prepaids</span><span>Open Fee Sheet to populate</span></div>
+                    <div style={{ ...rowStyle, fontStyle:"italic", color:c.gray, fontSize:12 }}><span>Closing Costs &amp; Prepaids</span><span>Open Fee Sheet to populate</span></div>
                   )}
                   <div style={{ borderTop:`2px solid ${c.blue||"#2563eb"}44` }} />
                   {(() => {
@@ -2844,7 +2932,7 @@ function PaymentCalculator({ isInternal, user }) {
         <>
           {equityTimeline.length > 1 && (
             <SectionCard title="PROJECTED EQUITY CURVE" accent={c.blue} style={{ maxWidth: 640 }}>
-              <LabeledInput label="Appreciation Rate" value={pcAppr} onChange={setPcAppr} suffix="% / yr" hint={STATE_APPR_RATES[pcState] != null ? `${pcState} avg ≈ ${STATE_APPR_RATES[pcState]}% · Based on U.S. government home price data (5-yr avg) · Edit to override` : "Annual home value growth for equity projection"} />
+              <LabeledInput label="Appreciation Rate" value={pcAppr} onChange={setPcAppr} suffix="% / yr" hint={STATE_APPR_RATES[pcState] != null ? `${pcState} avg ≈ ${STATE_APPR_RATES[pcState]}% · Based on U.S. government home price data (5-yr avg) · Edit to override` : "Annual home value growth for equity projection"} infoTip="The estimated annual rate at which the home's value will grow. Historically, U.S. home values have appreciated 3-4% annually on average, though this varies significantly by market. This is used to project your equity over time." />
               <EquityProjectionChart timeline={equityTimeline} milestones={equityMilestones} />
             </SectionCard>
           )}
@@ -2858,8 +2946,25 @@ function PaymentCalculator({ isInternal, user }) {
               </div>
               {s2AmortYears.length > 0 && (
                 <div>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: "#f97316", fontFamily: font, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8, paddingBottom: 4, borderBottom: "2px solid #f9731633" }}>2nd Lien</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "#f97316", fontFamily: font, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8, paddingBottom: 4, borderBottom: "2px solid #f9731633" }}>
+                    2nd Lien{s2Term === "balloon" ? " · 30/15 Balloon" : ""}
+                  </div>
                   <BalanceCurveChart years={s2AmortYears} />
+                  {s2Term === "balloon" && (() => {
+                    const bb = s2AmortYears[s2AmortYears.length - 1]?.balloonBalance || 0;
+                    if (bb <= 0) return null;
+                    return (
+                      <div style={{ marginTop: 8, padding: "8px 12px", background: "#FEF2F2", border: "1.5px solid #FECACA", borderRadius: 7 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: "#C0392B", fontFamily: font }}>⚠ Balloon Payment · Month 180</span>
+                          <span style={{ fontSize: 13, fontWeight: 800, color: "#C0392B", fontFamily: font }}>{fmt(bb)}</span>
+                        </div>
+                        <div style={{ fontSize: 12, color: "#C0392B", fontFamily: font, marginTop: 3, opacity: 0.8 }}>
+                          Remaining principal due in full at end of Year 15
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>

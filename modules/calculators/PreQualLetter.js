@@ -16,6 +16,7 @@ const useThemeColors = window.useThemeColors;
 const sharePQLetter = window.sharePQLetter;
 const fetchPQShares = window.fetchPQShares;
 const supabase = window._supabaseClient;
+const InfoTip = window.InfoTip;
 
 function buildLetterId(seq) {
   const n = new Date();
@@ -519,16 +520,16 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
       // Card 1: Customize PQ Letter (all users)
       React.createElement(SectionCard, { title: "Customize PQ Letter (Optional)" },
         React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" } },
-          React.createElement(LabeledInput, { label: "Purchase Price", value: bPurchasePrice, onChange: handleBPurchasePrice, prefix: "$", useCommas: true, hint: purchasePrice ? "Max: $" + Number(String(purchasePrice).replace(/,/g, "")).toLocaleString() : undefined }),
-          React.createElement(LabeledInput, { label: "Loan Amount", value: bLoanAmount, onChange: handleBLoanAmount, prefix: "$", useCommas: true, hint: loanAmount ? "Max: $" + Number(String(loanAmount).replace(/,/g, "")).toLocaleString() : undefined }),
+          React.createElement(LabeledInput, { label: "Purchase Price", value: bPurchasePrice, onChange: handleBPurchasePrice, prefix: "$", useCommas: true, hint: purchasePrice ? "Max: $" + Number(String(purchasePrice).replace(/,/g, "")).toLocaleString() : undefined, infoTip: "The maximum purchase price the buyer can be pre-qualified for. It's common practice to write the letter for the actual offer price rather than the maximum, so the seller doesn't know the buyer's full budget ceiling." }),
+          React.createElement(LabeledInput, { label: "Loan Amount", value: bLoanAmount, onChange: handleBLoanAmount, prefix: "$", useCommas: true, hint: loanAmount ? "Max: $" + Number(String(loanAmount).replace(/,/g, "")).toLocaleString() : undefined, infoTip: "The maximum loan amount the buyer is pre-qualified for based on their income, debts, and credit profile. This is a preliminary estimate — the final approved amount is determined after full underwriting. The letter can be written for any amount up to this maximum." }),
           React.createElement(LabeledInput, { label: "Property Address (optional)", value: propertyAddress, onChange: setPropertyAddress, type: "text" }),
-          React.createElement(LabeledInput, { label: "Closing Date", value: bClosingDate, onChange: setBClosingDate, type: "date" })
+          React.createElement(LabeledInput, { label: "Closing Date", value: bClosingDate, onChange: setBClosingDate, type: "date", infoTip: "Pre-qualification letters typically expire in 60-90 days. After expiration, income, assets, and credit should be re-verified. Some lenders issue 30-day letters to encourage urgency." })
         ),
         React.createElement("div", { style: { borderTop: "1px solid #e2e8f0", marginTop: "16px", paddingTop: "16px" } },
           React.createElement("div", { style: { fontSize: "13px", fontWeight: 700, color: "#1e3a5f", marginBottom: "10px" } }, "Co-Borrower: Optional"),
           React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "10px" } },
-            React.createElement(LabeledInput, { label: "First Name", value: abtC2First, onChange: setAbtC2First, type: "text", placeholder: "Co-borrower first name" }),
-            React.createElement(LabeledInput, { label: "Last Name",  value: abtC2Last,  onChange: setAbtC2Last,  type: "text", placeholder: "Co-borrower last name" })
+            React.createElement(LabeledInput, { label: "First Name", value: abtC2First, onChange: setAbtC2First, type: "text", placeholder: "Co-borrower first name", infoTip: "The name(s) as they should appear on the letter. This should match their legal name as it appears on their ID and will appear on all loan documents." }),
+            React.createElement(LabeledInput, { label: "Last Name",  value: abtC2Last,  onChange: setAbtC2Last,  type: "text", placeholder: "Co-borrower last name", infoTip: "The name(s) as they should appear on the letter. This should match their legal name as it appears on their ID and will appear on all loan documents." })
           ),
           React.createElement("div", {
             style: { fontSize: 12, color: "#64748b", background: "#f8fafc", padding: "8px 10px", borderRadius: 6, border: "1px solid #e2e8f0" }
@@ -539,13 +540,13 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
       (isInternal || paramsReady) ? React.createElement(SectionCard, { title: "PQ Parameters (only LO can edit)" },
         isInternal
           ? React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" } },
-              React.createElement(LabeledInput, { label: "Max Purchase Price", value: purchasePrice, onChange: setPurchasePrice, prefix: "$", useCommas: true }),
-              React.createElement(LabeledInput, { label: "Max Loan Amount", value: loanAmount, onChange: setLoanAmount, prefix: "$", useCommas: true }),
+              React.createElement(LabeledInput, { label: "Max Purchase Price", value: purchasePrice, onChange: setPurchasePrice, prefix: "$", useCommas: true, infoTip: "The maximum purchase price the buyer can be pre-qualified for. It's common practice to write the letter for the actual offer price rather than the maximum, so the seller doesn't know the buyer's full budget ceiling." }),
+              React.createElement(LabeledInput, { label: "Max Loan Amount", value: loanAmount, onChange: setLoanAmount, prefix: "$", useCommas: true, infoTip: "The maximum loan amount the buyer is pre-qualified for based on their income, debts, and credit profile. This is a preliminary estimate — the final approved amount is determined after full underwriting. The letter can be written for any amount up to this maximum." }),
               React.createElement(Select, { label: "Loan Type", value: loanType, onChange: setLoanType, options: ["Conventional", "FHA", "VA", "USDA"].map(v => ({ value: v, label: v })) }),
               React.createElement(Select, { label: "Loan Term", value: loanTerm, onChange: setLoanTerm, options: ["30 Year", "20 Year", "15 Year", "10 Year"].map(v => ({ value: v, label: v })) })
             )
           : React.createElement("div", null,
-              React.createElement("div", { style: { fontSize: 11, color: c.textSecondary || "#64748b", marginBottom: 12, fontStyle: "italic" } },
+              React.createElement("div", { style: { fontSize: 12, color: c.textSecondary || "#64748b", marginBottom: 12, fontStyle: "italic" } },
                 "These parameters were set by your Loan Officer."
               ),
               React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 24px" } },
@@ -634,9 +635,9 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
       React.createElement(LOSelector, null),
       React.createElement(SectionCard, { title: "LO Signature Details (Internal)", collapsed: loSigCollapsed, onToggle: function() { setLoSigCollapsed(function(v) { return !v; }); } },
         React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr", gap: "12px" } },
-          React.createElement(LabeledInput, { label: "LO Name", value: loName, onChange: setLoName, type: "text", placeholder: "e.g. Mark Ningard" }),
+          React.createElement(LabeledInput, { label: "LO Name", value: loName, onChange: setLoName, type: "text", placeholder: "e.g. Mark Ningard", infoTip: "The loan officer's name as it should appear on the letter. This is pulled from your profile settings — update it in the Pre-Qual Letter settings section." }),
           React.createElement(LabeledInput, { label: "Title / Role", value: loTitle, onChange: setLoTitle, type: "text", placeholder: "e.g. Senior Loan Officer" }),
-          React.createElement(LabeledInput, { label: "LO NMLS #", value: loNMLS, onChange: setLoNMLS, type: "text", placeholder: "e.g. 729612" }),
+          React.createElement(LabeledInput, { label: "LO NMLS #", value: loNMLS, onChange: setLoNMLS, type: "text", placeholder: "e.g. 729612", infoTip: "Your personal NMLS license number. Required to appear on all pre-qualification and pre-approval letters by law. Verify this matches your state licensing." }),
           React.createElement(LabeledInput, { label: "Company", value: company, onChange: setCompany, type: "text", placeholder: "e.g. CMG Home Loans" }),
           React.createElement(LabeledInput, { label: "Company NMLS #", value: companyNMLS, onChange: setCompanyNMLS, type: "text", placeholder: "e.g. 1820" }),
           React.createElement(LabeledInput, { label: "Branch NMLS #", value: branchNMLS, onChange: setBranchNMLS, type: "text", placeholder: "e.g. 123456" }),
@@ -1148,7 +1149,7 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
         showLetter
           ? React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 6 } },
               displaySnap
-                ? React.createElement("div", { style: { fontSize: 11, color: "#888", fontStyle: "italic", fontFamily: font } },
+                ? React.createElement("div", { style: { fontSize: 12, color: "#888", fontStyle: "italic", fontFamily: font } },
                     "Archived: " + (displaySnap.letterId || "")
                   )
                 : React.createElement("div", null),
@@ -1157,7 +1158,7 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
                 displaySnap && React.createElement(Button, { label: "Back to Live", small: true, onClick: () => { setDisplaySnap(null); } })
               )
             )
-          : React.createElement("div", { style: { fontSize: 11, color: COLORS.grayLight, fontFamily: font, fontStyle: "italic", marginBottom: 6, textAlign: "right" } },
+          : React.createElement("div", { style: { fontSize: 12, color: COLORS.grayLight, fontFamily: font, fontStyle: "italic", marginBottom: 6, textAlign: "right" } },
               "Live preview — click Generate to produce the official letter"
             ),
 

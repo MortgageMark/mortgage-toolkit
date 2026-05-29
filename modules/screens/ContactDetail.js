@@ -187,6 +187,20 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
   const isPartner  = !!(user && (user.role === "realtor" || user.role === "builder"));
   const canManage  = isInternal || isPartner;
 
+  // ── LO profiles for Assigned LO dropdown ─────────────────────────────────
+  const [loProfiles, setLoProfiles] = useState([]);
+  useEffectCD(function() {
+    if (!supabaseCD) return;
+    supabaseCD
+      .from("profiles")
+      .select("id, display_name, email")
+      .in("role", ["admin", "super_admin", "branch_admin", "internal"])
+      .order("display_name", { ascending: true })
+      .then(function(res) {
+        if (!res.error && res.data) setLoProfiles(res.data);
+      });
+  }, []);
+
   // Derive the login role from the contact's type/category
   const inferredRole = (function() {
     if (contact.contact_type === "client") return "borrower";
@@ -203,10 +217,12 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
     first_name: contact.first_name || "",
     nickname:   contact.nickname   || "",
     last_name:  contact.last_name  || "",
+    company:    contact.company    || "",
     // Classification
     contact_type:           contact.contact_type            || "client",
     contact_category:       contact.contact_category        || "",
     referred_by_contact_id: contact.referred_by_contact_id  || null,
+    assigned_lo_id:         contact.assigned_lo_id          || null,
     // Phone (fall back to legacy phone field for existing records)
     phone_cell: contact.phone_cell || contact.phone || "",
     phone_work: contact.phone_work || "",
@@ -957,6 +973,15 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                     placeholder="Last name"
                   />
                 </div>
+                <div>
+                  <label style={labelStyle}>Company</label>
+                  <input
+                    style={fieldStyle}
+                    value={editForm.company}
+                    onChange={function (e) { handleFieldChange("company", e.target.value); }}
+                    placeholder="Employer / company name"
+                  />
+                </div>
               </div>
               {/* Right: Classification */}
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -999,6 +1024,23 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                     excludeId={contact.id}
                   />
                 </div>
+                <div>
+                  <label style={labelStyle}>Assigned LO</label>
+                  <select
+                    style={fieldStyle}
+                    value={editForm.assigned_lo_id || ""}
+                    onChange={function(e) { handleFieldChange("assigned_lo_id", e.target.value || null); }}
+                  >
+                    <option value="">— Unassigned —</option>
+                    {loProfiles.map(function(lo) {
+                      return (
+                        <option key={lo.id} value={lo.id}>
+                          {lo.display_name || lo.email || lo.id}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
               </div>
             </div>
           ) : (
@@ -1009,6 +1051,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                 <InfoRow label="First Name" value={contact.first_name} />
                 <InfoRow label="Nickname"   value={contact.nickname} />
                 <InfoRow label="Last Name"  value={contact.last_name} />
+                <InfoRow label="Company"    value={contact.company} />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 <InfoRow
@@ -1049,6 +1092,17 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                     );
                   })()}
                 </div>
+                {(() => {
+                  const assignedLo = contact.assigned_lo_id
+                    ? loProfiles.find(function(lo) { return lo.id === contact.assigned_lo_id; })
+                    : null;
+                  return (
+                    <InfoRow
+                      label="Assigned LO"
+                      value={assignedLo ? (assignedLo.display_name || assignedLo.email) : null}
+                    />
+                  );
+                })()}
               </div>
             </div>
           )}

@@ -14,6 +14,7 @@ const LabeledInput = window.LabeledInput;
 const COLORS = window.COLORS;
 const font = window.font;
 const STATE_LIST = window.STATE_LIST;
+const InfoTip = window.InfoTip;
 const isWeekend = window.isWeekend;
 const isHoliday = window.isHoliday;
 const getHolidayName = window.getHolidayName;
@@ -73,7 +74,7 @@ function PdfRow(props) {
   var zero  = Math.round(Math.abs(amt||0)) === 0;
   var color = zero ? "#d1d5db" : isRed ? "#dc2626" : bold ? "#162447" : muted ? "#9ca3af" : "#374151";
   return (
-    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", padding:(bold?"6px 0 6px ":"3px 0 3px ")+(indent?"14px":"0px"), fontSize:10, fontWeight:bold?700:400, color:color, borderTop:bold?"1px solid #e2e8f0":undefined, marginTop:bold?3:0 }}>
+    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", padding:(bold?"6px 0 6px ":"3px 0 3px ")+(indent?"14px":"0px"), fontSize:12, fontWeight:bold?700:400, color:color, borderTop:bold?"1px solid #e2e8f0":undefined, marginTop:bold?3:0 }}>
       <span style={{ paddingRight:4 }}>{label}</span>
       <span style={{ whiteSpace:"nowrap", fontWeight:bold?700:600 }}>{zero?(bold?fmt(0):"—"):(amt<0?"("+fmt(-Math.round(amt))+")":fmt(Math.round(amt)))}</span>
     </div>
@@ -1089,11 +1090,11 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
               }} style={{ width:"100%", padding:"8px 10px", border:`1px solid ${COLORS.border}`, borderRadius:6, fontSize:13, fontFamily:font, color:COLORS.navy, background:"#fff", outline:"none", boxSizing:"border-box" }} />
               {fees.shortPayAdj > 0 ? (
                 <div style={{ marginTop:4, padding:"4px 8px", borderRadius:5, background:"#FFF3E0", border:"1px solid #B86B00", fontFamily:font }}>
-                  <span style={{ fontSize:11, fontWeight:700, color:"#B86B00" }}>⚠ Short Pay Active</span>
-                  <span style={{ fontSize:11, color:"#7A4500" }}> — prepaid interest zeroed; servicer credits back interest already collected</span>
+                  <span style={{ fontSize:12, fontWeight:700, color:"#B86B00" }}>⚠ Short Pay Active</span>
+                  <span style={{ fontSize:12, color:"#7A4500" }}> — prepaid interest zeroed; servicer credits back interest already collected</span>
                 </div>
               ) : (
-                <div style={{ fontSize:11, color:COLORS.grayLight, marginTop:2, fontFamily:font }}>
+                <div style={{ fontSize:13, color:COLORS.grayLight, marginTop:2, fontFamily:font }}>
                   {fees.prepaidDays + " days prepaid interest"}
                   {fees.totalReserves > 0 ? " · escrow reserves" : ""}
                   {parsedCD.day >= 1 && parsedCD.day <= 5 && !shortPay
@@ -1104,8 +1105,8 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                 </div>
               )}
               <details style={{ marginTop:4 }}>
-                <summary style={{ fontSize:10, color:COLORS.blue, cursor:"pointer", fontFamily:font }}>View Federal Holidays ({parsedCD.year})</summary>
-                <div style={{ fontSize:10, color:COLORS.grayLight, marginTop:4, fontFamily:font, lineHeight:1.8, paddingLeft:8 }}>
+                <summary style={{ fontSize:12, color:COLORS.blue, cursor:"pointer", fontFamily:font }}>View Federal Holidays ({parsedCD.year})</summary>
+                <div style={{ fontSize:12, color:COLORS.grayLight, marginTop:4, fontFamily:font, lineHeight:1.8, paddingLeft:8 }}>
                   {getFederalHolidays(parsedCD.year).map((h, i) => <div key={i}>{h.observed.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})} — {h.name}</div>)}
                 </div>
               </details>
@@ -1113,11 +1114,11 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
             {fundingDate && (
               <div style={{ background:"#f0f5ff", border:`1px solid ${COLORS.border}`, borderRadius:8, padding:12 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-                  <span style={{ fontSize:11, fontWeight:600, color:COLORS.blue, fontFamily:font }}>Funding Date</span>
+                  <span style={{ fontSize:12, fontWeight:600, color:COLORS.blue, fontFamily:font }}>Funding Date</span>
                   <span style={{ fontSize:13, fontWeight:700, color:COLORS.navy, fontFamily:font }}>{fmtDate(fundingDate)}</span>
                 </div>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                  <span style={{ fontSize:11, fontWeight:600, color:COLORS.blue, fontFamily:font }}>1st Payment Due</span>
+                  <span style={{ fontSize:12, fontWeight:600, color:COLORS.blue, fontFamily:font }}>1st Payment Due</span>
                   <span style={{ fontSize:13, fontWeight:700, color:COLORS.navy, fontFamily:font }}>{fmtDate(firstPayDate)}</span>
                 </div>
                 {firstPayDate && fundingDate && (() => {
@@ -1129,7 +1130,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                   const firstDay = firstPayDate.getDate();
                   const coversMo = firstMo === 1 ? 12 : firstMo - 1;
                   return (
-                    <div style={{ marginTop:8, padding:"8px 10px", background:"#f0f5ff", borderRadius:6, fontSize:10, color:COLORS.grayLight, fontFamily:font, lineHeight:1.6 }}>
+                    <div style={{ marginTop:8, padding:"8px 10px", background:"#f0f5ff", borderRadius:6, fontSize:12, color:COLORS.grayLight, fontFamily:font, lineHeight:1.6 }}>
                       <span style={{ fontWeight:700, color:COLORS.navy }}>Why does my first payment skip a month?</span>
                       <div style={{ marginTop:4 }}>
                         Mortgage interest is paid <em>in arrears</em> — each payment covers the <em>prior</em> month's interest. At closing, prepaid interest is collected from {fundMo}/{fundDay} through {fundMo}/{endDay}. Your {firstMo}/{firstDay} payment then covers the interest for {coversMo}/1 through {coversMo}/{endDay}.
@@ -1138,7 +1139,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                   );
                 })()}
                 {isRefiTXHomestead && (
-                  <div style={{ fontSize:10, color:COLORS.grayLight, marginTop:8, fontFamily:font, fontStyle:"italic", lineHeight:1.4 }}>
+                  <div style={{ fontSize:12, color:COLORS.grayLight, marginTop:8, fontFamily:font, fontStyle:"italic", lineHeight:1.4 }}>
                     TX homestead refi — 3-day TILA right of rescission applied (Sat counts; Sun &amp; federal holidays excluded)
                   </div>
                 )}
@@ -1148,7 +1149,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
               <div style={{ borderTop:`1px solid ${COLORS.border}`, marginTop:10, paddingTop:10 }}>
                 <Toggle label="Short Pay (1st–5th closing)" checked={shortPay} onChange={setShortPay} />
                 {shortPay && (
-                  <div style={{ fontSize:10, color:COLORS.green, marginTop:4, fontFamily:font, lineHeight:1.6 }}>
+                  <div style={{ fontSize:12, color:COLORS.green, marginTop:4, fontFamily:font, lineHeight:1.6 }}>
                     <div style={{ fontWeight:700, marginBottom:2 }}>⚡ Short Pay Active</div>
                     <div><strong>Availability:</strong> Short pays are only available when funding on days 1–5 of the month.</div>
                     <div style={{ marginTop:3 }}><strong>Cost impact:</strong> Prepaid interest is zeroed out — instead of collecting per diem interest through month-end, the servicer credits back any interest already collected. This reduces cash to close.</div>
@@ -1172,7 +1173,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
               const border = payoff > 0 ? (isShort ? "#fca5a5" : "#86efac") : COLORS.border;
               const clr    = isShort ? COLORS.red : COLORS.green;
               return (
-                <div style={{ padding: "10px 12px", background: bg, border: `1px solid ${border}`, borderRadius: 6, fontSize: 11, fontFamily: font, lineHeight: 1.8 }}>
+                <div style={{ padding: "10px 12px", background: bg, border: `1px solid ${border}`, borderRadius: 6, fontSize: 12, fontFamily: font, lineHeight: 1.8 }}>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <span style={{ color: COLORS.grayLight }}>New Loan Amount</span>
                     <span style={{ fontWeight: 700, color: COLORS.green }}>+ {fmt(la)}</span>
@@ -1186,7 +1187,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                 </div>
               );
             })()}
-            <div style={{ fontSize: 10, color: COLORS.grayLight, fontFamily: font, marginTop: 6 }}>
+            <div style={{ fontSize: 12, color: COLORS.grayLight, fontFamily: font, marginTop: 6 }}>
               Auto-filled from Payment Calc → Loan Sizing Worksheet "Amount Due"
             </div>
           </SectionCard>
@@ -1194,15 +1195,15 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
 
           {/* FEES & OPTIONS */}
           {isInternal && <SectionCard title="FEES & OPTIONS (Internal)" accent={COLORS.blue}>
-            <LabeledInput label="Origination Fee"  value={originationPct}  onChange={(v) => { if (!String(v).trimStart().startsWith("-")) setOriginationPct(v); }}  onBlur={() => { const n = parseFloat(originationPct); if (!isNaN(n)) { const s = Math.max(0,n).toFixed(Math.max(1, Math.min(3, (originationPct.split(".")[1]||"").length))); setOriginationPct(s); } }} suffix="%" hint={`${fmt(Math.round((parseFloat(loanAmount)||0)*(parseFloat(originationPct)||0)/100))}`} small />
-            <LabeledInput label="Discount Points"  value={discountPoints}  onChange={(v) => { if (!String(v).trimStart().startsWith("-")) setDiscountPoints(v); }}  onBlur={() => { const n = parseFloat(discountPoints); if (!isNaN(n)) { const s = Math.max(0,n).toFixed(Math.max(1, Math.min(3, (discountPoints.split(".")[1]||"").length))); setDiscountPoints(s); } }} suffix="%" hint={`${fmt(Math.round((parseFloat(loanAmount)||0)*(parseFloat(discountPoints)||0)/100))}`} small />
+            <LabeledInput label="Origination Fee"  value={originationPct}  onChange={(v) => { if (!String(v).trimStart().startsWith("-")) setOriginationPct(v); }}  onBlur={() => { const n = parseFloat(originationPct); if (!isNaN(n)) { const s = Math.max(0,n).toFixed(Math.max(1, Math.min(3, (originationPct.split(".")[1]||"").length))); setOriginationPct(s); } }} suffix="%" hint={`${fmt(Math.round((parseFloat(loanAmount)||0)*(parseFloat(originationPct)||0)/100))}`} small infoTip="A fee charged by the lender, expressed as a percentage of the loan amount. One point equals 1% of the loan. Discount points are prepaid interest — paying more upfront lowers your rate over the life of the loan." />
+            <LabeledInput label="Discount Points"  value={discountPoints}  onChange={(v) => { if (!String(v).trimStart().startsWith("-")) setDiscountPoints(v); }}  onBlur={() => { const n = parseFloat(discountPoints); if (!isNaN(n)) { const s = Math.max(0,n).toFixed(Math.max(1, Math.min(3, (discountPoints.split(".")[1]||"").length))); setDiscountPoints(s); } }} suffix="%" hint={`${fmt(Math.round((parseFloat(loanAmount)||0)*(parseFloat(discountPoints)||0)/100))}`} small infoTip="Prepaid interest paid to the lender at closing to reduce your interest rate. One point = 1% of the loan amount. Each point typically reduces the rate by 0.25%, though this varies by lender and market." />
             {fees.isPurchase && <Toggle label="Title: Seller Paid"         checked={sellerPaidTitle}         onChange={setSellerPaidTitle} />}
             {!fees.piw && <Toggle label="Appraisal: Paid Outside of Closing (POC)" checked={appraisalPOC} onChange={setAppraisalPOC} />}
             {!isClient && <Toggle label="Appraisal Waiver: PIW" checked={raPiw} onChange={setRaPiw} />}
             {!fees.isPurchase && (
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                 <div style={{ flex:1 }}><Toggle label="Survey: Needed" checked={effectiveSurvey} onChange={v => { setIncludeSurvey(v); if (!v) setOwnerExistingSurvey(false); }} /></div>
-                {(() => { const sr = getStateFees(selectedState).surveyRequired; if (!sr || sr==="optional") return null; const color = sr==="required"?COLORS.red:COLORS.blue; const text = sr==="required"?"⚠ required":sr==="recommended"?"ℹ recommended":null; return text ? React.createElement("span",{style:{fontSize:10,color,fontFamily:font,fontWeight:600,whiteSpace:"nowrap"}},text) : null; })()}
+                {(() => { const sr = getStateFees(selectedState).surveyRequired; if (!sr || sr==="optional") return null; const color = sr==="required"?COLORS.red:COLORS.blue; const text = sr==="required"?"⚠ required":sr==="recommended"?"ℹ recommended":null; return text ? React.createElement("span",{style:{fontSize:12,color,fontFamily:font,fontWeight:600,whiteSpace:"nowrap"}},text) : null; })()}
               </div>
             )}
             {!fees.isPurchase && effectiveSurvey && (
@@ -1212,7 +1213,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
               <Toggle label="Title Policy: Waive" checked={raWaiveTitle} onChange={setRaWaiveTitle} />
             )}
             {!fees.isPurchase && raWaiveTitle && !isClient && (
-              <div style={{ fontSize: 11, color: COLORS.red, padding: "6px 10px", background: `${COLORS.red}10`, border: `2px solid ${COLORS.red}55`, borderRadius: 6, marginTop: -4, marginBottom: 4, fontFamily: font, lineHeight: 1.5 }}>
+              <div style={{ fontSize: 12, color: COLORS.red, padding: "6px 10px", background: `${COLORS.red}10`, border: `2px solid ${COLORS.red}55`, borderRadius: 6, marginTop: -4, marginBottom: 4, fontFamily: font, lineHeight: 1.5 }}>
                 ⚠️ <strong style={{ color: COLORS.red }}>Non-standard.</strong> Lender's title policy removed from the fee sheet. Only use when explicitly authorized — confirm before closing.
               </div>
             )}
@@ -1228,12 +1229,12 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                   style={{ width:"100%", padding:"6px 10px", border:`1px solid ${COLORS.border}`, borderRadius:6, fontSize:13, fontFamily:font, color:COLORS.navy, background:"#fff", outline:"none" }}
                 />
                 {fees.txReissueCredit > 0 && (
-                  <div style={{ fontSize:11, color:COLORS.green, fontWeight:600, marginTop:4, fontFamily:font }}>
+                  <div style={{ fontSize:12, color:COLORS.green, fontWeight:600, marginTop:4, fontFamily:font }}>
                     ✓ 50% reissue credit applies — {fmt(fees.txReissueCredit)} saved
                   </div>
                 )}
                 {origTitleDate && fees.txReissueCredit === 0 && (() => { const orig = new Date(origTitleDate+"T00:00:00"); const close = new Date(parsedCD ? parsedCD.year : new Date().getFullYear(), parsedCD ? parsedCD.month-1 : new Date().getMonth(), parsedCD ? parsedCD.day : new Date().getDate()); const yrs = (close-orig)/(365.25*24*3600*1000); return yrs > 4; })() && (
-                  <div style={{ fontSize:11, color:COLORS.grayLight, marginTop:4, fontFamily:font }}>
+                  <div style={{ fontSize:12, color:COLORS.grayLight, marginTop:4, fontFamily:font }}>
                     Prior policy &gt;4 years ago — no reissue credit applies
                   </div>
                 )}
@@ -1248,19 +1249,19 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                 <div style={{ display:"flex", gap:0, borderRadius:6, overflow:"hidden", border:`1px solid ${COLORS.border}`, marginBottom:6 }}>
                   {[{ v:"true", l:"First Use" },{ v:"false", l:"Subsequent Use" }].map(o => (
                     <button key={o.v} onClick={() => setVaFirst(o.v)}
-                      style={{ flex:1, padding:"6px 0", fontSize:11, fontWeight:700, fontFamily:font, border:"none", cursor:"pointer", background:vaFirst===o.v?COLORS.navy:"transparent", color:vaFirst===o.v?"#fff":COLORS.gray, transition:"all 0.2s" }}>
+                      style={{ flex:1, padding:"6px 0", fontSize:12, fontWeight:700, fontFamily:font, border:"none", cursor:"pointer", background:vaFirst===o.v?COLORS.navy:"transparent", color:vaFirst===o.v?"#fff":COLORS.gray, transition:"all 0.2s" }}>
                       {o.l}
                     </button>
                   ))}
                 </div>
                 {fees.fsVaExempt ? (
-                  <div style={{ fontSize:11, color:COLORS.green, fontFamily:font, marginTop:4, fontWeight:600 }}>
+                  <div style={{ fontSize:12, color:COLORS.green, fontFamily:font, marginTop:4, fontWeight:600 }}>
                     Exempt — funding fee waived{fees.fsVaDisNum >= 10 ? ` (${fees.fsVaDisNum}% service-connected disability)` : ""}
                   </div>
                 ) : (
                   <>
                     {fees.vaFundingFee > 0 && (
-                      <div style={{ fontSize:11, color:COLORS.navy, fontFamily:font, marginTop:4 }}>
+                      <div style={{ fontSize:12, color:COLORS.navy, fontFamily:font, marginTop:4 }}>
                         Fee: <strong>{(fees.vaFeeRate*100).toFixed(2)}%</strong> = <strong>{fmt(fees.vaFundingFee)}</strong> (financed into loan)
                       </div>
                     )}
@@ -1271,7 +1272,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                         const tier = dp >= 10 ? "10%+" : "5–10%";
                         const tRate = dp >= 10 ? "1.25%" : "1.50%";
                         return (
-                          <div style={{ fontSize:10, color:COLORS.grayLight, fontFamily:font, marginTop:4, fontStyle:"italic" }}>
+                          <div style={{ fontSize:12, color:COLORS.grayLight, fontFamily:font, marginTop:4, fontStyle:"italic" }}>
                             At {tier} down, first &amp; subsequent use rates are both {tRate} (VA schedule). First/subsequent only differs at &lt;5% down.
                           </div>
                         );
@@ -1280,7 +1281,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                     })()}
                   </>
                 )}
-                <div style={{ fontSize:10, color:COLORS.gray, fontFamily:font, marginTop:4, lineHeight:1.4 }}>
+                <div style={{ fontSize:12, color:COLORS.gray, fontFamily:font, marginTop:4, lineHeight:1.4 }}>
                   Disability % and service type set in Payment Calculator tab.
                 </div>
               </div>
@@ -1337,7 +1338,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                   setOvTitleSearch(""); setOvHomeWarranty(""); setOvRecordingFee(""); setOvTitleCourier(""); setOvTaxCert("");
                   setOvPestInspection(""); setOvBondFee("");
                 }
-              }} style={{ padding:"6px 14px", background:COLORS.grayLight, color:"#fff", border:"none", borderRadius:6, cursor:"pointer", fontSize:11, fontWeight:600, fontFamily:font }}>
+              }} style={{ padding:"6px 14px", background:COLORS.grayLight, color:"#fff", border:"none", borderRadius:6, cursor:"pointer", fontSize:12, fontWeight:600, fontFamily:font }}>
                 {isInternal ? "↺ Reset All Fees" : "↺ Reset Points"}
               </button>
             </div>
@@ -1346,7 +1347,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
           {/* ESCROW DETAILS */}
           {isInternal && <SectionCard title="ESCROW DETAILS (Internal)" accent={COLORS.blue}>
             {isGovLoan && (
-              <div style={{ fontSize:10, color:COLORS.blue, marginBottom:8, fontFamily:font }}>
+              <div style={{ fontSize:12, color:COLORS.blue, marginBottom:8, fontFamily:font }}>
                 Escrows are mandatory for {loanTypeLabel} loans.
               </div>
             )}
@@ -1354,7 +1355,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
               <div style={{ marginBottom:8 }}>
                 <Toggle label="Simple 12/3/3 Escrows" checked={simpleEscrow} onChange={setSimpleEscrow} />
                 {!simpleEscrow && (
-                  <div style={{ fontSize:10, color:COLORS.blue, marginTop:2, fontFamily:font, lineHeight:1.5, fontStyle:"italic" }}>
+                  <div style={{ fontSize:12, color:COLORS.blue, marginTop:2, fontFamily:font, lineHeight:1.5, fontStyle:"italic" }}>
                     Proper RESPA aggregate adjustment active — enter disbursement dates below.
                   </div>
                 )}
@@ -1363,7 +1364,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
             {fees.inclEscrow && (!fees.isPurchase || !simpleEscrow) && (
               <div style={{ padding:"10px 12px", background:"#f0f5ff", border:`1px solid ${COLORS.border}`, borderRadius:8, marginBottom:8 }}>
                 <div style={{ fontSize:11, fontWeight:700, color:COLORS.blue, letterSpacing:"0.05em", marginBottom:6, fontFamily:font }}>RESPA ESCROW DATES</div>
-                <div style={{ fontSize:10, color:COLORS.grayLight, marginBottom:8, fontFamily:font, lineHeight:1.4 }}>
+                <div style={{ fontSize:12, color:COLORS.grayLight, marginBottom:8, fontFamily:font, lineHeight:1.4 }}>
                   {fees.isPurchase
                     ? "Enter the next tax disbursement date. Insurance reserves use 1 year from funding (policy starts at closing)."
                     : "Enter the next tax disbursement date and insurance renewal date for accurate reserve calculation."}
@@ -1376,7 +1377,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                 {!nextTaxDueDate && (() => {
                   const stateInfo = STATE_TAX_DUE_DATES[selectedState];
                   return (
-                    <div style={{ fontSize:10, color:COLORS.blue, marginTop:2, marginBottom:4, fontFamily:font, fontStyle:"italic" }}>
+                    <div style={{ fontSize:12, color:COLORS.blue, marginTop:2, marginBottom:4, fontFamily:font, fontStyle:"italic" }}>
                       {stateInfo
                         ? `ℹ In ${stateInfo.name}, property taxes are typically due ${stateInfo.due}. Using Dec 31 default — override above.`
                         : "ℹ Using Dec 31 default — override above to customize."
@@ -1394,18 +1395,18 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                     <input type="date" value={insRenewalDate || origTitleDate || ""} onChange={e => setInsRenewalDate(e.target.value)}
                       style={{ width:"100%", padding:"6px 10px", border:`1px solid ${insRenewalDate ? COLORS.border : COLORS.blue}`, borderRadius:6, fontSize:13, fontFamily:font, color:COLORS.navy, background: insRenewalDate ? "#fff" : "#f0f5ff", outline:"none", boxSizing:"border-box", marginBottom:4 }} />
                     {!insRenewalDate && origTitleDate && (
-                      <div style={{ fontSize:10, color:COLORS.blue, marginTop:2, marginBottom:4, fontFamily:font, fontStyle:"italic" }}>
+                      <div style={{ fontSize:12, color:COLORS.blue, marginTop:2, marginBottom:4, fontFamily:font, fontStyle:"italic" }}>
                         ℹ Using next renewal {_nextInsRenewal} (based on Original Loan Date month/day) — override above if different.
                       </div>
                     )}
                     {!insRenewalDate && !origTitleDate && (
-                      <div style={{ fontSize:10, color:COLORS.blue, marginTop:2, marginBottom:4, fontFamily:font, fontStyle:"italic" }}>
+                      <div style={{ fontSize:12, color:COLORS.blue, marginTop:2, marginBottom:4, fontFamily:font, fontStyle:"italic" }}>
                         ℹ Enter the insurance renewal date for accurate calculation. Set Original Loan Date in Refi Analyzer to auto-populate.
                       </div>
                     )}
                   </React.Fragment>
                 )}
-                <div style={{ fontSize:10, color:COLORS.green, marginTop:6, fontFamily:font, fontWeight:600 }}>
+                <div style={{ fontSize:12, color:COLORS.green, marginTop:6, fontFamily:font, fontWeight:600 }}>
                   ✓ RESPA calculation active · {fees.taxReserveMonths} mo tax + {fees.insReserveMonths} mo ins
                   {fees.aggregateAdj < 0 ? ` · adj: (${fmt(Math.abs(fees.aggregateAdj))}) credit` : fees.aggregateAdj > 0 ? ` · adj: +${fmt(fees.aggregateAdj)}` : " · adj: $0"}
                 </div>
@@ -1415,14 +1416,14 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
               <div>
                 <Toggle label="Waive Escrows" checked={waiveEscrows} onChange={setWaiveEscrows} />
                 {waiveEscrows && (
-                  <div style={{ fontSize:10, color:COLORS.grayLight, marginTop:2, marginBottom:4, fontFamily:font, lineHeight:1.5, fontStyle:"italic" }}>
+                  <div style={{ fontSize:12, color:COLORS.grayLight, marginTop:2, marginBottom:4, fontFamily:font, lineHeight:1.5, fontStyle:"italic" }}>
                     Note: Waiving escrows may incur a 0.25% LLPA pricing adjustment ({fmt(waiveLLPA)}) from the lender.
                     {fees.isPurchase && fees.sellerProratedTaxCredit > 0 && " Seller's prorated tax credit still applies."}
                   </div>
                 )}
                 {fees.ins90Check && (
                   <>
-                    <div style={{ margin:"6px 0 4px", padding:"8px 10px", background:"#fffbeb", border:"1px solid #fcd34d", borderRadius:6, fontSize:10, fontFamily:font, lineHeight:1.6, color:"#92400e" }}>
+                    <div style={{ margin:"6px 0 4px", padding:"8px 10px", background:"#fffbeb", border:"1px solid #fcd34d", borderRadius:6, fontSize:12, fontFamily:font, lineHeight:1.6, color:"#92400e" }}>
                       <strong>⚠ Internal:</strong> Insurance renews within 90 days of funding. When escrows are waived, most lenders require 90 days of prepaid insurance at closing to ensure coverage during new loan setup.
                     </div>
                     <Toggle label="Internal: Collect 90 Days of Insurance" checked={collect90Ins} onChange={setCollect90Ins} />
@@ -1432,120 +1433,13 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
             )}
           </SectionCard>}
 
-          {/* CREDITS */}
-          <SectionCard title="CREDITS" accent={COLORS.green}>
-            {fees.isPurchase && <LabeledInput label="Seller Credits"  prefix="$" value={sellerCredits}  onChange={setSellerCredits}  useCommas />}
-            {fees.isPurchase && <LabeledInput label="Realtor Credits" prefix="$" value={realtorContrib} onChange={setRealtorContrib} useCommas />}
-            <LabeledInput label="Lender Credits" prefix="$" value={lenderCredits} onChange={setLenderCredits} useCommas />
-
-            {/* Lender credit over-cap warning */}
-            {fees.lenderCred > fees.lenderCredMax && fees.lenderCredMax > 0 && (
-              <div style={{ marginTop:4, marginBottom:4, padding:"8px 10px", background:"#fef2f2", border:`2px solid ${COLORS.red}`, borderRadius:6, fontSize:11, fontFamily:font, color:COLORS.red, fontWeight:700, lineHeight:1.5 }}>
-                ⚠ LENDER CREDIT EXCEEDS ALLOWABLE MAXIMUM — Lender credits cannot exceed total closing costs + prepaids ({fmt(fees.lenderCredMax)}). Credit must be reduced before closing.
-              </div>
-            )}
-
-            {/* Seller concession program limit indicator — purchase only */}
-            {fees.isPurchase && fees.sellerConcMax > 0 && (() => {
-              const used      = fees.sellerCred + fees.realtor + fees.lenderCred;
-              const max       = fees.sellerConcMax;
-              const over      = used > max;
-              const barPct    = max > 0 ? Math.min(used / max, 1) * 100 : 0;
-              const barColor  = over ? COLORS.red : COLORS.green;
-              const nearLimit = !over && max > 0 && (max - used) / max < 0.15;
-              const ltv       = Math.round((parseFloat(loanAmount)||0) / (parseFloat(purchasePrice)||1) * 100);
-              const programLine = loanType === "va"
-                ? `Max concessions allowed: ${fees.sellerConcPct}% (${fmt(max)}) for VA loans`
-                : loanType === "fha"
-                  ? `Max concessions allowed: ${fees.sellerConcPct}% (${fmt(max)}) for FHA loans`
-                  : loanType === "usda"
-                    ? `Max concessions allowed: ${fees.sellerConcPct}% (${fmt(max)}) for USDA loans`
-                    : `Max concessions allowed: ${fees.sellerConcPct}% (${fmt(max)}) for Conventional loans at ${ltv}% LTV${occupancy === "investment" ? " — investment property" : ""}`;
-              return (
-                <div style={{ marginTop:2, marginBottom:6, fontSize:10, fontFamily:font, background: over ? "#fef2f2" : "#f8f9fb", border: over ? `2px solid ${COLORS.red}` : "none", borderRadius:6, padding:"6px 8px" }}>
-                  <div style={{ color:COLORS.grayLight, marginBottom:4 }}>{programLine}</div>
-                  {used > 0 && (
-                    <div style={{ height:4, borderRadius:2, background:COLORS.border, overflow:"hidden", marginBottom:4 }}>
-                      <div style={{ height:"100%", width:`${barPct}%`, background:barColor, borderRadius:2, transition:"width 0.3s" }} />
-                    </div>
-                  )}
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                    <span style={{ color:COLORS.navy, fontWeight:600 }}>Current Concessions = {fmt(used)}</span>
-                    {over
-                      ? <span style={{ color:COLORS.red, fontWeight:700 }}>⚠ {fmt(used - max)} over limit</span>
-                      : nearLimit
-                        ? <span style={{ color:COLORS.red, fontWeight:600 }}>{fmt(max - used)} from limit</span>
-                        : null}
-                  </div>
-                  {over && (
-                    <div style={{ marginTop:8, padding:"8px 10px", background:"#fef2f2", border:`1px solid ${COLORS.red}`, borderRadius:6, fontSize:11, color:COLORS.red, fontFamily:font, fontWeight:600, lineHeight:1.6 }}>
-                      ⛔ CONCESSION LIMIT EXCEEDED — Concessions are {fmt(used - max)} over the allowable maximum.<br/>
-                      <span style={{ fontWeight:400 }}>Concessions can only be applied toward closing costs and prepaids — they cannot be used to cover the down payment. The buyer must source any excess from their own funds. Reduce concessions or adjust the loan structure.</span>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-
-            {/* Costs to cover + credit summary + delta */}
-            {(() => {
-              const creditsApplied = (fees.lenderCred || 0) + (fees.sellerCred || 0) + (fees.realtor || 0);
-              const coverableCosts = (fees.displayClosingCosts || 0) + (fees.additionalFeesTotal || 0) + (fees.totalPrepaids || 0);
-              const delta          = coverableCosts - creditsApplied;
-              const deltaOver      = delta < 0;
-              return (
-                <div style={{ marginTop:8, padding:"8px 10px", background:"#f8f9fb", borderRadius:6, border:`1px solid ${COLORS.border}` }}>
-                  <div style={{ fontSize:10, fontWeight:700, color:COLORS.grayLight, marginBottom:6, fontFamily:font, letterSpacing:"0.04em" }}>COSTS TO COVER</div>
-                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, fontFamily:font, marginBottom:3 }}>
-                    <span style={{ color:COLORS.grayLight }}>Closing Costs</span>
-                    <span style={{ fontWeight:600, color:COLORS.navy }}>{fmt(fees.displayClosingCosts || 0)}</span>
-                  </div>
-                  {(fees.additionalFeesTotal > 0) && (
-                    <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, fontFamily:font, marginBottom:3 }}>
-                      <span style={{ color:COLORS.grayLight }}>Additional Fees</span>
-                      <span style={{ fontWeight:600, color:COLORS.navy }}>{fmt(fees.additionalFeesTotal)}</span>
-                    </div>
-                  )}
-                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, fontFamily:font, marginBottom:4 }}>
-                    <span style={{ color:COLORS.grayLight }}>Prepaids &amp; Reserves</span>
-                    <span style={{ fontWeight:600, color:COLORS.navy }}>{fmt(fees.totalPrepaids || 0)}</span>
-                  </div>
-                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, fontFamily:font, borderTop:`1px solid ${COLORS.border}`, paddingTop:4, marginBottom: creditsApplied > 0 ? 6 : 0 }}>
-                    <span style={{ fontWeight:700, color:COLORS.grayLight }}>Total to Zero Out</span>
-                    <span style={{ fontWeight:700, color:COLORS.navy }}>{fmt(coverableCosts)}</span>
-                  </div>
-                  {creditsApplied > 0 && (
-                    <React.Fragment>
-                      <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, fontFamily:font, marginBottom:3 }}>
-                        <span style={{ color:COLORS.grayLight }}>
-                          Total Credits Applied
-                          <span style={{ fontSize:9, color:COLORS.grayLight, fontWeight:400, marginLeft:4 }}>(excl. option &amp; earnest)</span>
-                        </span>
-                        <span style={{ fontWeight:700, color:COLORS.red }}>({fmt(creditsApplied)})</span>
-                      </div>
-                      <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, fontFamily:font, borderTop:`1px solid ${COLORS.border}`, paddingTop:4 }}>
-                        <span style={{ fontWeight:700, color: deltaOver ? COLORS.red : COLORS.green }}>
-                          {deltaOver ? "⚠ Over Coverable Costs" : delta === 0 ? "✓ All Costs Covered" : "Remaining to Allocate"}
-                        </span>
-                        <span style={{ fontWeight:700, color: deltaOver ? COLORS.red : COLORS.green }}>
-                          {deltaOver ? `(${fmt(Math.abs(delta))})` : fmt(delta)}
-                        </span>
-                      </div>
-                    </React.Fragment>
-                  )}
-                </div>
-              );
-            })()}
-          </SectionCard>
-
-
           {/* CONTRACT DETAILS */}
           {fees.isPurchase && (
           <SectionCard title="CONTRACT DETAILS" accent={COLORS.green}>
             {selectedState === "TX" && <LabeledInput label="Option Money"  prefix="$" value={optionMoney}  onChange={setOptionMoney}  useCommas />}
-            <LabeledInput label="Earnest Money" prefix="$" value={earnestMoney} onChange={setEarnestMoney} useCommas />
+            <LabeledInput label="Earnest Money" prefix="$" value={earnestMoney} onChange={setEarnestMoney} useCommas infoTip="A good-faith deposit made by the buyer, typically held in escrow by the title company. Applied toward the buyer's closing costs or down payment at closing." />
             <LabeledInput
-              label="Realtor Commissions: Buyer Paid"
+              label="Realtor Commissions Paid by Buyer"
               value={rcBuyerVal}
               prefix={rcBuyerMode === "dollar" ? "$" : undefined}
               suffix={rcBuyerMode === "pct" ? "%" : undefined}
@@ -1591,11 +1485,121 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
           </SectionCard>
           )}
 
+          {/* CREDITS */}
+          <SectionCard title="CREDITS" accent={COLORS.green}>
+            {fees.isPurchase && <LabeledInput label="Seller Credits"  prefix="$" value={sellerCredits}  onChange={setSellerCredits}  useCommas infoTip="A dollar amount the seller agrees to contribute toward the buyer's closing costs. This reduces what the buyer needs to bring to closing. Subject to program-specific limits." />}
+            {fees.isPurchase && <LabeledInput label="Realtor Credits" prefix="$" value={realtorContrib} onChange={setRealtorContrib} useCommas />}
+            <LabeledInput label="Lender Credits" prefix="$" value={lenderCredits} onChange={setLenderCredits} useCommas infoTip="Credits from the lender that offset closing costs — typically in exchange for accepting a slightly higher interest rate. Lender credits cannot exceed total closing costs." />
+
+            {/* Lender credit over-cap warning */}
+            {fees.lenderCred > fees.lenderCredMax && fees.lenderCredMax > 0 && (
+              <div style={{ marginTop:4, marginBottom:4, padding:"8px 10px", background:"#fef2f2", border:`2px solid ${COLORS.red}`, borderRadius:6, fontSize:12, fontFamily:font, color:COLORS.red, fontWeight:700, lineHeight:1.5 }}>
+                ⚠ LENDER CREDIT EXCEEDS ALLOWABLE MAXIMUM — Lender credits cannot exceed total closing costs + prepaids ({fmt(fees.lenderCredMax)}). Credit must be reduced before closing.
+              </div>
+            )}
+
+            {/* Seller concession program limit indicator — purchase only */}
+            {fees.isPurchase && fees.sellerConcMax > 0 && (() => {
+              const used      = fees.sellerCred + fees.realtor + fees.lenderCred;
+              const max       = fees.sellerConcMax;
+              const over      = used > max;
+              const barPct    = max > 0 ? Math.min(used / max, 1) * 100 : 0;
+              const barColor  = over ? COLORS.red : COLORS.green;
+              const nearLimit = !over && max > 0 && (max - used) / max < 0.15;
+              const ltv       = Math.round((parseFloat(loanAmount)||0) / (parseFloat(purchasePrice)||1) * 100);
+              const programLine = loanType === "va"
+                ? `Max concessions allowed: ${fees.sellerConcPct}% (${fmt(max)}) for VA loans`
+                : loanType === "fha"
+                  ? `Max concessions allowed: ${fees.sellerConcPct}% (${fmt(max)}) for FHA loans`
+                  : loanType === "usda"
+                    ? `Max concessions allowed: ${fees.sellerConcPct}% (${fmt(max)}) for USDA loans`
+                    : `Max concessions allowed: ${fees.sellerConcPct}% (${fmt(max)}) for Conventional loans at ${ltv}% LTV${occupancy === "investment" ? " — investment property" : ""}`;
+              return (
+                <div style={{ marginTop:2, marginBottom:6, fontSize:12, fontFamily:font, background: over ? "#fef2f2" : "#f8f9fb", border: over ? `2px solid ${COLORS.red}` : "none", borderRadius:6, padding:"6px 8px" }}>
+                  <div style={{ color:COLORS.grayLight, marginBottom:4 }}>{programLine}</div>
+                  {used > 0 && (
+                    <div style={{ height:4, borderRadius:2, background:COLORS.border, overflow:"hidden", marginBottom:4 }}>
+                      <div style={{ height:"100%", width:`${barPct}%`, background:barColor, borderRadius:2, transition:"width 0.3s" }} />
+                    </div>
+                  )}
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                    <span style={{ color:COLORS.navy, fontWeight:600 }}>Current Concessions = {fmt(used)}</span>
+                    {over
+                      ? <span style={{ color:COLORS.red, fontWeight:700 }}>⚠ {fmt(used - max)} over limit</span>
+                      : nearLimit
+                        ? <span style={{ color:COLORS.red, fontWeight:600 }}>{fmt(max - used)} from limit</span>
+                        : null}
+                  </div>
+                  {over && (
+                    <div style={{ marginTop:8, padding:"8px 10px", background:"#fef2f2", border:`1px solid ${COLORS.red}`, borderRadius:6, fontSize:12, color:COLORS.red, fontFamily:font, fontWeight:600, lineHeight:1.6 }}>
+                      ⛔ CONCESSION LIMIT EXCEEDED — Concessions are {fmt(used - max)} over the allowable maximum.<br/>
+                      <span style={{ fontWeight:400 }}>Concessions can only be applied toward closing costs and prepaids — they cannot be used to cover the down payment. The buyer must source any excess from their own funds. Reduce concessions or adjust the loan structure.</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Costs to cover + credit summary + delta */}
+            {(() => {
+              const creditsApplied = (fees.lenderCred || 0) + (fees.sellerCred || 0) + (fees.realtor || 0);
+              const coverableCosts = (fees.displayClosingCosts || 0) + (fees.additionalFeesTotal || 0) + (fees.totalPrepaids || 0);
+              const delta          = coverableCosts - creditsApplied;
+              const deltaOver      = delta < 0;
+              return (
+                <div style={{ marginTop:8, padding:"8px 10px", background:"#f8f9fb", borderRadius:6, border:`1px solid ${COLORS.border}` }}>
+                  <div style={{ fontSize:10, fontWeight:700, color:COLORS.grayLight, marginBottom:6, fontFamily:font, letterSpacing:"0.04em" }}>COSTS TO COVER</div>
+                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, fontFamily:font, marginBottom:3 }}>
+                    <span style={{ color:COLORS.grayLight }}>Closing Costs</span>
+                    <span style={{ fontWeight:600, color:COLORS.navy }}>{fmt(fees.displayClosingCosts || 0)}</span>
+                  </div>
+                  {(fees.additionalFeesTotal > 0) && (
+                    <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, fontFamily:font, marginBottom:3 }}>
+                      <span style={{ color:COLORS.grayLight }}>Additional Fees</span>
+                      <span style={{ fontWeight:600, color:COLORS.navy }}>{fmt(fees.additionalFeesTotal)}</span>
+                    </div>
+                  )}
+                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, fontFamily:font, marginBottom:4 }}>
+                    <span style={{ color:COLORS.grayLight }}>Prepaids &amp; Reserves</span>
+                    <span style={{ fontWeight:600, color:COLORS.navy }}>{fmt(fees.totalPrepaids || 0)}</span>
+                  </div>
+                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, fontFamily:font, borderTop:`1px solid ${COLORS.border}`, paddingTop:4, marginBottom: creditsApplied > 0 ? 6 : 0 }}>
+                    <span style={{ fontWeight:700, color:COLORS.grayLight }}>Total to Zero Out</span>
+                    <span style={{ fontWeight:700, color:COLORS.navy }}>{fmt(coverableCosts)}</span>
+                  </div>
+                  {creditsApplied > 0 && (
+                    <React.Fragment>
+                      <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, fontFamily:font, marginBottom:3 }}>
+                        <span style={{ color:COLORS.grayLight }}>
+                          Total Credits Applied
+                          <span style={{ fontSize:9, color:COLORS.grayLight, fontWeight:400, marginLeft:4 }}>(excl. option &amp; earnest)</span>
+                        </span>
+                        <span style={{ fontWeight:700, color:COLORS.red }}>({fmt(creditsApplied)})</span>
+                      </div>
+                      <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, fontFamily:font, borderTop:`1px solid ${COLORS.border}`, paddingTop:4 }}>
+                        <span style={{ fontWeight:700, color: deltaOver ? COLORS.red : COLORS.green }}>
+                          {deltaOver ? "⚠ Over Coverable Costs" : delta === 0 ? "✓ All Costs Covered" : "Remaining to Allocate"}
+                        </span>
+                        <span style={{ fontWeight:700, color: deltaOver ? COLORS.red : COLORS.green }}>
+                          {deltaOver ? `(${fmt(Math.abs(delta))})` : fmt(delta)}
+                        </span>
+                      </div>
+                    </React.Fragment>
+                  )}
+                </div>
+              );
+            })()}
+          </SectionCard>
+
+
           {/* HOA */}
           {fees.isPurchase && (
             <SectionCard title="HOMEOWNERS ASSOCIATION (HOA)" accent={COLORS.blue}>
-              <LabeledInput label="HOA Transfer Fee"   prefix="$" value={hoaTransferFee} onChange={setHoaTransferFee} useCommas />
               <LabeledInput label="HOA Dues (monthly)" prefix="$" value={hoaDues} onChange={setHoaDues} useCommas />
+              <LabeledInput label="HOA Transfer Fee"   prefix="$" value={hoaTransferFee} onChange={setHoaTransferFee} useCommas />
+              <div style={{ fontSize:12, color:COLORS.grayLight, marginTop:2, marginBottom:8, fontFamily:font, lineHeight:1.6 }}>
+                The contract may determine how much of this fee the buyer is responsible for. For existing homes, <strong style={{ color:COLORS.navy }}>$250</strong> is typical. For new construction, it can be up to <strong style={{ color:COLORS.navy }}>$1,200</strong> at closing.
+              </div>
               {fees.hoaMonthly > 0 && (
                 <div style={{ marginTop:4, marginBottom:4 }}>
                   <label style={{ display:"block", fontSize:11, fontWeight:600, color:COLORS.grayLight, marginBottom:3, fontFamily:font, letterSpacing:"0.04em" }}>HOA Collection Frequency</label>
@@ -1605,7 +1609,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                     <option value="semi-annual">Semi-Annual</option>
                     <option value="quarterly">Quarterly</option>
                   </select>
-                  <div style={{ fontSize:10, color:COLORS.grayLight, marginTop:3, fontFamily:font, fontStyle:"italic", lineHeight:1.4 }}>
+                  <div style={{ fontSize:12, color:COLORS.grayLight, marginTop:3, fontFamily:font, fontStyle:"italic", lineHeight:1.4 }}>
                     {hoaFrequency === "annual"      && "Using Jan 1st as the payment date for HOA dues"}
                     {hoaFrequency === "semi-annual" && "Using Jan. 1 and July 1 as payment dates for HOA dues"}
                     {hoaFrequency === "quarterly"   && "Using Jan. 1, Apr. 1, July 1, and Oct. 1 as payment dates for HOA dues"}
@@ -1658,7 +1662,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                     </select>
                   </div>
                   {fees.effectiveTaxRate > 0 && fees.ncValuation > 0 && (
-                    <div style={{ marginTop:6, padding:"7px 10px", background:"#f8fafc", border:`1px solid ${COLORS.border}`, borderRadius:6, fontSize:10, color:COLORS.grayLight, fontFamily:font, lineHeight:1.7 }}>
+                    <div style={{ marginTop:6, padding:"7px 10px", background:"#f8fafc", border:`1px solid ${COLORS.border}`, borderRadius:6, fontSize:12, color:COLORS.grayLight, fontFamily:font, lineHeight:1.7 }}>
                       <div><strong>Estimated Tax Rate:</strong> {(fees.effectiveTaxRate * 100).toFixed(3)}% (derived from monthly taxes ÷ {homesteadExemption ? "estimated 70% tax basis" : "purchase price"})</div>
                       {homesteadExemption && (
                         <div style={{ color:COLORS.blue }}>Est. tax valuation uses approx. 70% of purchase price — a homestead exemption may reduce the taxable value for owner-occupied properties. Actual amounts will vary.</div>
@@ -1673,16 +1677,16 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                   )}
                   {ncEscrowType === "improved" && (
                     <div style={{ marginTop:8, padding:"8px 10px", background:"#f0fdf4", border:`1px solid #86efac`, borderRadius:6 }}>
-                      <div style={{ fontSize:11, fontWeight:700, color:"#166534", fontFamily:font, marginBottom:2 }}>✓ Improved Escrows — Good Shape</div>
-                      <div style={{ fontSize:10, color:"#166534", fontFamily:font, lineHeight:1.5 }}>
+                      <div style={{ fontSize:12, fontWeight:700, color:"#166534", fontFamily:font, marginBottom:2 }}>✓ Improved Escrows — Good Shape</div>
+                      <div style={{ fontSize:12, color:"#166534", fontFamily:font, lineHeight:1.5 }}>
                         Escrows are based on the full improved value. Since the seller owned during the unimproved period, the buyer is paying taxes at the higher rate from day one — they'll likely receive a refund at the first escrow analysis.
                       </div>
                     </div>
                   )}
                   {ncEscrowType === "unimproved" && (
                     <div style={{ marginTop:8, padding:"8px 10px", background:"#fef2f2", border:`1px solid #fca5a5`, borderRadius:6 }}>
-                      <div style={{ fontSize:11, fontWeight:700, color:"#991b1b", fontFamily:font, marginBottom:2 }}>⚠ WARNING: Escrow Shortage Likely</div>
-                      <div style={{ fontSize:10, color:"#991b1b", fontFamily:font, lineHeight:1.5 }}>
+                      <div style={{ fontSize:12, fontWeight:700, color:"#991b1b", fontFamily:font, marginBottom:2 }}>⚠ WARNING: Escrow Shortage Likely</div>
+                      <div style={{ fontSize:12, color:"#991b1b", fontFamily:font, lineHeight:1.5 }}>
                         Escrows are based on the unimproved valuation ({fees.ncValuation > 0 ? `$${fees.ncValuation.toLocaleString()}` : "enter valuation above"}). When the full improved assessment is applied — typically within 12–24 months — the escrow account will almost certainly be short, resulting in a significant rebalance and higher monthly payment.
                       </div>
                     </div>
@@ -1729,7 +1733,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                               const yearCost = monthlySavings * 12;
                               runningTotal += yearCost;
                               return (
-                                <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: COLORS.navy, fontFamily: font, marginBottom: 5 }}>
+                                <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: COLORS.navy, fontFamily: font, marginBottom: 5 }}>
                                   <span style={{ fontWeight: 600 }}>Year {i + 1}: {adjRate.toFixed(3)}% rate</span>
                                   <span>{fmt(monthlySavings)}/mo savings &nbsp;·&nbsp; <strong>{fmt(yearCost)}</strong></span>
                                 </div>
@@ -1739,7 +1743,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                               <span>Total Buydown Cost</span>
                               <span style={{ color: COLORS.blue }}>{fmt(runningTotal)}</span>
                             </div>
-                            <div style={{ fontSize: 10, color: COLORS.gray, fontFamily: font, marginTop: 4, lineHeight: 1.4 }}>
+                            <div style={{ fontSize: 12, color: COLORS.gray, fontFamily: font, marginTop: 4, lineHeight: 1.4 }}>
                               Added to Lender Fees — typically covered by builder/seller concession.
                             </div>
                           </>
@@ -1747,7 +1751,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                       })()}
                     </div>
                   ) : (
-                    <div style={{ marginTop: 8, padding: "8px 10px", background: "#fef9c3", border: `1px solid #fde047`, borderRadius: 6, fontSize: 11, color: "#713f12", fontFamily: font }}>
+                    <div style={{ marginTop: 8, padding: "8px 10px", background: "#fef9c3", border: `1px solid #fde047`, borderRadius: 6, fontSize: 12, color: "#713f12", fontFamily: font }}>
                       Enter a rate and loan amount above to calculate buydown cost.
                     </div>
                   )}
@@ -1758,7 +1762,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
 
           {/* OTHER FEES */}
           {isInternal && <SectionCard title="OTHER FEES (Internal)" accent={COLORS.blue}>
-            <div style={{ fontSize:11, color:COLORS.grayLight, fontFamily:font, marginBottom:10, lineHeight:1.4 }}>
+            <div style={{ fontSize:12, color:COLORS.grayLight, fontFamily:font, marginBottom:10, lineHeight:1.4 }}>
               Add up to three custom fees. These will appear in the Additional Fees section of the fee sheet.
             </div>
             {[
@@ -1783,7 +1787,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
           {/* DPA PROGRAM OPTIONS — shown when active program has optional fees (e.g. TDHCA MCC) */}
           {fees.isPurchase && fees.dpaDef && fees.dpaDef.optionalProgramFees && (
             <SectionCard title={`${fees.dpaDef.label} — OPTIONAL FEES`} accent={COLORS.blue}>
-              <div style={{ fontSize:11, color:COLORS.grayLight, fontFamily:font, marginBottom:10, lineHeight:1.4 }}>
+              <div style={{ fontSize:12, color:COLORS.grayLight, fontFamily:font, marginBottom:10, lineHeight:1.4 }}>
                 Toggle optional program fees. Only check if this borrower is applying for an MCC.
               </div>
               {fees.dpaDef.optionalProgramFees.map(f => (
@@ -1845,8 +1849,8 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                       : `Split Premium MI Upfront (0.50%) — ${fees.convMiAtClosing ? "paid at closing" : "rolled into loan"}`}
                     amount={fees.convUpfrontPremium} indent color={fees.convMiAtClosing ? COLORS.navy : COLORS.blue} />
                   {fees.convMiAtClosing
-                    ? <div style={{ fontSize:10, color:COLORS.grayLight, fontFamily:font, paddingLeft:20, marginBottom:2, lineHeight:1.4 }}>↑ Included in cash to close</div>
-                    : <div style={{ fontSize:10, color:COLORS.grayLight, fontFamily:font, paddingLeft:20, marginBottom:2, lineHeight:1.4 }}>↑ Financed into loan — not included in cash to close</div>
+                    ? <div style={{ fontSize:12, color:COLORS.grayLight, fontFamily:font, paddingLeft:20, marginBottom:2, lineHeight:1.4 }}>↑ Included in cash to close</div>
+                    : <div style={{ fontSize:12, color:COLORS.grayLight, fontFamily:font, paddingLeft:20, marginBottom:2, lineHeight:1.4 }}>↑ Financed into loan — not included in cash to close</div>
                   }
                   <Toggle
                     label="Finance into loan (vs. pay at closing)"
@@ -1889,7 +1893,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
               {sellerPaidTitle && fees.ownerTitlePolicy > 0 && <FeeRow label="Owner's Title (Seller Paid)" amount={-fees.ownerTitlePolicy} indent color={COLORS.red} />}
               <FeeRow label={fees.titleWaived ? "Lender's Title Policy — Waived" : fees.isPurchase ? "Lender's Title (Simultaneous)" : "Lender's Title Policy"} amount={fees.lenderTitlePolicy} indent />
               {fees.txReissueCredit > 0 && <FeeRow label="Lender's Title: TX Reissue Rate Credit" amount={-fees.txReissueCredit} indent color={COLORS.red} />}
-              {fees.titleWaived && <div style={{ fontSize:10, color:COLORS.green, fontFamily:font, paddingLeft:20, marginBottom:4, lineHeight:1.4 }}>✅ Title policy waived — special program</div>}
+              {fees.titleWaived && <div style={{ fontSize:12, color:COLORS.green, fontFamily:font, paddingLeft:20, marginBottom:4, lineHeight:1.4 }}>✅ Title policy waived — special program</div>}
               {isInternal && fees.endorsementTotal>0 && <FeeRow label="Title Policy Endorsements" amount={fees.endorsementTotal} indent />}
               {ovEscrowFee    !== "0" && <FeeRow label="Escrow/Settlement Fee" amount={fees.escrowFee}   indent editKey="escfee" editValue={ovEscrowFee}   onEdit={setOvEscrowFee}   defaultVal={fees._defaults.escrowFee}   isInternal={canEditFees} />}
               {ovRecordingFee !== "0" && <FeeRow label="Recording Fees"                        amount={fees.recordingFees}     indent editKey="rec"     editValue={ovRecordingFee} onEdit={setOvRecordingFee} defaultVal={fees._defaults.recordingFees}   isInternal={canEditFees} />}
@@ -1910,11 +1914,11 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                 {fees.otherFee1 !== 0 && <FeeRow label={fees.otherFee1Label || "Other Fee 1"} amount={fees.otherFee1} indent color={fees.otherFee1 < 0 ? COLORS.red : undefined} />}
                 {fees.otherFee2 !== 0 && <FeeRow label={fees.otherFee2Label || "Other Fee 2"} amount={fees.otherFee2} indent color={fees.otherFee2 < 0 ? COLORS.red : undefined} />}
                 {fees.otherFee3 !== 0 && <FeeRow label={fees.otherFee3Label || "Other Fee 3"} amount={fees.otherFee3} indent color={fees.otherFee3 < 0 ? COLORS.red : undefined} />}
-                {fees.rcBuyerAmt > 0 && <FeeRow label="Realtor Commissions: Buyer Paid" amount={fees.rcBuyerAmt} indent />}
+                {fees.rcBuyerAmt > 0 && <FeeRow label="Realtor Commissions Paid by Buyer" amount={fees.rcBuyerAmt} indent />}
                 {fees.hoaDuesAmt > 0 && (
                   <div>
                     <FeeRow label={`HOA Dues: ${fees.fundingDateFmt} through ${fees.nextHoaDateFmt}`} amount={fees.hoaDuesAmt} indent />
-                    <div style={{ fontSize:10, color:COLORS.grayLight, fontFamily:font, fontStyle:"italic", paddingLeft:16, marginTop:-2, marginBottom:4 }}>
+                    <div style={{ fontSize:12, color:COLORS.grayLight, fontFamily:font, fontStyle:"italic", paddingLeft:16, marginTop:-2, marginBottom:4 }}>
                       {`Credit to Seller's for Prepaid HOA Dues: ${fees.hoaProrationDays} days`}
                     </div>
                   </div>
@@ -1933,7 +1937,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
               {fees.insurancePOCCredit > 0 && (
                 <>
                   <FeeRow label="Homeowners Insurance — Paid Outside of Closing (POC)" amount={-fees.insurancePOCCredit} indent color={COLORS.red} />
-                  <div style={{ fontSize:10, color:COLORS.grayLight, fontFamily:font, fontStyle:"italic", paddingLeft:16, marginTop:-2, marginBottom:4 }}>
+                  <div style={{ fontSize:12, color:COLORS.grayLight, fontFamily:font, fontStyle:"italic", paddingLeft:16, marginTop:-2, marginBottom:4 }}>
                     Premium paid directly by borrower prior to closing; excluded from cash to close.
                   </div>
                 </>
@@ -1946,7 +1950,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                     const unimprovedMo = Math.round(fees.effectiveTaxRate * fees.ncValuation * homesteadFactor / 12);
                     const isUnimp      = ncEscrowType === "unimproved";
                     return (
-                      <div style={{ fontSize:10, color: isUnimp ? "#991b1b" : "#166534", fontFamily:font, fontStyle:"italic", marginTop:-4, marginBottom:4, paddingLeft:16, lineHeight:1.5 }}>
+                      <div style={{ fontSize:12, color: isUnimp ? "#991b1b" : "#166534", fontFamily:font, fontStyle:"italic", marginTop:-4, marginBottom:4, paddingLeft:16, lineHeight:1.5 }}>
                         {isUnimp
                           ? `⚠ New construction — escrows collected at unimproved rate (${fmt(unimprovedMo)}/mo). Once the full improved assessment is applied, taxes will jump to ${fmt(improvedMo)}/mo — escrows will likely be short and a rebalance is expected within 12–24 months.`
                           : `✓ New construction — escrows collected at full improved rate (${fmt(improvedMo)}/mo). Seller owned during the unimproved period (${fmt(unimprovedMo)}/mo), so buyer is over-collecting from day one — a refund is likely at the first escrow analysis.`
@@ -1977,7 +1981,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
               {fees.sellerProratedTaxCredit > 0 && (
                 <div>
                   <FeeRow label={`Seller's Prorated Tax Credit (${fees.sellerProratedDays} days)`} amount={-fees.sellerProratedTaxCredit} indent color={COLORS.red} />
-                  <div style={{ fontSize:10, color:COLORS.grayLight, fontFamily:font, fontStyle:"italic", paddingLeft:16, marginTop:-2, marginBottom:4 }}>
+                  <div style={{ fontSize:12, color:COLORS.grayLight, fontFamily:font, fontStyle:"italic", paddingLeft:16, marginTop:-2, marginBottom:4 }}>
                     {isNewConstruction && fees.effectiveTaxRate > 0 && fees.ncValuation > 0
                       ? `New construction — seller credit calculated at unimproved rate (${fmt(Math.round(fees.effectiveTaxRate * fees.ncValuation * homesteadFactor / 12))}/mo) for ${fees.sellerProratedDays} days. Buyer will be assessed at the improved rate (${fmt(Math.round(fees.taxMonthly))}/mo) once full assessment is applied.`
                       : `Buyer pays full-year taxes at year-end; seller credits their prorated share (${fmt(Math.round(fees.taxMonthly))}/mo) for ${fees.sellerProratedDays} days owned.`
@@ -1987,7 +1991,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
               )}
               <FeeRow label="Subtotal — Prepaids" amount={fees.totalPrepaids - fees.sellerProratedTaxCredit} bold />
               {fees.inclEscrow && (
-                <div style={{ fontSize:10, color:COLORS.grayLight, marginTop:4, fontFamily:font, lineHeight:1.4 }}>
+                <div style={{ fontSize:12, color:COLORS.grayLight, marginTop:4, fontFamily:font, lineHeight:1.4 }}>
                   Monthly escrow: {fmt(fees.taxMonthly)}/mo tax + {fmt(fees.insMonthly)}/mo ins = {fmt(fees.taxMonthly+fees.insMonthly)}/mo
                   {fees.aggregateAdj !== 0 && (
                     <span> · aggregate adj {fees.aggregateAdj < 0 ? `(${fmt(Math.abs(fees.aggregateAdj))}) credit` : `+${fmt(fees.aggregateAdj)}`}</span>
@@ -2023,7 +2027,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                   return (
                     <div>
                       <FeeRow label={`${typeLabel} — ${prog}`} amount={-fees.dpaGrantCredit} indent color={COLORS.green} />
-                      <div style={{ fontSize:10, color:COLORS.grayLight, fontFamily:font, paddingLeft:20, marginBottom:2, lineHeight:1.4 }}>{typeNote}</div>
+                      <div style={{ fontSize:12, color:COLORS.grayLight, fontFamily:font, paddingLeft:20, marginBottom:2, lineHeight:1.4 }}>{typeNote}</div>
                     </div>
                   );
                 })()}
@@ -2068,7 +2072,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                     <div style={{ fontSize:13, fontWeight:800, color:"#fca5a5", fontFamily:font, marginBottom:5 }}>
                       ⛔ OVER-CREDITING ERROR — Buyer Not Bringing Full Down Payment
                     </div>
-                    <div style={{ fontSize:11, color:"#fecaca", fontFamily:font, lineHeight:1.6 }}>
+                    <div style={{ fontSize:12, color:"#fecaca", fontFamily:font, lineHeight:1.6 }}>
                       Seller, realtor, and lender credits total <strong style={{color:"#fca5a5"}}>{fmt(applicableCredit)}</strong> but
                       closing costs + prepaids only total <strong style={{color:"#fca5a5"}}>{fmt(coverableCosts)}</strong>.
                       Credits exceed coverable costs by <strong style={{color:"#f87171"}}>{fmt(excessCredits)}</strong> —
@@ -2083,7 +2087,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                     <div style={{ fontSize:12, fontWeight:700, color:"#fcd34d", fontFamily:font, marginBottom:4 }}>
                       ⚠ Prorated Tax Credit Notice
                     </div>
-                    <div style={{ fontSize:11, color:"#fde68a", fontFamily:font, lineHeight:1.6 }}>
+                    <div style={{ fontSize:12, color:"#fde68a", fontFamily:font, lineHeight:1.6 }}>
                       Seller/realtor/lender credits are within limits, but the seller's prorated tax credit
                       ({fmt(fees.sellerProratedTaxCredit)}) reduces cash to close
                       by <strong style={{color:"#fcd34d"}}>{fmt(proratedOverflow)}</strong> below the
@@ -2110,12 +2114,12 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                       </div>
                       {(fees.govUpfrontFee||0) > 0 && (
                         <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-                          <span style={{ fontSize:10, color:"rgba(255,255,255,0.45)", fontFamily:font, fontStyle:"italic" }}>
+                          <span style={{ fontSize:12, color:"rgba(255,255,255,0.45)", fontFamily:font, fontStyle:"italic" }}>
                             {loanType === "va"  ? `VA Funding Fee (${((fees.vaFeeRate||0)*100).toFixed(2)}%) — financed into loan` :
                              loanType === "fha" ? "FHA UFMIP (1.75%) — financed into loan" :
                                                   "USDA Guarantee Fee (1.0%) — financed into loan"}
                           </span>
-                          <span style={{ fontSize:10, color:"rgba(255,255,255,0.45)", fontFamily:font, fontStyle:"italic" }}>
+                          <span style={{ fontSize:12, color:"rgba(255,255,255,0.45)", fontFamily:font, fontStyle:"italic" }}>
                             +{fmt(fees.govUpfrontFee)}
                           </span>
                         </div>
@@ -2158,12 +2162,12 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                     <>
                       <div style={{ borderTop:"1px solid rgba(255,255,255,0.2)", margin:"6px 0 4px" }} />
                       <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
-                        <span style={{ fontSize:11, color:"rgba(255,255,255,0.7)", fontFamily:font }}>New Loan Amount</span>
-                        <span style={{ fontSize:11, color:"#86efac", fontFamily:font, fontWeight:700 }}>+ {fmt(parseFloat(loanAmount)||0)}</span>
+                        <span style={{ fontSize:12, color:"rgba(255,255,255,0.7)", fontFamily:font }}>New Loan Amount</span>
+                        <span style={{ fontSize:12, color:"#86efac", fontFamily:font, fontWeight:700 }}>+ {fmt(parseFloat(loanAmount)||0)}</span>
                       </div>
                       <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
-                        <span style={{ fontSize:11, color:"rgba(255,255,255,0.7)", fontFamily:font }}>Estimated Payoff</span>
-                        <span style={{ fontSize:11, color: fees.refiPayoffAmt > 0 ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.4)", fontFamily:font, fontWeight:600, fontStyle: fees.refiPayoffAmt > 0 ? "normal" : "italic" }}>
+                        <span style={{ fontSize:12, color:"rgba(255,255,255,0.7)", fontFamily:font }}>Estimated Payoff</span>
+                        <span style={{ fontSize:12, color: fees.refiPayoffAmt > 0 ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.4)", fontFamily:font, fontWeight:600, fontStyle: fees.refiPayoffAmt > 0 ? "normal" : "italic" }}>
                           {fees.refiPayoffAmt > 0 ? fmt(fees.refiPayoffAmt) : "see Loan Sizing ↑"}
                         </span>
                       </div>
@@ -2258,12 +2262,12 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                         Total credits entered ({fmt(creditsGiven)}) exceed the closing costs and prepaids that can be covered ({fmt(coverableCosts)}).
                         The remaining <strong style={{color:"#f87171"}}>{fmt(leftOnTable)}</strong> cannot be applied and is being left on the table.
                       </div>
-                      <div style={{ padding:"8px 12px", background:"rgba(0,0,0,0.25)", borderRadius:6, fontSize:11, color:"#fecaca", fontFamily:font, lineHeight:1.8 }}>
+                      <div style={{ padding:"8px 12px", background:"rgba(0,0,0,0.25)", borderRadius:6, fontSize:12, color:"#fecaca", fontFamily:font, lineHeight:1.8 }}>
                         {sellerUnused  > 0 && <div>Seller Concessions: {fmt(sellerGiven)} given → <strong style={{color:"#f87171"}}>{fmt(sellerUnused)}</strong> unused</div>}
                         {lenderUnused  > 0 && <div>Lender Credits: {fmt(lenderGiven)} given → <strong style={{color:"#f87171"}}>{fmt(lenderUnused)}</strong> unused</div>}
                         {realtorUnused > 0 && <div>Realtor Credits: {fmt(realtorGiven)} given → <strong style={{color:"#f87171"}}>{fmt(realtorUnused)}</strong> unused</div>}
                       </div>
-                      <div style={{ marginTop:8, fontSize:11, color:"#fca5a5", fontFamily:font, fontStyle:"italic" }}>
+                      <div style={{ marginTop:8, fontSize:12, color:"#fca5a5", fontFamily:font, fontStyle:"italic" }}>
                         Consider using unused credits for a permanent rate buydown, prepaid items, or negotiating a lower purchase price.
                       </div>
                     </div>
@@ -2274,10 +2278,10 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
               );
             })()}
 
-            <div style={{ fontSize:10, color:COLORS.grayLight, marginTop:10, lineHeight:1.5, fontFamily:font }}>
+            <div style={{ fontSize:12, color:COLORS.grayLight, marginTop:10, lineHeight:1.5, fontFamily:font }}>
               * Fees marked with * are finance charges included in the APR calculation (Origination, Discount Points, Underwriting, Processing, Flood Cert, Tax Service, Doc Prep).
             </div>
-            <div style={{ fontSize:11, color:COLORS.grayLight, marginTop:4, lineHeight:1.5, fontFamily:font }}>
+            <div style={{ fontSize:12, color:COLORS.grayLight, marginTop:4, lineHeight:1.5, fontFamily:font }}>
               ** {fees.disclaimer || `Title insurance rates in ${stateName} are estimates. Fees may vary by title company and lender.`}
             </div>
 
@@ -2331,7 +2335,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
               <div className="mtk-no-print" style={{ marginTop: 16, border: `1px solid ${COLORS.border}`, borderRadius: 10, overflow: "hidden" }}>
                 <div style={{ padding: "10px 14px", background: "#f1f5f9", borderBottom: `1px solid ${COLORS.border}`, display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.navy, fontFamily: font, letterSpacing: "0.05em" }}>⊘ ZEROED-OUT FEES</span>
-                  <span style={{ fontSize: 11, color: COLORS.gray, fontFamily: font }}>— hidden from sheet · click Restore to add back</span>
+                  <span style={{ fontSize: 12, color: COLORS.gray, fontFamily: font }}>— hidden from sheet · click Restore to add back</span>
                 </div>
                 <div style={{ background: "#fff" }}>
                   {zItems.map((item, idx) => (
@@ -2339,7 +2343,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                       <span style={{ fontSize: 12, color: COLORS.gray, fontFamily: font, textDecoration: "line-through" }}>{item.label}</span>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                         <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.gray, fontFamily: font, minWidth: 48, textAlign: "right" }}>{fmt(item.def)}</span>
-                        <button onClick={() => item.setOv("")} style={{ padding: "3px 12px", fontSize: 11, fontWeight: 600, color: COLORS.blue, background: `${COLORS.blue}12`, border: `1px solid ${COLORS.blue}33`, borderRadius: 5, cursor: "pointer", fontFamily: font, whiteSpace: "nowrap" }}>
+                        <button onClick={() => item.setOv("")} style={{ padding: "3px 12px", fontSize: 12, fontWeight: 600, color: COLORS.blue, background: `${COLORS.blue}12`, border: `1px solid ${COLORS.blue}33`, borderRadius: 5, cursor: "pointer", fontFamily: font, whiteSpace: "nowrap" }}>
                           Restore
                         </button>
                       </div>
@@ -2380,7 +2384,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", padding:"9px 0", borderBottom:`1px solid ${COLORS.border}` }}>
                 <div style={{ flex:1, paddingRight:16 }}>
                   <div style={{ fontSize:13, fontFamily:font, color: muted ? COLORS.grayLight : COLORS.navy }}>{label}</div>
-                  {note && <div style={{ fontSize:10, color:COLORS.grayLight, marginTop:2, fontFamily:font, lineHeight:1.5 }}>{note}</div>}
+                  {note && <div style={{ fontSize:12, color:COLORS.grayLight, marginTop:2, fontFamily:font, lineHeight:1.5 }}>{note}</div>}
                 </div>
                 <span style={{ fontSize:15, fontWeight:700, fontFamily:font, whiteSpace:"nowrap",
                   color: amount > 0 ? COLORS.green : amount < 0 ? COLORS.red : COLORS.grayLight }}>
@@ -2392,7 +2396,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
             return (
               <div style={{ marginTop:16 }}>
                 <SectionCard title="REFINANCE: 90-DAY CASH FLOW SNAPSHOT" accent={COLORS.navy}>
-                  <div style={{ fontSize:11, color:COLORS.grayLight, fontFamily:font, marginBottom:14, lineHeight:1.6 }}>
+                  <div style={{ fontSize:12, color:COLORS.grayLight, fontFamily:font, marginBottom:14, lineHeight:1.6 }}>
                     A summary of every cash event in the 90 days surrounding your refinance — what leaves your account, what comes back, and what you save during the transition.
                   </div>
 
@@ -2421,7 +2425,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                   {/* SKIPPED PAYMENT */}
                   <div style={{ fontSize:10, fontWeight:700, color:COLORS.blue, letterSpacing:"0.08em", marginTop:12, marginBottom:2, fontFamily:font }}>~ DAYS 15–45 — PAYMENT TIMING</div>
                   {shortPay ? (
-                    <div style={{ padding:"9px 12px", background:`${COLORS.green}12`, border:`1px solid ${COLORS.green}44`, borderRadius:6, fontSize:11, color:COLORS.navy, fontFamily:font, lineHeight:1.6 }}>
+                    <div style={{ padding:"9px 12px", background:`${COLORS.green}12`, border:`1px solid ${COLORS.green}44`, borderRadius:6, fontSize:12, color:COLORS.navy, fontFamily:font, lineHeight:1.6 }}>
                       <strong style={{ color:COLORS.green }}>Short Pay — First Payment Arrives Sooner.</strong> Because you're closing in the first 5 days of the month, there's no transition gap. Your first new payment is due the very next month — no "skipped" month, but also no free month. You simply start paying sooner.
                     </div>
                   ) : curPI > 0 ? (
@@ -2431,7 +2435,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                       note="Your old loan is paid off and your new loan's first payment isn't due yet — no payment is owed to anyone this month"
                     />
                   ) : (
-                    <div style={{ padding:"9px 12px", background:"#f8f9fb", border:`1px solid ${COLORS.border}`, borderRadius:6, fontSize:11, color:COLORS.grayLight, fontFamily:font }}>
+                    <div style={{ padding:"9px 12px", background:"#f8f9fb", border:`1px solid ${COLORS.border}`, borderRadius:6, fontSize:12, color:COLORS.grayLight, fontFamily:font }}>
                       Enter your current <strong>P&amp;I payment</strong> in the <strong>Refi: Existing Loan</strong> tab to see your skipped-payment savings here.
                     </div>
                   )}
@@ -2439,7 +2443,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                   {/* ESCROW REFUND */}
                   <div style={{ fontSize:10, fontWeight:700, color:COLORS.blue, letterSpacing:"0.08em", marginTop:12, marginBottom:2, fontFamily:font }}>~ DAYS 30–60 — ESCROW REFUND</div>
                   {raNetEsc ? (
-                    <div style={{ padding:"9px 12px", background:`${COLORS.blue}10`, border:`1px solid ${COLORS.blue}33`, borderRadius:6, fontSize:11, color:COLORS.navy, fontFamily:font, lineHeight:1.6 }}>
+                    <div style={{ padding:"9px 12px", background:`${COLORS.blue}10`, border:`1px solid ${COLORS.blue}33`, borderRadius:6, fontSize:12, color:COLORS.navy, fontFamily:font, lineHeight:1.6 }}>
                       <strong style={{ color:COLORS.blue }}>Escrow Netted from Payoff.</strong> Your escrow balance ({fmt(escBal)}) was credited against the loan payoff at closing — no separate refund check is coming.
                     </div>
                   ) : escBal > 0 ? (
@@ -2449,7 +2453,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                       note="The prior servicer refunds your existing escrow account balance — typically arrives as a check within 30 to 60 days of payoff"
                     />
                   ) : (
-                    <div style={{ padding:"9px 12px", background:"#f8f9fb", border:`1px solid ${COLORS.border}`, borderRadius:6, fontSize:11, color:COLORS.grayLight, fontFamily:font }}>
+                    <div style={{ padding:"9px 12px", background:"#f8f9fb", border:`1px solid ${COLORS.border}`, borderRadius:6, fontSize:12, color:COLORS.grayLight, fontFamily:font }}>
                       Enter your <strong>current escrow balance</strong> in the Escrow Details section to see your refund estimate here.
                     </div>
                   )}
@@ -2459,7 +2463,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                       <div>
                         <div style={{ fontSize:12, fontWeight:700, color:"rgba(255,255,255,0.75)", fontFamily:font, letterSpacing:"0.06em" }}>NET 90-DAY CASH IMPACT</div>
-                        <div style={{ fontSize:10, color:"rgba(255,255,255,0.45)", marginTop:3, fontFamily:font }}>
+                        <div style={{ fontSize:12, color:"rgba(255,255,255,0.45)", marginTop:3, fontFamily:font }}>
                           {curPI === 0 && !shortPay
                             ? "Add current P&I in Refi tab to complete this total"
                             : `Closing ${fmtFlow(closingFlow)}${skippedFlow ? `  +  Skipped Pmt ${fmtFlow(skippedFlow)}` : ""}${escRow ? `  +  Escrow Refund ${fmtFlow(escRow)}` : ""}`}
@@ -2473,7 +2477,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                   </div>
 
                   {/* Contextual explainer */}
-                  <div style={{ marginTop:12, padding:"10px 14px", background:"#f8f9fb", border:`1px solid ${COLORS.border}`, borderRadius:6, fontSize:10, color:COLORS.grayLight, fontFamily:font, lineHeight:1.7 }}>
+                  <div style={{ marginTop:12, padding:"10px 14px", background:"#f8f9fb", border:`1px solid ${COLORS.border}`, borderRadius:6, fontSize:12, color:COLORS.grayLight, fontFamily:font, lineHeight:1.7 }}>
                     <strong style={{ color:COLORS.navy }}>How to read this:</strong> A positive net means the escrow refund and skipped payment more than offset what you spent at closing — the refi puts money back in your pocket within 90 days. A negative net means your upfront closing costs exceed those short-term inflows, but the long-term monthly savings (from a lower rate or payment) make up the difference over time.
                   </div>
                 </SectionCard>
@@ -2494,22 +2498,22 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
               {stateName.toUpperCase()} · {fees.isPurchase ? "PURCHASE" : "REFINANCE"} · {loanTypeLabel.toUpperCase()}
             </div>
             {pdfBorrowerName && <div style={{ fontSize:12, color:"rgba(255,255,255,0.85)", marginTop:5, fontWeight:600 }}>Borrower: {pdfBorrowerName}</div>}
-            {pdfScenarioName  && <div style={{ fontSize:11, color:"rgba(255,255,255,0.65)", marginTop:2 }}>Scenario: {pdfScenarioName}</div>}
+            {pdfScenarioName  && <div style={{ fontSize:12, color:"rgba(255,255,255,0.65)", marginTop:2 }}>Scenario: {pdfScenarioName}</div>}
           </div>
           <div style={{ textAlign:"right" }}>
             {loName && <div style={{ fontSize:14, fontWeight:700, color:"#fff" }}>{loName}</div>}
-            {loNmls && <div style={{ fontSize:11, color:"rgba(255,255,255,0.7)" }}>NMLS # {loNmls}</div>}
-            <div style={{ fontSize:11, color:"rgba(255,255,255,0.6)", marginTop:2 }}>
+            {loNmls && <div style={{ fontSize:12, color:"rgba(255,255,255,0.7)" }}>NMLS # {loNmls}</div>}
+            <div style={{ fontSize:12, color:"rgba(255,255,255,0.6)", marginTop:2 }}>
               {new Date().toLocaleDateString("en-US", { month:"long", day:"numeric", year:"numeric" })}
             </div>
-            <div style={{ fontSize:10, color:"rgba(255,255,255,0.5)", marginTop:1 }}>
+            <div style={{ fontSize:12, color:"rgba(255,255,255,0.5)", marginTop:1 }}>
               {new Date().toLocaleTimeString("en-US", { hour:"numeric", minute:"2-digit", hour12:true })}
             </div>
           </div>
         </div>
 
         {/* LOAN SUMMARY STRIP */}
-        <div style={{ background:"#f8fafc", borderBottom:"1.5px solid #e2e8f0", padding:"7px 24px", display:"flex", gap:24, flexWrap:"wrap", fontSize:11, color:"#64748b" }}>
+        <div style={{ background:"#f8fafc", borderBottom:"1.5px solid #e2e8f0", padding:"7px 24px", display:"flex", gap:24, flexWrap:"wrap", fontSize:12, color:"#64748b" }}>
           {[
             ["Loan Amount",   fmt(parseFloat(loanAmount)||0)],
             fees.isPurchase ? ["Purchase Price", fmt(parseFloat(purchasePrice)||0)] : null,
@@ -2579,7 +2583,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                 {fees.otherFee1 !== 0 && <PdfRow label={fees.otherFee1Label || "Other Fee 1"} amt={fees.otherFee1} indent isRed={fees.otherFee1 < 0} />}
                 {fees.otherFee2 !== 0 && <PdfRow label={fees.otherFee2Label || "Other Fee 2"} amt={fees.otherFee2} indent isRed={fees.otherFee2 < 0} />}
                 {fees.otherFee3 !== 0 && <PdfRow label={fees.otherFee3Label || "Other Fee 3"} amt={fees.otherFee3} indent isRed={fees.otherFee3 < 0} />}
-                {fees.rcBuyerAmt > 0 && <PdfRow label="Realtor Commissions: Buyer Paid" amt={fees.rcBuyerAmt} indent />}
+                {fees.rcBuyerAmt > 0 && <PdfRow label="Realtor Commissions Paid by Buyer" amt={fees.rcBuyerAmt} indent />}
                 <PdfRow label="Subtotal — Additional Fees" amt={fees.additionalFeesTotal} bold />
               </React.Fragment>
             )}
@@ -2633,8 +2637,8 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                     var isParens = pair[2] === "parens";
                     return (
                       <div key={pair[0]} style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
-                        <span style={{ fontSize:10, color:"rgba(255,255,255,0.75)" }}>{pair[0]}</span>
-                        <span style={{ fontSize:10, fontWeight:600, color: isRed ? "#fca5a5" : "rgba(255,255,255,0.9)" }}>
+                        <span style={{ fontSize:12, color:"rgba(255,255,255,0.75)" }}>{pair[0]}</span>
+                        <span style={{ fontSize:12, fontWeight:600, color: isRed ? "#fca5a5" : "rgba(255,255,255,0.9)" }}>
                           {isRed ? "− " + fmt(Math.abs(Math.round(val))) : isParens ? "(" + fmt(Math.round(val)) + ")" : fmt(Math.round(val))}
                         </span>
                       </div>
@@ -2687,7 +2691,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
             <div style={{ padding:"0 24px 6px" }}>
               {showProrated && (
                 <div style={{ marginTop:8, padding:"9px 12px", background:"#431407", border:"2px solid #f59e0b", borderRadius:6 }}>
-                  <div style={{ fontSize:10, fontWeight:700, color:"#fcd34d", marginBottom:3 }}>⚠ Prorated Tax Credit Notice</div>
+                  <div style={{ fontSize:12, fontWeight:700, color:"#fcd34d", marginBottom:3 }}>⚠ Prorated Tax Credit Notice</div>
                   <div style={{ fontSize:9, color:"#fde68a", lineHeight:1.6 }}>
                     Seller/realtor/lender credits are within limits, but the seller's prorated tax credit ({fmt(fees.sellerProratedTaxCredit)}) reduces
                     cash to close by <strong style={{color:"#fcd34d"}}>{fmt(pdfProratedOverflow)}</strong> below the down payment — buyer brings{" "}
@@ -2699,7 +2703,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
               )}
               {showCashBack && (
                 <div style={{ marginTop:8, padding:"9px 12px", background:"#0c4a6e", border:"2px solid #38bdf8", borderRadius:6 }}>
-                  <div style={{ fontSize:10, fontWeight:800, color:"#7dd3fc", marginBottom:3 }}>
+                  <div style={{ fontSize:12, fontWeight:800, color:"#7dd3fc", marginBottom:3 }}>
                     💰 Cash Back at Closing — {fmt(pdfCashBack)} Refund
                   </div>
                   <div style={{ fontSize:9, color:"#e0f2fe", lineHeight:1.6 }}>
@@ -2711,7 +2715,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
               )}
               {showLeftOnTbl && (
                 <div style={{ marginTop:8, padding:"9px 12px", background:"#450a0a", border:"2px solid #dc2626", borderRadius:6 }}>
-                  <div style={{ fontSize:10, fontWeight:800, color:"#fca5a5", marginBottom:3 }}>
+                  <div style={{ fontSize:12, fontWeight:800, color:"#fca5a5", marginBottom:3 }}>
                     ⚠ {fmt(leftOnTable)} Left on the Table — Credits Exceed Closing Costs &amp; Prepaids
                   </div>
                   <div style={{ fontSize:9, color:"#fecaca", lineHeight:1.6 }}>

@@ -84,7 +84,7 @@ function LeadStatusSelect({ value, onChange, style }) {
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────
-function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpenContact, onUsers, onMyInfo, pageTitle,
+function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpenContact, onUsers, onMyInfo, onLoginSettings, pageTitle,
   groupFilter: groupFilterProp, setGroupFilter: setGroupFilterProp }) {
   const c = useThemeColors();
   const isTaskView = pageTitle === "Tasks: Scenarios"; // tasks view hides/adds specific columns
@@ -127,6 +127,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
   const [selectedIds,   setSelectedIds]   = useState([]);  // scenario IDs
   const [bulkFields,    setBulkFields]    = useState({ lead_status: "", fu_date: "", fu_who: "", fu_priority: "" });
   const [bulkApplying,  setBulkApplying]  = useState(false);
+  const [bulkDeleting,  setBulkDeleting]  = useState(false);
   const [bulkResult,    setBulkResult]    = useState(null); // null | { ok, failed }
 
   const [filterLeadStatus, setFilterLeadStatus] = useState(""); // "" | "pre" | "active" | "waiting" | "archived"
@@ -138,6 +139,14 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
   const [cloudLoading, setCloudLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [cloudError, setCloudError] = useState(null);
+  const [openMenuId, setOpenMenuId] = useState(null);   // three-dot menu
+  useEffect(function() {
+    if (!openMenuId) return;
+    function handleClick() { setOpenMenuId(null); }
+    document.addEventListener("click", handleClick);
+    return function() { document.removeEventListener("click", handleClick); };
+  }, [openMenuId]);
+
   const [auditLogOpen, setAuditLogOpen] = useState(null);
   const [auditLogData, setAuditLogData] = useState([]);
   const [auditLogLoading, setAuditLogLoading] = useState(false);
@@ -167,6 +176,8 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
   const [shareNote,          setShareNote]          = useState("");
   const [shareSaving,        setShareSaving]        = useState(false);
   const [shareMode,          setShareMode]          = useState("existing"); // "existing" | "invite"
+  const [shareBrokerage,     setShareBrokerage]     = useState(""); // brokerage name for team-share
+  const [brokerageShareResult, setBrokerageShareResult] = useState(null); // { ok, failed } after team share
   const [shareInviteEmail,   setShareInviteEmail]   = useState("");
   const [shareInviteRole,    setShareInviteRole]    = useState("realtor");
   const [shareInviteDone,    setShareInviteDone]    = useState(null); // copy-paste snippet after invite
@@ -732,6 +743,24 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
     setScenarios(prev => prev.filter(s => s.id !== id));
   }
 
+  async function bulkDeleteScenarios() {
+    if (selectedIds.length === 0) return;
+    if (!confirm("Permanently delete " + selectedIds.length + " scenario" + (selectedIds.length === 1 ? "" : "s") + "? This cannot be undone.")) return;
+    setBulkDeleting(true);
+    try {
+      let deleted = 0;
+      for (const id of selectedIds) {
+        const { error, deletedCount } = await deleteScenarioFromSupabase(id);
+        if (!error && deletedCount > 0) deleted++;
+      }
+      setScenarios(function(prev) { return prev.filter(function(s) { return !selectedIds.includes(s.id); }); });
+      setSelectedIds([]);
+      setBulkResult({ okScenarios: deleted, failed: selectedIds.length - deleted, hasFuFields: false, okContacts: 0, skippedNoContact: 0 });
+    } catch (err) {
+      alert("Bulk delete failed: " + err.message);
+    } finally { setBulkDeleting(false); }
+  }
+
   async function duplicateScenario(scenario) {
     if (isCloudUser) {
       setSaving(true);
@@ -918,6 +947,31 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
     setShareInviteEmail("");
     setShareInviteRole("realtor");
     setShareInviteDone(null);
+    setShareBrokerage("");
+    setBrokerageShareResult(null);
+  }
+
+  async function handleShareWithBrokerage() {
+    if (!shareModalScenario || !shareBrokerage || shareSaving) return;
+    const members = partnerProfiles.filter(function(p) { return p.brokerage === shareBrokerage; });
+    if (members.length === 0) return;
+    setShareSaving(true);
+    setBrokerageShareResult(null);
+    let ok = 0; let failed = 0;
+    for (const partner of members) {
+      const { error } = await shareScenarioWithPartner({
+        scenarioId:  shareModalScenario.id,
+        partnerId:   partner.id,
+        permission:  sharePermission,
+        note:        shareNote,
+      });
+      if (error) { failed++; } else { ok++; }
+    }
+    setShareCountsMap(function(prev) {
+      return { ...prev, [shareModalScenario.id]: (prev[shareModalScenario.id] || 0) + ok };
+    });
+    setBrokerageShareResult({ ok, failed, total: members.length });
+    setShareSaving(false);
   }
 
   async function handleInviteAndShare() {
@@ -1179,9 +1233,13 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
       if (sortBy === "contact") {
         const ctA = contactsMap[a.contact_id];
         const ctB = contactsMap[b.contact_id];
-        const na = ctA ? ((ctA.last_name || "") + (ctA.first_name || "")) : "";
-        const nb = ctB ? ((ctB.last_name || "") + (ctB.first_name || "")) : "";
-        return dir * na.localeCompare(nb);
+        const firstA = (ctA ? ctA.first_name || "" : "").toLowerCase();
+        const firstB = (ctB ? ctB.first_name || "" : "").toLowerCase();
+        const cmp = firstA.localeCompare(firstB);
+        if (cmp !== 0) return dir * cmp;
+        const lastA  = (ctA ? ctA.last_name  || "" : "").toLowerCase();
+        const lastB  = (ctB ? ctB.last_name  || "" : "").toLowerCase();
+        return dir * lastA.localeCompare(lastB);
       }
       if (sortBy === "uid") {
         return dir * (a.uid || "").localeCompare(b.uid || "");
@@ -1468,6 +1526,47 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
 
   return (
     <div style={{ minHeight: "100vh", background: c.bg, color: c.text }}>
+
+      {/* ── Client / borrower header bar (profile + logout) ── */}
+      {!user.isInternal && (
+        <div style={{
+          background: "linear-gradient(135deg, #0C4160 0%, #1A5E8A 100%)",
+          padding: "12px 20px",
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+        }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>
+              {user.name ? "Welcome, " + user.name.split(" ")[0] : "My Scenarios"}
+            </div>
+            {user.email && (
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginTop: 1 }}>{user.email}</div>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+            {onMyInfo && (
+              <button onClick={onMyInfo} style={{
+                background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)",
+                color: "#fff", borderRadius: 8, padding: "7px 14px",
+                fontSize: 13, fontWeight: 600, cursor: "pointer",
+              }}>📋 My Info</button>
+            )}
+            {onLoginSettings && (
+              <button onClick={onLoginSettings} style={{
+                background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)",
+                color: "#fff", borderRadius: 8, padding: "7px 14px",
+                fontSize: 13, fontWeight: 600, cursor: "pointer",
+              }}>🔑 Login & Password</button>
+            )}
+            {onLogout && (
+              <button onClick={onLogout} style={{
+                background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.25)",
+                color: "rgba(255,255,255,0.85)", borderRadius: 8, padding: "7px 12px",
+                fontSize: 12, cursor: "pointer",
+              }}>Logout</button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Main Content ──────────────────────────────────────────── */}
       <div style={{ maxWidth: "1400px", margin: "0 auto", padding: "24px" }}>
@@ -2007,6 +2106,23 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
               ✕ Deselect
             </button>
 
+            {/* Bulk delete (admin only) */}
+            {user && user.role === "admin" && (
+              <button
+                onClick={bulkDeleteScenarios}
+                disabled={bulkDeleting}
+                style={{
+                  padding: "6px 14px", borderRadius: 6,
+                  border: "1px solid rgba(239,68,68,0.4)",
+                  background: "rgba(239,68,68,0.12)", color: "#f87171",
+                  fontSize: 12, fontWeight: 700,
+                  cursor: bulkDeleting ? "wait" : "pointer", whiteSpace: "nowrap",
+                }}
+              >
+                {bulkDeleting ? "Deleting…" : "🗑 Delete " + selectedIds.length}
+              </button>
+            )}
+
             {/* Result badge */}
             {bulkResult && (
               <span style={{ fontSize: 12, fontWeight: 600, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
@@ -2028,7 +2144,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
               </span>
             )}
 
-            <span style={{ fontSize: 11, color: c.textSecondary, marginLeft: "auto" }}>
+            <span style={{ fontSize: 12, color: c.textSecondary, marginLeft: "auto" }}>
               Only filled fields will be changed. Blank = leave as-is.
             </span>
           </div>
@@ -2097,12 +2213,6 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                           Contact {arrow("contact")}
                         </th>
 
-                        {/* ID — sortable (hidden in task view) */}
-                        {!isTaskView && (
-                          <th style={clickTh} onClick={function() { handleSort("uid"); }}>
-                            ID {arrow("uid")}
-                          </th>
-                        )}
 
                         {/* Scenario Name — sortable */}
                         <th style={clickTh} onClick={function() { handleSort("clientName"); }}>
@@ -2126,11 +2236,48 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                           </select>
                         </th>
 
-                        {/* FU columns — task view only */}
-                        {isTaskView && <th style={thStyle}>FU Next</th>}
-                        {isTaskView && <th style={thStyle}>FU Who</th>}
-                        {isTaskView && <th style={thStyle}>FU Priority</th>}
-                        {isTaskView && <th style={{ ...thStyle, minWidth: 140 }}>Quick Notes</th>}
+                        {/* FU columns — sortable; Who + Priority also filterable */}
+                        <th style={clickTh} onClick={function() { handleSort("fu_date"); }}>
+                          FU Next {arrow("fu_date")}
+                        </th>
+
+                        <th style={clickTh}>
+                          <div onClick={function() { handleSort("fu_who"); }} style={{ display: "inline-block" }}>
+                            FU Who {arrow("fu_who")}
+                          </div>
+                          <select
+                            value={filterFuWho}
+                            onChange={function(e) { e.stopPropagation(); setFilterFuWho(e.target.value); }}
+                            onClick={function(e) { e.stopPropagation(); }}
+                            style={{ ...filterSelectStyle, minWidth: 80 }}
+                          >
+                            <option value="">All</option>
+                            <option value="_none">— None —</option>
+                            {[...new Set(Object.values(contactsMap).map(function(c) { return c.fu_who; }).filter(Boolean))].sort().map(function(w) {
+                              return <option key={w} value={w}>{w}</option>;
+                            })}
+                          </select>
+                        </th>
+
+                        <th style={clickTh}>
+                          <div onClick={function() { handleSort("fu_priority"); }} style={{ display: "inline-block" }}>
+                            FU Priority {arrow("fu_priority")}
+                          </div>
+                          <select
+                            value={filterFuPriority}
+                            onChange={function(e) { e.stopPropagation(); setFilterFuPriority(e.target.value); }}
+                            onClick={function(e) { e.stopPropagation(); }}
+                            style={{ ...filterSelectStyle, minWidth: 80 }}
+                          >
+                            <option value="">All</option>
+                            <option value="_none">— None —</option>
+                            <option value="High">High</option>
+                            <option value="Medium">Medium</option>
+                            <option value="Low">Low</option>
+                          </select>
+                        </th>
+
+                        <th style={{ ...thStyle, minWidth: 140 }}>Quick Notes</th>
 
                         {/* Created — sortable (hidden in task view) */}
                         {!isTaskView && (
@@ -2140,16 +2287,10 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                         )}
 
                         {/* Loan Officer (hidden in task view) */}
-                        {!isTaskView && <th style={thStyle}>LO</th>}
+                        {!isTaskView && <th style={thStyle}>Creator</th>}
 
-                        {/* Actions column */}
-                        <th style={thStyle}></th>
-
-                        {/* Archive column */}
-                        <th style={{ ...thStyle, textAlign: "center" }}>Archive</th>
-
-                        {/* Delete column */}
-                        <th style={{ ...thStyle, textAlign: "center" }}>Delete</th>
+                        {/* Three-dot menu column */}
+                        {!isTaskView && <th style={{ ...thStyle, width: 40 }}></th>}
                       </React.Fragment>
                     );
                   })()}
@@ -2231,15 +2372,6 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                           }
                         </td>
 
-                        {/* ID (hidden in task view) */}
-                        {!isTaskView && (
-                          <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
-                            {scenario.uid
-                              ? <span style={{ fontFamily: "monospace", fontSize: "11px", color: c.textSecondary || "#888", letterSpacing: "0.03em" }}>{scenario.uid}</span>
-                              : <span style={{ color: c.textSecondary || "#aaa" }}>—</span>
-                            }
-                          </td>
-                        )}
 
                         {/* Scenario Name */}
                         <td style={tdStyle}>
@@ -2282,8 +2414,8 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                           })()}
                         </td>
 
-                        {/* FU fields from linked contact (task view only) */}
-                        {isTaskView && (() => {
+                        {/* FU fields from linked contact */}
+                        {(true) && (() => {
                           const ct = contactsMap[scenario.contact_id] || {};
                           const fuDate = ct.fu_date
                             ? new Date(ct.fu_date + "T00:00:00").toLocaleDateString("en-US", { month: "2-digit", day: "2-digit" })
@@ -2327,112 +2459,99 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                           </td>
                         )}
 
-                        {/* Actions */}
-                        <td style={{ ...tdStyle, whiteSpace: "nowrap" }} onClick={function(e) { e.stopPropagation(); }}>
-                          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-                            {isCloudUser && (
+                        {/* Three-dot menu */}
+                        {!isTaskView && (
+                          <td style={{ ...tdStyle, textAlign: "center", width: 40 }} onClick={function(e) { e.stopPropagation(); }}>
+                            <div style={{ position: "relative", display: "inline-block" }}>
                               <button
-                                title="Activity Log"
-                                onClick={function() { toggleAuditLog(scenario.id); }}
-                                style={{
-                                  ...actionBtnStyle,
-                                  background:   auditLogOpen === scenario.id ? "rgba(37,99,235,0.1)" : "transparent",
-                                  borderColor:  auditLogOpen === scenario.id ? "#2563eb" : c.border,
-                                  color:        auditLogOpen === scenario.id ? "#2563eb" : c.text,
-                                }}
-                              >📜</button>
-                            )}
-                            {isCloudUser && user.isInternal && (
-                              <button
-                                title="Edit Lead Details"
-                                onClick={function() {
-                                  if (editDetailsOpen === scenario.id) {
-                                    setEditDetailsOpen(null); setEditDetailsForm({});
-                                  } else {
-                                    setEditDetailsOpen(scenario.id);
-                                    setEditDetailsForm({
-                                      loan_purpose:           scenario.loan_purpose           || "purchase",
-                                      property_address:       scenario.property_address       || "",
-                                      lead_source:            scenario.lead_source            || "",
-                                      target_close_date:      scenario.target_close_date      || "",
-                                      actual_close_date:      scenario.actual_close_date      || "",
-                                      co_borrower_contact_id: scenario.co_borrower_contact_id || "",
-                                    });
-                                  }
+                                onClick={function(e) {
+                                  e.stopPropagation();
+                                  setOpenMenuId(function(prev) { return prev === scenario.id ? null : scenario.id; });
                                 }}
                                 style={{
-                                  ...actionBtnStyle,
-                                  background:   editDetailsOpen === scenario.id ? "rgba(37,99,235,0.1)" : "transparent",
-                                  borderColor:  editDetailsOpen === scenario.id ? "#2563eb" : c.border,
-                                  color:        editDetailsOpen === scenario.id ? "#2563eb" : c.text,
+                                  background: openMenuId === scenario.id ? (c.bgAlt || "rgba(0,0,0,0.06)") : "transparent",
+                                  border: "1px solid " + (openMenuId === scenario.id ? c.border : "transparent"),
+                                  borderRadius: 6, cursor: "pointer",
+                                  padding: "3px 7px", fontSize: 16,
+                                  color: c.text, lineHeight: 1,
                                 }}
-                              >✏️</button>
-                            )}
-                            {isCloudUser && user.isInternal && (
-                              <button
-                                title="Save as Template"
-                                onClick={function() {
-                                  setSaveTemplateModal({
-                                    scenarioId:     scenario.id,
-                                    calculatorData: scenario.calculatorData || {},
-                                    loanPurpose:    scenario.loan_purpose || "purchase",
-                                  });
-                                  setSaveTemplateName(scenario.clientName || "");
-                                  setSaveTemplateDesc("");
-                                  setSaveTemplateIsGlobal(false);
-                                }}
-                                style={{ ...actionBtnStyle }}
-                              >📋</button>
-                            )}
-                            {isCloudUser && user.isInternal && partnerProfiles.length > 0 && (
-                              <button
-                                title="Share with Partner (Realtor / Builder)"
-                                onClick={function() {
-                                  setShareModalScenario(scenario);
-                                  setSharePartnerId("");
-                                  setSharePermission("view");
-                                  setShareNote("");
-                                }}
-                                style={{ ...actionBtnStyle }}
-                              >🔗</button>
-                            )}
-                          </div>
-                        </td>
+                              >⋯</button>
 
-                        {/* Archive */}
-                        <td style={{ ...tdStyle, textAlign: "center" }} onClick={function(e) { e.stopPropagation(); }}>
-                          {user.isInternal && (
-                            <button
-                              title="Archive Scenario"
-                              onClick={function() {
-                                if (!confirm("Archive this scenario? It will move to the Archived tab.")) return;
-                                changeLeadStatus(scenario, "z- Lead");
-                              }}
-                              style={{
-                                ...actionBtnStyle,
-                                background: "transparent",
-                                borderColor: "rgba(245,158,11,0.4)",
-                                color: "#b45309",
-                              }}
-                            >📦</button>
-                          )}
-                        </td>
-
-                        {/* Delete */}
-                        <td style={{ ...tdStyle, textAlign: "center" }} onClick={function(e) { e.stopPropagation(); }}>
-                          {isCloudUser && user.role === "admin" && (
-                            <button
-                              title="Delete Scenario"
-                              onClick={function() { deleteScenario(scenario.id); }}
-                              style={{
-                                ...actionBtnStyle,
-                                background: "transparent",
-                                borderColor: "rgba(239,68,68,0.4)",
-                                color: "#ef4444",
-                              }}
-                            >🗑</button>
-                          )}
-                        </td>
+                              {openMenuId === scenario.id && (
+                                <div
+                                  onClick={function(e) { e.stopPropagation(); }}
+                                  style={{
+                                    position: "absolute", right: 0, top: "calc(100% + 4px)", zIndex: 200,
+                                    background: c.bg || "#fff",
+                                    border: "1px solid " + c.border,
+                                    borderRadius: 10, boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
+                                    minWidth: 180, padding: "6px 0",
+                                  }}
+                                >
+                                  {(function() {
+                                    const menuItem = function(label, onClick, color) {
+                                      return React.createElement("button", {
+                                        key: label,
+                                        onClick: function() { setOpenMenuId(null); onClick(); },
+                                        style: {
+                                          display: "block", width: "100%", textAlign: "left",
+                                          padding: "8px 16px", background: "transparent",
+                                          border: "none", cursor: "pointer",
+                                          fontSize: 13, fontFamily: "inherit",
+                                          color: color || c.text,
+                                        },
+                                        onMouseEnter: function(e) { e.currentTarget.style.background = c.bgAlt || "rgba(0,0,0,0.04)"; },
+                                        onMouseLeave: function(e) { e.currentTarget.style.background = "transparent"; },
+                                      }, label);
+                                    };
+                                    const items = [];
+                                    if (isCloudUser)
+                                      items.push(menuItem("📜  Activity Log", function() { toggleAuditLog(scenario.id); }));
+                                    if (isCloudUser && user.isInternal)
+                                      items.push(menuItem("✏️  Edit Details", function() {
+                                        if (editDetailsOpen === scenario.id) { setEditDetailsOpen(null); setEditDetailsForm({}); }
+                                        else {
+                                          setEditDetailsOpen(scenario.id);
+                                          setEditDetailsForm({
+                                            loan_purpose:           scenario.loan_purpose           || "purchase",
+                                            property_address:       scenario.property_address       || "",
+                                            lead_source:            scenario.lead_source            || "",
+                                            target_close_date:      scenario.target_close_date      || "",
+                                            actual_close_date:      scenario.actual_close_date      || "",
+                                            co_borrower_contact_id: scenario.co_borrower_contact_id || "",
+                                          });
+                                        }
+                                      }));
+                                    if (isCloudUser && user.isInternal)
+                                      items.push(menuItem("📋  Save as Template", function() {
+                                        setSaveTemplateModal({ scenarioId: scenario.id, calculatorData: scenario.calculatorData || {}, loanPurpose: scenario.loan_purpose || "purchase" });
+                                        setSaveTemplateName(scenario.clientName || "");
+                                        setSaveTemplateDesc("");
+                                        setSaveTemplateIsGlobal(false);
+                                      }));
+                                    if (isCloudUser && user.isInternal && partnerProfiles.length > 0)
+                                      items.push(menuItem("🔗  Share with Partner", function() {
+                                        setShareModalScenario(scenario);
+                                        setSharePartnerId(""); setSharePermission("view"); setShareNote("");
+                                      }));
+                                    if (user.isInternal) {
+                                      if (items.length > 0)
+                                        items.push(React.createElement("div", { key: "div1", style: { height: 1, background: c.border, margin: "4px 0" } }));
+                                      items.push(menuItem("📦  Archive", function() {
+                                        if (!confirm("Archive this scenario? It will move to the Archived tab.")) return;
+                                        changeLeadStatus(scenario, "z- Lead");
+                                      }, "#b45309"));
+                                    }
+                                    if (isCloudUser && user.role === "admin") {
+                                      items.push(menuItem("🗑  Delete", function() { deleteScenario(scenario.id); }, "#ef4444"));
+                                    }
+                                    return items;
+                                  })()}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        )}
                       </tr>
 
                       {/* ── Audit Log expanded row ── */}
@@ -2644,7 +2763,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                         <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
                           {isPartner && (
                             referredIds.has(scenario.id)
-                              ? <span style={{ fontSize: 11, fontWeight: 700, color: "#7c3aed", background: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.25)", borderRadius: 99, padding: "3px 10px", whiteSpace: "nowrap" }}>⭐ Referred</span>
+                              ? <span style={{ fontSize: 12, fontWeight: 700, color: "#7c3aed", background: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.25)", borderRadius: 99, padding: "3px 10px", whiteSpace: "nowrap" }}>⭐ Referred</span>
                               : <button onClick={function() { setReferringId(scenario.id); setReferNote(""); }}
                                   style={{ background: "rgba(124,58,237,0.12)", color: "#7c3aed", border: "1px solid rgba(124,58,237,0.3)", borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
                                   ⭐ Refer
@@ -2724,7 +2843,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                             >
                               <td style={{ ...tdStyle, fontWeight: 600 }}>{scenario.clientName}</td>
                               <td style={tdStyle}>
-                                <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 10, fontSize: 11, fontWeight: 700, background: isRefi ? "rgba(59,130,246,0.12)" : "rgba(34,197,94,0.12)", color: isRefi ? "#1d4ed8" : "#15803d" }}>
+                                <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 10, fontSize: 12, fontWeight: 700, background: isRefi ? "rgba(59,130,246,0.12)" : "rgba(34,197,94,0.12)", color: isRefi ? "#1d4ed8" : "#15803d" }}>
                                   {isRefi ? "Refi" : "Purchase"}
                                 </span>
                               </td>
@@ -2795,7 +2914,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                           <td style={tdStyle} onClick={function(e) { e.stopPropagation(); }}>
                             <span style={{
                               display: "inline-block", padding: "3px 8px", borderRadius: 5,
-                              fontSize: 11, fontWeight: 700,
+                              fontSize: 12, fontWeight: 700,
                               background: lsColor.bg, color: lsColor.text,
                             }}>{ls}</span>
                           </td>
@@ -2819,7 +2938,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                             <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                               <span style={{ fontWeight: 600 }}>{scenario.clientName}</span>
                               {referredIds.has(scenario.id) && (
-                                <span style={{ fontSize: 10, fontWeight: 700, background: "rgba(124,58,237,0.12)", color: "#7c3aed", border: "1px solid rgba(124,58,237,0.25)", borderRadius: 99, padding: "1px 7px", whiteSpace: "nowrap" }}>⭐ Referred</span>
+                                <span style={{ fontSize: 12, fontWeight: 700, background: "rgba(124,58,237,0.12)", color: "#7c3aed", border: "1px solid rgba(124,58,237,0.25)", borderRadius: 99, padding: "1px 7px", whiteSpace: "nowrap" }}>⭐ Referred</span>
                               )}
                             </div>
                           </td>
@@ -2828,7 +2947,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                           <td style={tdStyle}>
                             <span style={{
                               display: "inline-block", padding: "2px 8px", borderRadius: 10,
-                              fontSize: 11, fontWeight: 700, whiteSpace: "nowrap",
+                              fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
                               background: isRefi ? "rgba(59,130,246,0.12)" : "rgba(34,197,94,0.12)",
                               color:      isRefi ? "#1d4ed8"               : "#15803d",
                             }}>
@@ -2852,7 +2971,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                           <td style={{ ...tdStyle, whiteSpace: "nowrap" }} onClick={function(e) { e.stopPropagation(); }}>
                             <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
                               {referredIds.has(scenario.id)
-                                ? <span style={{ fontSize: 11, fontWeight: 700, color: "#7c3aed", background: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.25)", borderRadius: 99, padding: "3px 10px", whiteSpace: "nowrap" }}>⭐ Referred</span>
+                                ? <span style={{ fontSize: 12, fontWeight: 700, color: "#7c3aed", background: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.25)", borderRadius: 99, padding: "3px 10px", whiteSpace: "nowrap" }}>⭐ Referred</span>
                                 : <button onClick={function() { setReferringId(scenario.id); setReferNote(""); }}
                                     style={{ background: "rgba(124,58,237,0.12)", color: "#7c3aed", border: "1px solid rgba(124,58,237,0.3)", borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
                                     ⭐ Refer
@@ -2871,6 +2990,21 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                 </table>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ── Client disclosure ─────────────────────────────────────── */}
+        {!user.isInternal && (
+          <div style={{
+            marginTop: 32, paddingTop: 14,
+            borderTop: "1px solid " + (c.border || "#e5eef4"),
+            fontSize: 12, color: c.gray || "#94a3b8",
+            lineHeight: 1.6, textAlign: "center",
+          }}>
+            Not a commitment to lend. All loans subject to credit approval and underwriting.
+            Rates shown are estimates only and subject to change without notice.{" "}
+            Mark Pfeiffer | NMLS #729612 | CMG Home Loans | NMLS #1820 | Equal Housing Lender |{" "}
+            NMLS Consumer Access: www.nmlsconsumeraccess.org
           </div>
         )}
 
@@ -2926,7 +3060,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                     })}
                   </select>
                   {partnerProfiles.length === 0 && (
-                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 6 }}>
+                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 6 }}>
                       No partners in your account yet — use "Invite New Partner" to add one.
                     </div>
                   )}
@@ -2941,7 +3075,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                 </div>
                 <div>
                   <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
-                    Note <span style={{ fontSize: 10, fontWeight: 400, opacity: 0.6 }}>(optional)</span>
+                    Note <span style={{ fontSize: 12, fontWeight: 400, opacity: 0.6 }}>(optional)</span>
                   </label>
                   <input type="text" value={shareNote} onChange={function(e) { setShareNote(e.target.value); }}
                     placeholder="e.g. Working with this buyer on Oakwood subdivision"
@@ -2957,6 +3091,65 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                     Cancel
                   </button>
                 </div>
+
+                {/* ── Brokerage team share ── */}
+                {(function() {
+                  const brokerages = [...new Set(
+                    partnerProfiles
+                      .filter(function(p) { return p.brokerage && p.brokerage.trim(); })
+                      .map(function(p) { return p.brokerage.trim(); })
+                  )].sort();
+                  if (brokerages.length === 0) return null;
+                  const teamMembers = shareBrokerage
+                    ? partnerProfiles.filter(function(p) { return p.brokerage === shareBrokerage; })
+                    : [];
+                  return (
+                    <div style={{ borderTop: "1px solid #2a4a6a", paddingTop: 16, marginTop: 4 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>
+                        — or share with a whole brokerage team —
+                      </div>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                        <select
+                          value={shareBrokerage}
+                          onChange={function(e) { setShareBrokerage(e.target.value); setBrokerageShareResult(null); }}
+                          style={{ flex: 1, minWidth: 160, padding: "9px 12px", borderRadius: 8, border: "1px solid #2a4a6a", background: "#1a3450", color: shareBrokerage ? "#fff" : "rgba(255,255,255,0.4)", fontSize: 13, outline: "none" }}
+                        >
+                          <option value="">Select brokerage…</option>
+                          {brokerages.map(function(b) {
+                            const count = partnerProfiles.filter(function(p) { return p.brokerage === b; }).length;
+                            return <option key={b} value={b}>{b} ({count})</option>;
+                          })}
+                        </select>
+                        <button
+                          onClick={handleShareWithBrokerage}
+                          disabled={!shareBrokerage || shareSaving}
+                          style={{
+                            padding: "9px 18px", borderRadius: 8, border: "none",
+                            background: !shareBrokerage || shareSaving ? "#374151" : "#0f766e",
+                            color: "#fff", fontSize: 13, fontWeight: 700,
+                            cursor: !shareBrokerage || shareSaving ? "not-allowed" : "pointer",
+                            opacity: !shareBrokerage || shareSaving ? 0.6 : 1, whiteSpace: "nowrap",
+                          }}
+                        >
+                          {shareSaving ? "Sharing…" : "Share with Team"}
+                        </button>
+                      </div>
+                      {shareBrokerage && teamMembers.length > 0 && !brokerageShareResult && (
+                        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 6 }}>
+                          Will share with: {teamMembers.map(function(p) { return p.display_name || p.email; }).join(", ")}
+                        </div>
+                      )}
+                      {brokerageShareResult && (
+                        <div style={{ fontSize: 12, marginTop: 8, fontWeight: 600,
+                          color: brokerageShareResult.failed > 0 ? "#f87171" : "#4ade80" }}>
+                          {brokerageShareResult.failed > 0
+                            ? "⚠️ " + brokerageShareResult.ok + "/" + brokerageShareResult.total + " shared (" + brokerageShareResult.failed + " failed)"
+                            : "✅ Shared with all " + brokerageShareResult.ok + " members of " + shareBrokerage}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
@@ -2992,7 +3185,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                 </div>
                 <div>
                   <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
-                    Note <span style={{ fontSize: 10, fontWeight: 400, opacity: 0.6 }}>(optional)</span>
+                    Note <span style={{ fontSize: 12, fontWeight: 400, opacity: 0.6 }}>(optional)</span>
                   </label>
                   <input type="text" value={shareNote} onChange={function(e) { setShareNote(e.target.value); }}
                     placeholder="e.g. Working with this buyer on Oakwood subdivision"
@@ -3051,7 +3244,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
             </div>
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
-                Note <span style={{ fontSize: 10, fontWeight: 400, opacity: 0.6 }}>(optional)</span>
+                Note <span style={{ fontSize: 12, fontWeight: 400, opacity: 0.6 }}>(optional)</span>
               </label>
               <input type="text" value={referNote} onChange={function(e) { setReferNote(e.target.value); }}
                 placeholder="e.g. Pre-approved target $450k, looking to close by June"

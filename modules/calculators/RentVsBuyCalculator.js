@@ -12,6 +12,7 @@ const COLORS = window.COLORS;
 const font = window.font;
 const STATE_LIST = window.STATE_LIST;
 const STATE_APPR_RATES = window.STATE_APPR_RATES;
+const InfoTip = window.InfoTip;
 
 // Simple owner vs renter net worth line chart
 function RvbWealthChart({ data }) {
@@ -192,30 +193,30 @@ function RentVsBuyCalculator() {
         <div style={{ marginBottom: 10 }}>
           <Select label="State (auto-fills appreciation)" value={rvbState} onChange={setRvbState} options={STATE_LIST.map(s => ({ value: s.value, label: s.label }))} />
           {STATE_APPR_RATES[rvbState] != null && (
-            <div style={{ fontSize: 10, color: c.grayLight || COLORS.grayLight, fontFamily: font, marginTop: -4, marginBottom: 4, fontStyle: "italic" }}>
+            <div style={{ fontSize: 12, color: c.grayLight || COLORS.grayLight, fontFamily: font, marginTop: -4, marginBottom: 4, fontStyle: "italic" }}>
               * {rvbState} FHFA avg ≈ {STATE_APPR_RATES[rvbState]}% — override as needed
             </div>
           )}
         </div>
         <div className="mtk-grid-3" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-          <LabeledInput label="Home Price" value={homePrice} onChange={setHomePrice} prefix="$" useCommas />
-          <LabeledInput label="Down Payment %" value={downPct} onChange={setDownPct} suffix="%" />
+          <LabeledInput label="Home Price" value={homePrice} onChange={setHomePrice} prefix="$" useCommas infoTip="The price of the home you're considering buying. This is the starting point for all the calculations — loan amount, down payment, equity projections, and total cost of ownership." />
+          <LabeledInput label="Down Payment %" value={downPct} onChange={setDownPct} suffix="%" infoTip="The amount you'd put down to purchase the home. A larger down payment means a smaller loan, lower monthly payment, and potentially no PMI — but it also means less cash available for other investments." />
           <LabeledInput label="Interest Rate" value={rate} onChange={setRate} suffix="%" />
           <LabeledInput label="Loan Term (years)" value={termYrs} onChange={setTermYrs} />
           <LabeledInput label="Property Tax Rate" value={propTaxRate} onChange={setPropTaxRate} suffix="%" />
           <LabeledInput label="Annual Insurance" value={insurance} onChange={setInsurance} prefix="$" useCommas />
           <LabeledInput label="Monthly HOA" value={hoa} onChange={setHoa} prefix="$" useCommas />
-          <LabeledInput label="Maintenance %" value={maint} onChange={setMaint} suffix="%" />
-          <LabeledInput label="Appreciation Rate" value={appreciation} onChange={setAppreciation} suffix="%" />
+          <LabeledInput label="Maintenance %" value={maint} onChange={setMaint} suffix="%" infoTip="A common rule of thumb is 1% of the home's value per year for maintenance and repairs. This is money renters don't spend — it's a real cost of homeownership that's easy to underestimate." />
+          <LabeledInput label="Appreciation Rate" value={appreciation} onChange={setAppreciation} suffix="%" infoTip="How much the home's value is expected to grow each year. Historically, U.S. homes appreciate 3-4% annually on average. This is a major factor in building wealth through homeownership." />
         </div>
       </SectionCard>
       <SectionCard title="RENTING COSTS" accent={c.blue || COLORS.blue}>
         <div className="mtk-grid-3" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-          <LabeledInput label="Monthly Rent" value={monthlyRent} onChange={setMonthlyRent} prefix="$" useCommas />
-          <LabeledInput label="Annual Rent Increase" value={rentIncrease} onChange={setRentIncrease} suffix="%" />
-          <LabeledInput label="Investment Return" value={investReturn} onChange={setInvestReturn} suffix="%" />
-          <LabeledInput label="Tax Bracket" value={taxBracket} onChange={setTaxBracket} suffix="%" />
-          <LabeledInput label="Years to Stay" value={stayYears} onChange={setStayYears} />
+          <LabeledInput label="Monthly Rent" value={monthlyRent} onChange={setMonthlyRent} prefix="$" useCommas infoTip="Your current monthly rent payment. This is compared to the total cost of homeownership to determine the true break-even point between renting and buying." />
+          <LabeledInput label="Annual Rent Increase" value={rentIncrease} onChange={setRentIncrease} suffix="%" infoTip="The rate at which your rent increases each year. Nationally, rents have increased 3-5% annually in recent years. This is a key factor — rising rent makes buying look more attractive over time." />
+          <LabeledInput label="Investment Return" value={investReturn} onChange={setInvestReturn} suffix="%" infoTip="If you rented and invested your down payment instead, what return would you expect? The S&P 500 has averaged about 7-10% annually over the long term. This compares the opportunity cost of tying up money in a down payment vs. investing it." />
+          <LabeledInput label="Tax Bracket" value={taxBracket} onChange={setTaxBracket} suffix="%" infoTip="Your federal income tax bracket. Homeowners may deduct mortgage interest and property taxes, which can reduce your tax bill. This factors into the true after-tax cost of owning." />
+          <LabeledInput label="Years to Stay" value={stayYears} onChange={setStayYears} infoTip="How long you plan to stay in the home. Buying typically makes more financial sense the longer you stay. Most break-even points fall between 3-7 years depending on the market." />
         </div>
       </SectionCard>
       <SectionCard title="VERDICT" accent={calc.buyWins ? (c.green || COLORS.green) : (c.blue || COLORS.blue)}>
@@ -252,11 +253,11 @@ function RentVsBuyCalculator() {
               return (
                 <div key={yr} style={{ padding: 10, borderRadius: 8, border: `1px solid ${c.border || COLORS.border}`, background: c.bg || "#fff" }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: c.gray || COLORS.gray, fontFamily: font, letterSpacing: "0.05em", marginBottom: 6 }}>YEAR {yr}</div>
-                  <div style={{ fontSize: 11, color: c.gray || COLORS.gray, fontFamily: font }}>Owner:</div>
+                  <div style={{ fontSize: 12, color: c.gray || COLORS.gray, fontFamily: font }}>Owner:</div>
                   <div style={{ fontSize: 14, fontWeight: 800, color: c.green || COLORS.green, fontFamily: font }}>{fmt(Math.round(d.ownerNetWorth))}</div>
-                  <div style={{ fontSize: 11, color: c.gray || COLORS.gray, fontFamily: font, marginTop: 4 }}>Renter:</div>
+                  <div style={{ fontSize: 12, color: c.gray || COLORS.gray, fontFamily: font, marginTop: 4 }}>Renter:</div>
                   <div style={{ fontSize: 14, fontWeight: 800, color: c.blue || COLORS.blue, fontFamily: font }}>{fmt(Math.round(d.renterNetWorth))}</div>
-                  <div style={{ marginTop: 6, padding: "3px 6px", borderRadius: 5, background: ownerWins ? (c.green || COLORS.green) + "20" : (c.blue || COLORS.blue) + "20", fontSize: 10, fontWeight: 700, color: ownerWins ? (c.green || COLORS.green) : (c.blue || COLORS.blue), fontFamily: font, textAlign: "center" }}>
+                  <div style={{ marginTop: 6, padding: "3px 6px", borderRadius: 5, background: ownerWins ? (c.green || COLORS.green) + "20" : (c.blue || COLORS.blue) + "20", fontSize: 12, fontWeight: 700, color: ownerWins ? (c.green || COLORS.green) : (c.blue || COLORS.blue), fontFamily: font, textAlign: "center" }}>
                     {ownerWins ? "🏠" : "🏢"} {ownerWins ? "Own +" : "Rent +"}{fmt(Math.round(diff))}
                   </div>
                 </div>
@@ -283,7 +284,7 @@ function RentVsBuyCalculator() {
               { label: "HOA + Maint.", val: calc.hoaMo + calc.maintMo, clr: c.gold || COLORS.gold },
               { label: "PMI", val: calc.pmiMo, clr: c.red || COLORS.red },
             ].filter(d => d.val > 0).map((d, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontFamily: font }}>
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontFamily: font }}>
                 <div style={{ width: 8, height: 8, borderRadius: 2, background: d.clr, flexShrink: 0 }} />
                 <span style={{ color: c.gray || COLORS.gray }}>{d.label}</span>
                 <span style={{ marginLeft: "auto", fontWeight: 700, color: c.text || COLORS.navy }}>{fmt2(d.val)}</span>
@@ -292,15 +293,15 @@ function RentVsBuyCalculator() {
           </div>
         </div>
         <div style={{ textAlign: "center", padding: "8px 0", background: c.blueLight || COLORS.blueLight, borderRadius: 6 }}>
-          <span style={{ fontSize: 11, color: c.gray || COLORS.gray, fontFamily: font }}>Monthly Rent: </span>
+          <span style={{ fontSize: 12, color: c.gray || COLORS.gray, fontFamily: font }}>Monthly Rent: </span>
           <span style={{ fontSize: 14, fontWeight: 700, color: c.blue || COLORS.blue, fontFamily: font }}>{fmt2(parseFloat(monthlyRent) || 0)}</span>
-          <span style={{ fontSize: 11, color: c.gray || COLORS.gray, fontFamily: font, marginLeft: 8 }}>Difference: </span>
+          <span style={{ fontSize: 12, color: c.gray || COLORS.gray, fontFamily: font, marginLeft: 8 }}>Difference: </span>
           <span style={{ fontSize: 14, fontWeight: 700, color: calc.totalBuyMo > (parseFloat(monthlyRent) || 0) ? (c.red || COLORS.red) : (c.green || COLORS.green), fontFamily: font }}>{fmt2(Math.abs(calc.totalBuyMo - (parseFloat(monthlyRent) || 0)))}/mo</span>
         </div>
       </SectionCard>
       <SectionCard title="YEAR-BY-YEAR PROJECTION" accent={c.navy || COLORS.navy}>
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, fontFamily: font }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, fontFamily: font }}>
             <thead>
               <tr>{["Year", "Home Value", "Equity", "Buy Cost", "Rent Cost", "Rent Invest."].map((h, i) => (
                 <th key={i} style={{ padding: "8px 6px", textAlign: i === 0 ? "center" : "right", borderBottom: `2px solid ${c.navy || COLORS.navy}`, color: c.gray || COLORS.gray, fontWeight: 700, fontSize: 10, letterSpacing: "0.03em" }}>{h}</th>

@@ -8,6 +8,7 @@ const SectionCard = window.SectionCard;
 const GaugeChart = window.GaugeChart;
 const COLORS = window.COLORS;
 const font = window.font;
+const InfoTip = window.InfoTip;
 
 const INCOME_TYPES = [
   "Alimony Received",
@@ -191,7 +192,7 @@ function OwnerBadge({ owner, onClick, width, opts }) {
   const o = ownerOpt(owner, opts);
   return (
     <button onClick={onClick} title={`${o.label} — click to change`} style={{
-      width: width || 64, fontSize: 11, padding: "4px 2px",
+      width: width || 64, fontSize: 12, padding: "4px 2px",
       borderRadius: 10, border: `1.5px solid ${o.color}`,
       background: o.color + "18", color: o.color,
       fontFamily: font, fontWeight: 700, cursor: "pointer",
@@ -459,7 +460,7 @@ function DTICalculator() {
               )}
             </div>
             {calc.income > 0 && (
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", fontFamily: font, marginTop: 5 }}>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", fontFamily: font, marginTop: 5 }}>
                 {fmt2(calc.income)}/mo gross income
               </div>
             )}
@@ -499,14 +500,21 @@ function DTICalculator() {
                 )}
                 <div style={{ paddingRight: i < 2 ? 20 : 0 }}>
                   <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase",
-                    color: "rgba(255,255,255,0.48)", fontFamily: font, marginBottom: 3 }}>
+                    color: "rgba(255,255,255,0.48)", fontFamily: font, marginBottom: 3,
+                    display: "flex", alignItems: "center", gap: 4 }}>
                     {m.label}
+                    {m.label === "Front-End DTI" && (
+                      <InfoTip text="The percentage of your gross monthly income going toward housing costs (PITI — principal, interest, taxes, insurance). Most conventional loans want this below 28%. FHA allows up to 31%." />
+                    )}
+                    {m.label === "Back-End DTI" && (
+                      <InfoTip text="The percentage of your gross monthly income covering ALL monthly obligations — your housing payment plus all other debts. Most conventional loans require under 45%, FHA allows up to 57% with compensating factors, and VA has no hard cap but lenders prefer under 41%." />
+                    )}
                   </div>
                   <div style={{ fontSize: m.valueSize, fontWeight: 700, lineHeight: 1, color: m.color, fontFamily: font }}>
                     {m.value}
                   </div>
                   {m.sub && (
-                    <div style={{ fontSize: 10, color: "rgba(255,255,255,0.38)", fontFamily: font, marginTop: 2 }}>
+                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.38)", fontFamily: font, marginTop: 2 }}>
                       {m.sub}
                     </div>
                   )}
@@ -533,7 +541,7 @@ function DTICalculator() {
               </>
             )}
           </div>
-          <div style={{ display: "flex", gap: 14, marginTop: 5, fontSize: 11, fontFamily: font, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 14, marginTop: 5, fontSize: 12, fontFamily: font, flexWrap: "wrap" }}>
             <span style={{ color: "rgba(147,197,253,0.9)" }}>
               ■ Housing {calc.income > 0 ? ((calc.housing / calc.income) * 100).toFixed(0) : 0}%
             </span>
@@ -600,7 +608,7 @@ function DTICalculator() {
               <strong>Please check with your LO — approval is not automatic at these levels.</strong>
             </div>
             {(calc.frontDTI > 34 || calc.backDTI > 46) && (
-              <div style={{ fontSize: 11, color: "#14532d", fontFamily: font, marginTop: 4,
+              <div style={{ fontSize: 12, color: "#14532d", fontFamily: font, marginTop: 4,
                 fontStyle: "italic" }}>
                 Note: Current ratios exceed USDA's maximum with compensating factors. This scenario will
                 require a close review of GUS findings and loan-level approval.
@@ -618,8 +626,9 @@ function DTICalculator() {
           background: (c.green || COLORS.green) + "10",
           border: `1px solid ${(c.green || COLORS.green) + "30"}` }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: c.green || COLORS.green,
-            fontFamily: font, marginBottom: 4 }}>
+            fontFamily: font, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
             Enter GROSS (pre-tax) monthly income only.
+            <InfoTip text="Your total income before taxes and deductions. For salaried employees, use your annual salary divided by 12. Self-employed borrowers use a 2-year average from their tax returns (Schedule C or K-1). Include all qualifying sources: base salary, consistent overtime, rental income, and other documented income." />
           </div>
           <span style={{ fontSize: 12, color: c.gray || COLORS.gray, fontFamily: font, lineHeight: 1.6 }}>
             💡 <strong>Best practice:</strong> Break income down by category rather than entering a single gross total.
@@ -692,7 +701,7 @@ function DTICalculator() {
               <select
                 value={row.status || (row.excluded ? "exclude" : "")}
                 onChange={e => updateIncome(row.id, "status", e.target.value)}
-                style={{ ...inputStyle, width: COL_INC_STAT, flexShrink: 0, fontSize: 11, padding: "5px 4px",
+                style={{ ...inputStyle, width: COL_INC_STAT, flexShrink: 0, fontSize: 12, padding: "5px 4px",
                   background: excl ? "#fff3cd" : (c.bg || "#fff"),
                   color: excl ? "#92400e" : (c.gray || COLORS.gray),
                   fontWeight: excl ? 700 : 400,
@@ -744,7 +753,7 @@ function DTICalculator() {
           </div>
           <div style={{ width: COL_BAL, flexShrink: 0 }} />
           <div style={{ width: COL_INC_STAT + COL_REM + 8, flexShrink: 0,
-            fontSize: 11, color: (c.green || COLORS.green) + "99", fontFamily: font,
+            fontSize: 12, color: (c.green || COLORS.green) + "99", fontFamily: font,
             textAlign: "center", fontStyle: "italic" }}>
             {pendingAmt ? "← select type" : ""}
           </div>
@@ -789,6 +798,9 @@ function DTICalculator() {
           <div style={{ marginBottom: 12, padding: "10px 14px", borderRadius: 8,
             background: (c.red || COLORS.red) + "10",
             border: `1px solid ${(c.red || COLORS.red) + "30"}` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+              <InfoTip text="All recurring monthly debt payments that appear on your credit report — car loans, student loans, credit card minimum payments, personal loans. Do NOT include utilities, subscriptions, cell phone bills, or insurance — these are not counted in your DTI calculation." />
+            </div>
             <span style={{ fontSize: 12, color: c.gray || COLORS.gray, fontFamily: font, lineHeight: 1.6 }}>
               💡 <strong>Enter minimum monthly payments only.</strong>{" "}
               Focus on debts that appear on a credit report (credit cards, auto loans, student loans, personal loans)
@@ -817,7 +829,7 @@ function DTICalculator() {
             border: `1px solid ${(c.blue || COLORS.blue) + "28"}`,
           }}>
             <button onClick={cycleHousingOwner} style={{
-              width: COL_OWN, flexShrink: 0, fontSize: 11, padding: "4px 2px",
+              width: COL_OWN, flexShrink: 0, fontSize: 12, padding: "4px 2px",
               borderRadius: 10, border: `1.5px solid ${hOwnerOpt.color}`,
               background: hOwnerOpt.color + "18", color: hOwnerOpt.color,
               fontFamily: font, fontWeight: 700, cursor: "pointer", textAlign: "center",
@@ -843,7 +855,7 @@ function DTICalculator() {
             </div>
             {/* Status — always counted, no control shown */}
             <div style={{ width: COL_STATUS, flexShrink: 0,
-              fontSize: 11, color: c.gray || COLORS.gray, fontFamily: font,
+              fontSize: 12, color: c.gray || COLORS.gray, fontFamily: font,
               fontStyle: "italic", textAlign: "center" }}>
               Always counted
             </div>
@@ -936,7 +948,7 @@ function DTICalculator() {
               }}>✕</button>
             </div>
             {d.type === "Rental Income" && (
-              <div style={{ fontSize: 11, color: "#16a34a", fontFamily: font, fontStyle: "italic",
+              <div style={{ fontSize: 12, color: "#16a34a", fontFamily: font, fontStyle: "italic",
                 paddingLeft: 8, marginTop: -2, marginBottom: 4, lineHeight: 1.5 }}>
                 💡 Rental income <strong>lowers</strong> your DTI — enter it as a <strong>negative number</strong>. Example: rental property mortgage = $1,200/mo debt (entered above). Gross rent collected = $1,500/mo. Most lenders count 75% of gross rent → enter <strong>-1125</strong>. Net DTI hit: $1,200 − $1,125 = only <strong>$75/mo</strong> added to obligations instead of $1,200.
               </div>
@@ -964,7 +976,7 @@ function DTICalculator() {
                 </div>
                 {mismatch && slDebt && (
                   <button onClick={() => setDebtsStr(JSON.stringify(debts.map(d => d.id === slDebt.id ? { ...d, amount: String(slCalcAmt) } : d)))}
-                    style={{ padding: "4px 12px", borderRadius: 4, fontSize: 11, fontFamily: font,
+                    style={{ padding: "4px 12px", borderRadius: 4, fontSize: 12, fontFamily: font,
                       background: "#2563eb", color: "#fff", border: "none", cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" }}>
                     Update to ${slCalcAmt.toLocaleString()}
                   </button>
@@ -1129,7 +1141,7 @@ function DTICalculator() {
               }}>
                 {/* Row 1: description + remove */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: c.gray, fontFamily: font, minWidth: 20 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: c.gray, fontFamily: font, minWidth: 20 }}>
                     #{idx + 1}
                   </div>
                   <input
@@ -1147,7 +1159,7 @@ function DTICalculator() {
                 {/* Row 2: balance + credit report payment + status */}
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
                   <div style={{ flex: "1 1 120px" }}>
-                    <div style={{ fontSize: 10, color: c.gray, fontFamily: font, marginBottom: 2 }}>Outstanding Balance</div>
+                    <div style={{ fontSize: 12, color: c.gray, fontFamily: font, marginBottom: 2 }}>Outstanding Balance</div>
                     <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
                       <span style={{ padding: "6px 8px", background: c.bgAlt, border: `1px solid ${c.border}`,
                         borderRight: "none", borderRadius: "4px 0 0 4px", fontSize: 15, color: c.gray }}>$</span>
@@ -1156,7 +1168,7 @@ function DTICalculator() {
                     </div>
                   </div>
                   <div style={{ flex: "1 1 120px" }}>
-                    <div style={{ fontSize: 10, color: c.gray, fontFamily: font, marginBottom: 2 }}>Credit Report Payment</div>
+                    <div style={{ fontSize: 12, color: c.gray, fontFamily: font, marginBottom: 2 }}>Credit Report Payment</div>
                     <div style={{ display: "flex", alignItems: "center" }}>
                       <span style={{ padding: "6px 8px", background: c.bgAlt, border: `1px solid ${c.border}`,
                         borderRight: "none", borderRadius: "4px 0 0 4px", fontSize: 15, color: c.gray }}>$</span>
@@ -1165,7 +1177,7 @@ function DTICalculator() {
                     </div>
                   </div>
                   <div style={{ flex: "2 1 200px" }}>
-                    <div style={{ fontSize: 10, color: c.gray, fontFamily: font, marginBottom: 2 }}>Repayment Status</div>
+                    <div style={{ fontSize: 12, color: c.gray, fontFamily: font, marginBottom: 2 }}>Repayment Status</div>
                     <select value={loan.status} onChange={e => updateSlLoan(loan.id, "status", e.target.value)}
                       style={{ ...inputStyle, width: "100%" }}>
                       {SL_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
@@ -1180,7 +1192,7 @@ function DTICalculator() {
                     <input type="checkbox" checked={!!loan.vaDeferred12mo}
                       onChange={e => updateSlLoan(loan.id, "vaDeferred12mo", e.target.checked)}
                       style={{ width: 16, height: 16, cursor: "pointer" }} />
-                    <div style={{ fontSize: 11, fontFamily: font, color: c.text || c.navy }}>
+                    <div style={{ fontSize: 12, fontFamily: font, color: c.text || c.navy }}>
                       <strong>VA only:</strong> Deferment extends 12+ months beyond closing date
                       — if checked, VA excludes this loan from DTI entirely
                     </div>
@@ -1192,7 +1204,7 @@ function DTICalculator() {
                   <input type="checkbox" checked={!!loan.pslf}
                     onChange={e => updateSlLoan(loan.id, "pslf", e.target.checked)}
                     style={{ width: 16, height: 16, cursor: "pointer" }} />
-                  <div style={{ fontSize: 11, fontFamily: font, color: c.gray }}>
+                  <div style={{ fontSize: 12, fontFamily: font, color: c.gray }}>
                     Enrolled in PSLF / forgiveness with <strong>fewer than 10 payments remaining</strong>
                     — Fannie Mae & Freddie Mac may exclude from DTI (documentation required)
                   </div>
@@ -1201,7 +1213,7 @@ function DTICalculator() {
                 {/* Agency payment grid */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr repeat(5, 72px)", gap: 4,
                   borderTop: `1px solid ${c.border}`, paddingTop: 8 }}>
-                  <div style={{ fontSize: 10, color: c.gray, fontFamily: font, display: "flex",
+                  <div style={{ fontSize: 12, color: c.gray, fontFamily: font, display: "flex",
                     alignItems: "center" }}>Qualifying payment used in DTI:</div>
                   {SL_AGENCIES.map(ag => {
                     const pmt = payments[ag.id];
@@ -1212,7 +1224,7 @@ function DTICalculator() {
                         background: isActive ? (c.navy || COLORS.navy) : (c.bgAlt || "#f4f5f7"),
                         color: isActive ? "#fff" : (c.text || c.navy),
                       }}>
-                        <div style={{ fontSize: 10, fontWeight: 600, opacity: 0.7, marginBottom: 1 }}>{ag.short}</div>
+                        <div style={{ fontSize: 12, fontWeight: 600, opacity: 0.7, marginBottom: 1 }}>{ag.short}</div>
                         <div style={{ fontSize: 13, fontWeight: 800 }}>
                           {pmt === 0 ? <span style={{ color: isActive ? "#86efac" : "#16a34a" }}>$0</span>
                                      : `$${Math.round(pmt).toLocaleString()}`}
@@ -1234,7 +1246,7 @@ function DTICalculator() {
                   };
                   const note = notes[loan.status];
                   return note ? (
-                    <div style={{ fontSize: 10, color: c.gray, fontFamily: font, marginTop: 6, lineHeight: 1.5 }}>
+                    <div style={{ fontSize: 12, color: c.gray, fontFamily: font, marginTop: 6, lineHeight: 1.5 }}>
                       💡 {note}
                     </div>
                   ) : null;
@@ -1268,7 +1280,7 @@ function DTICalculator() {
                       color: isActive ? "#fff" : (c.text || c.navy),
                       border: isActive ? "none" : `1px solid ${c.border}`,
                     }}>
-                      <div style={{ fontSize: 10, fontWeight: 600, opacity: 0.7, marginBottom: 1 }}>{ag.short}</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, opacity: 0.7, marginBottom: 1 }}>{ag.short}</div>
                       <div style={{ fontSize: 14, fontWeight: 800 }}>
                         {total === 0
                           ? <span style={{ color: isActive ? "#86efac" : "#16a34a" }}>$0</span>
@@ -1278,7 +1290,7 @@ function DTICalculator() {
                   );
                 })}
               </div>
-              <div style={{ fontSize: 11, color: c.gray, fontFamily: font, marginTop: 8, lineHeight: 1.5 }}>
+              <div style={{ fontSize: 12, color: c.gray, fontFamily: font, marginTop: 8, lineHeight: 1.5 }}>
                 ↑ Enter the <strong>{SL_PROGRAMS.find(p => p.value === slProgram)?.label || slProgram}</strong> total
                 (${Math.round(slTotals[slProgram] || 0).toLocaleString()}/mo) into the Monthly Debt section above as "Student Loan."
               </div>
@@ -1286,9 +1298,9 @@ function DTICalculator() {
           )}
 
           {/* Reference card */}
-          <div style={{ marginTop: 14, fontSize: 10, color: c.gray, fontFamily: font, lineHeight: 1.7,
+          <div style={{ marginTop: 14, fontSize: 12, color: c.gray, fontFamily: font, lineHeight: 1.7,
             padding: "10px 12px", background: c.bgAlt, borderRadius: 8, border: `1px solid ${c.border}` }}>
-            <div style={{ fontWeight: 700, color: c.navy || COLORS.navy, marginBottom: 4, fontSize: 11 }}>
+            <div style={{ fontWeight: 700, color: c.navy || COLORS.navy, marginBottom: 4, fontSize: 12 }}>
               Quick Reference — Qualifying Payment Rules
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "90px 1fr", gap: "2px 10px" }}>

@@ -28,7 +28,7 @@
   document.head.appendChild(s);
 })();
 
-function LabeledInput({ label, value, onChange, onBlur, prefix, suffix, type = "number", step, hint, useCommas, disabled, small, noNegative, rightAddon }) {
+function LabeledInput({ label, value, onChange, onBlur, prefix, suffix, type = "number", step, hint, useCommas, disabled, small, noNegative, rightAddon, infoTip }) {
   const c = useThemeColors();
   const displayVal = useCommas ? addCommas(value) : value;
   const handleChange = (raw) => {
@@ -51,7 +51,12 @@ function LabeledInput({ label, value, onChange, onBlur, prefix, suffix, type = "
   );
   return (
     <div style={{ marginBottom: small ? 10 : 14, minWidth: 0 }}>
-      {label && <label style={{ display: "block", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: c.gray, marginBottom: 5, fontFamily: font }}>{label}</label>}
+      {label && (
+        <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5 }}>
+          <label style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: c.gray, fontFamily: font }}>{label}</label>
+          {infoTip && <InfoTip text={infoTip} />}
+        </div>
+      )}
       {rightAddon
         ? <div style={{ display: "flex", gap: 4, alignItems: "stretch" }}>{inputBox}{rightAddon}</div>
         : inputBox}
@@ -157,6 +162,86 @@ function WarningBanner({ warnings }) {
   );
 }
 
+// ── InfoTip ───────────────────────────────────────────────────────────────────
+// Small ⓘ icon that opens a dark popover with explanatory text on click.
+// Uses a React portal so the popover escapes overflow:hidden containers.
+function InfoTip({ text }) {
+  const [open, setOpen] = React.useState(false);
+  const [pos, setPos]   = React.useState(null);
+  const btnRef = React.useRef(null);
+  const popRef = React.useRef(null);
+  const f = font;
+
+  React.useEffect(function() {
+    if (!open) return;
+    function handleOutside(e) {
+      if (popRef.current && !popRef.current.contains(e.target) &&
+          btnRef.current && !btnRef.current.contains(e.target)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutside);
+    document.addEventListener("touchstart", handleOutside);
+    return function() {
+      document.removeEventListener("mousedown", handleOutside);
+      document.removeEventListener("touchstart", handleOutside);
+    };
+  }, [open]);
+
+  function handleToggle(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setPos({ r, openAbove: r.top > window.innerHeight * 0.55 });
+    }
+    setOpen(function(o) { return !o; });
+  }
+
+  const POP_W = 280;
+  var popStyle = {
+    position: "fixed", zIndex: 99999,
+    width: POP_W,
+    background: "#1B2A3B", color: "#fff",
+    padding: "12px 14px", borderRadius: 10,
+    fontSize: 13, lineHeight: 1.65, fontFamily: f,
+    boxShadow: "0 6px 28px rgba(0,0,0,0.32)",
+    pointerEvents: "auto",
+  };
+  if (open && pos) {
+    var r = pos.r;
+    var left = r.left;
+    if (left + POP_W > window.innerWidth - 12) left = window.innerWidth - POP_W - 12;
+    if (left < 12) left = 12;
+    popStyle.left = left;
+    if (pos.openAbove) {
+      popStyle.bottom = window.innerHeight - r.top + 8;
+    } else {
+      popStyle.top = r.bottom + 8;
+    }
+  }
+
+  return React.createElement(React.Fragment, null,
+    React.createElement("button", {
+      ref: btnRef, type: "button", onClick: handleToggle,
+      title: "More info",
+      style: {
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        width: 16, height: 16, borderRadius: "50%",
+        background: open ? "#0C4160" : "#1A5E8A",
+        color: "#fff", border: "none", cursor: "pointer",
+        fontSize: 10, fontWeight: 800, fontFamily: f, lineHeight: 1,
+        flexShrink: 0, transition: "background 0.15s",
+        padding: 0,
+      }
+    }, "i"),
+    open && pos && ReactDOM.createPortal(
+      React.createElement("div", { ref: popRef, style: popStyle }, text),
+      document.body
+    )
+  );
+}
+
 window.LabeledInput = LabeledInput;
 window.Toggle = Toggle;
 window.Select = Select;
@@ -164,3 +249,4 @@ window.MetricCard = MetricCard;
 window.SectionCard = SectionCard;
 window.Button = Button;
 window.WarningBanner = WarningBanner;
+window.InfoTip = InfoTip;

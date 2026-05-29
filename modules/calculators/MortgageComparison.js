@@ -16,6 +16,7 @@ const exportToPDF     = window.exportToPDF;
 const exportToExcel    = window.exportToExcel;
 const lookupPMICompany = window.lookupPMICompany;
 const lookupPMI        = window.lookupPMI;
+const InfoTip          = window.InfoTip;
 
 const PRESET_TERMS_MC = ["30", "20", "15"];
 
@@ -554,7 +555,7 @@ function MortgageComparison() {
           border: `1px solid ${mode === v ? COLORS.gold : COLORS.border}`,
           background: mode === v ? `${COLORS.gold}22` : "transparent",
           color: mode === v ? COLORS.gold : COLORS.gray,
-          fontSize: 10, fontWeight: 700,
+          fontSize: 12, fontWeight: 700,
         }}>{lbl}</button>
       ))}
     </div>
@@ -583,12 +584,12 @@ function MortgageComparison() {
 
     const PermResults = ({ pbd }) => {
       if (pbd.noRate) return (
-        <div style={{ fontSize: 11, color: COLORS.gray, fontFamily: font, padding: "8px 0" }}>
+        <div style={{ fontSize: 12, color: COLORS.gray, fontFamily: font, padding: "8px 0" }}>
           Enter a buydown rate above to see analysis.
         </div>
       );
       if (pbd.rateError) return (
-        <div style={{ fontSize: 11, color: COLORS.red, fontFamily: font, padding: "8px 0" }}>
+        <div style={{ fontSize: 12, color: COLORS.red, fontFamily: font, padding: "8px 0" }}>
           Rate must be lower than the base rate ({pbd.baseRate}%).
         </div>
       );
@@ -616,10 +617,10 @@ function MortgageComparison() {
           const rdxPct = (pbd.baseRate - pbd.bdRate).toFixed(3).replace(/\.?0+$/, "");
           return (
             <div style={{ background: COLORS.bgAlt, borderRadius: 6, padding: "10px 12px" }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.navy, fontFamily: font, marginBottom: 6 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.navy, fontFamily: font, marginBottom: 6 }}>
                 Breakeven Analysis
               </div>
-              <div style={{ fontSize: 10, color: COLORS.navy, fontFamily: font, lineHeight: 1.65, marginBottom: 8 }}>
+              <div style={{ fontSize: 12, color: COLORS.navy, fontFamily: font, lineHeight: 1.65, marginBottom: 8 }}>
                 Reducing your rate from <strong>{pbd.baseRate}%</strong> to <strong>{pbd.bdRate}%</strong> (a <strong>{rdxPct}%</strong> reduction) saves{" "}
                 <strong style={{ color: COLORS.green }}>{fmt2(pbd.monthlySavings)}/mo</strong>.{" "}
                 At a cost of <strong style={{ color: COLORS.gold }}>{fmt(pbd.cost)}</strong>, you won't see the benefit of this buydown until{" "}
@@ -654,12 +655,12 @@ function MortgageComparison() {
       {/* Schedule table — hidden when no valid schedule (e.g. Fee Sheet has "none") */}
       {tbd.years ? (
         <div style={{ overflowX: "auto", marginTop: 8 }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: font, fontSize: 11 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: font, fontSize: 12 }}>
             <thead>
               <tr style={{ borderBottom: `1.5px solid ${COLORS.navy}` }}>
                 {["Yr", "Rate", "Payment", "Subsidy/yr"].map(h => (
                   <th key={h} style={{ padding: "5px 6px", textAlign: h === "Yr" ? "left" : "right",
-                                       fontSize: 10, fontWeight: 700, color: COLORS.gray }}>{h}</th>
+                                       fontSize: 12, fontWeight: 700, color: COLORS.gray }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -689,7 +690,7 @@ function MortgageComparison() {
           </table>
         </div>
       ) : (
-        <div style={{ textAlign: "center", padding: "12px 0", color: COLORS.gray, fontSize: 11, fontFamily: font }}>
+        <div style={{ textAlign: "center", padding: "12px 0", color: COLORS.gray, fontSize: 12, fontFamily: font }}>
           {a.id === 1
             ? "Set a temp buydown type in the Fee Sheet to see the schedule."
             : "Select a structure above."}
@@ -702,7 +703,7 @@ function MortgageComparison() {
             💰 Seller/Builder Subsidy:{" "}
             <span style={{ color: COLORS.gold, fontSize: 15 }}>{fmt(Math.round(tbd.totalSubsidy))}</span>
           </div>
-          <div style={{ fontSize: 10, color: COLORS.gray, fontFamily: font, marginTop: 2, lineHeight: 1.4 }}>
+          <div style={{ fontSize: 12, color: COLORS.gray, fontFamily: font, marginTop: 2, lineHeight: 1.4 }}>
             Deposited into escrow at closing to cover the payment gap each month during the buydown period.
           </div>
         </div>
@@ -744,10 +745,10 @@ function MortgageComparison() {
                 <div style={{ background: "#16A34A14", border: "1px solid #16A34A55",
                               borderRadius: 6, padding: "6px 10px", marginBottom: 8,
                               display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: "#16A34A", fontFamily: font }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#16A34A", fontFamily: font }}>
                     No buydown — $0 subsidy
                   </span>
-                  <span style={{ fontSize: 10, color: "#16A34A", fontFamily: font }}>
+                  <span style={{ fontSize: 12, color: "#16A34A", fontFamily: font }}>
                     Saves {fmt(aBdCost)} vs Scenario A
                   </span>
                 </div>
@@ -765,10 +766,10 @@ function MortgageComparison() {
             <div style={{ background: `${COLORS.gold}18`, border: `1.5px solid ${COLORS.gold}55`,
                           borderRadius: 6, padding: "6px 10px", marginBottom: 8,
                           display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: COLORS.gold, fontFamily: font }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.gold, fontFamily: font }}>
                 💰 Buydown Subsidy: {fmt(bdCost)}
               </span>
-              <span style={{ fontSize: 10, color: COLORS.gray, fontFamily: font }}>
+              <span style={{ fontSize: 12, color: COLORS.gray, fontFamily: font }}>
                 {diffLabel}
               </span>
             </div>
@@ -777,7 +778,7 @@ function MortgageComparison() {
 
         {/* ─ No buydown placeholder ─ */}
         {bdType === "none" && (
-          <div style={{ textAlign: "center", padding: "14px 0", color: COLORS.gray, fontSize: 11, fontFamily: font }}>
+          <div style={{ textAlign: "center", padding: "14px 0", color: COLORS.gray, fontSize: 12, fontFamily: font }}>
             {a.id === 1
               ? "Set a temp buydown type in the Fee Sheet to see the schedule here."
               : <>Select <strong>Permanent</strong> or <strong>Temporary</strong> to analyze.</>
@@ -788,7 +789,7 @@ function MortgageComparison() {
         {/* ─ Permanent section ─ */}
         {showPerm && (<>
           {bdType === "both" && (
-            <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.navy, fontFamily: font,
+            <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.navy, fontFamily: font,
                           textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
               Permanent Buydown
             </div>
@@ -816,11 +817,11 @@ function MortgageComparison() {
             <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.gold, fontFamily: font, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>
               ⚠ Pricing Changes Daily
             </div>
-            <div style={{ fontSize: 10, color: COLORS.navy, fontFamily: font, lineHeight: 1.55 }}>
+            <div style={{ fontSize: 12, color: COLORS.navy, fontFamily: font, lineHeight: 1.55 }}>
               Buydown costs are set by current market pricing and vary by loan program, credit score, LTV, and lender-level adjustments (LLPAs). A rough starting point:{" "}
               <strong>~0.5% in discount points typically buys ~0.125% in rate reduction</strong> — but this is not linear, not guaranteed, and not a substitute for actual lender pricing.
             </div>
-            <div style={{ fontSize: 10, color: COLORS.gray, fontFamily: font, marginTop: 5, fontStyle: "italic" }}>
+            <div style={{ fontSize: 12, color: COLORS.gray, fontFamily: font, marginTop: 5, fontStyle: "italic" }}>
               Always verify current costs with your lender before quoting a buydown to a borrower.
             </div>
           </div>
@@ -834,7 +835,7 @@ function MortgageComparison() {
         {/* ─ Temporary section ─ */}
         {showTemp && (<>
           {bdType === "both" && (
-            <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.navy, fontFamily: font,
+            <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.navy, fontFamily: font,
                           textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
               Temporary Buydown
             </div>
@@ -910,7 +911,7 @@ function MortgageComparison() {
     <div>
 
       {/* ══ CURRENT VALUES REFERENCE ════════════════════════════════════════ */}
-      <div style={{ fontSize: 10, color: COLORS.gray, fontFamily: font, fontStyle: "italic", marginBottom: 14 }}>
+      <div style={{ fontSize: 12, color: COLORS.gray, fontFamily: font, fontStyle: "italic", marginBottom: 14 }}>
         Default values are pulled from the Payment Calculator and Fee Sheet. Adjust each scenario independently below.
       </div>
 
@@ -922,7 +923,7 @@ function MortgageComparison() {
                         padding: "9px 14px", borderRadius: 8, fontFamily: font,
                         background: "#FFF8E7", border: "1px solid #F0D080", borderLeft: "3px solid #E6A817" }}>
             <span style={{ fontSize: 15 }}>🔒</span>
-            <div style={{ fontSize: 11, color: "#7A5800", lineHeight: 1.5 }}>
+            <div style={{ fontSize: 12, color: "#7A5800", lineHeight: 1.5 }}>
               <span style={{ fontWeight: 700 }}>Internal view — </span>
               The scenario inputs and fee details on this page are your working view and are not shown to clients.
               The side-by-side comparison below is what clients see when they access this scenario.
@@ -954,12 +955,12 @@ function MortgageComparison() {
           // Read-only field for Scenario A — styled to match LabeledInput small
           const ROField = ({ label, value, hint }) => (
             <div style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.gray, fontFamily: font,
+              <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.gray, fontFamily: font,
                             letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 5 }}>{label}</div>
               <div style={{ background: COLORS.bg, border: `1.5px solid ${COLORS.border}`,
                             borderRadius: 8, padding: "8px 10px", fontSize: 13,
                             fontWeight: 500, color: COLORS.navy, fontFamily: font }}>{value || "—"}</div>
-              {hint && <div style={{ fontSize: 11, color: COLORS.gray, marginTop: 3, fontFamily: font }}>{hint}</div>}
+              {hint && <div style={{ fontSize: 12, color: COLORS.gray, marginTop: 3, fontFamily: font }}>{hint}</div>}
             </div>
           );
 
@@ -1002,7 +1003,7 @@ function MortgageComparison() {
                 {isA ? (
                   <>
                     <div style={{
-                      fontSize: 10, color: s.color, fontFamily: font, fontWeight: 700,
+                      fontSize: 12, color: s.color, fontFamily: font, fontWeight: 700,
                       textAlign: "center", marginBottom: 10, padding: "5px 8px",
                       background: `${s.color}11`, border: `1px solid ${s.color}33`, borderRadius: 5,
                     }}>
@@ -1037,17 +1038,17 @@ function MortgageComparison() {
                         display: "block", width: "100%", marginBottom: 10,
                         padding: "5px 10px", borderRadius: 6, cursor: "pointer", fontFamily: font,
                         border: `1px solid ${s.color}66`, background: `${s.color}11`,
-                        color: s.color, fontSize: 11, fontWeight: 700,
+                        color: s.color, fontSize: 12, fontWeight: 700,
                       }}
                       title="Copy current Payment Calculator values into this scenario"
                     >
                       ↺ Reset to Current Values
                     </button>
                     <Select label="Loan Program" value={s.prog || "conventional"} onChange={(v) => updateScenario(s.id, "prog", v)} options={PROG_OPTS} small />
-                    <LabeledInput label="Purchase Price" prefix="$" value={s.hp || ""}  onChange={(v) => { if (String(v).trimStart().startsWith("-")) return; updateScenario(s.id, "hp", v); }} useCommas small />
+                    <LabeledInput label="Purchase Price" prefix="$" value={s.hp || ""}  onChange={(v) => { if (String(v).trimStart().startsWith("-")) return; updateScenario(s.id, "hp", v); }} useCommas small infoTip="The amount financed for this scenario. Comparing scenarios with different loan amounts (e.g., different down payments) shows the trade-off between upfront cash and monthly payment." />
                     <LabeledInput label="Down Payment"   value={s.downPct} type="text" onChange={(v) => { if (String(v).trimStart().startsWith("-")) return; updateScenario(s.id, "downPct", v); }} onBlur={(v) => { if (v !== "") updateScenario(s.id, "downPct", fmtDec(v)); }} suffix="%" small
                       hint={dpDollar > 0 ? `${fmt(dpDollar)} down · Loan: ${fmt(Math.round(hp - dpDollar))}` : undefined} />
-                    <LabeledInput label="Interest Rate"  value={s.rate}    type="text" onChange={(v) => { if (String(v).trimStart().startsWith("-")) return; updateScenario(s.id, "rate", v); }} onBlur={(v) => { if (v !== "") updateScenario(s.id, "rate", fmtDec(v)); }} suffix="%" small />
+                    <LabeledInput label="Interest Rate"  value={s.rate}    type="text" onChange={(v) => { if (String(v).trimStart().startsWith("-")) return; updateScenario(s.id, "rate", v); }} onBlur={(v) => { if (v !== "") updateScenario(s.id, "rate", fmtDec(v)); }} suffix="%" small infoTip="The rate for this specific scenario. Use this to compare a lower rate with points vs. a higher rate with no points — the break-even calculator can tell you when the lower rate pays off." />
                     {scAnalysis && scAnalysis.apr && scAnalysis.apr !== parseFloat(s.rate) && (() => {
                       const rStr = String(s.rate || "").trim(); const d = rStr.indexOf("."); const dec = d === -1 ? 2 : Math.max(2, rStr.length - d - 1);
                       return <div style={{ fontSize: 9, color: COLORS.gray, fontFamily: font, marginTop: -4, marginBottom: 4 }}>APR {scAnalysis.apr.toFixed(dec)}%</div>;
@@ -1192,7 +1193,7 @@ function MortgageComparison() {
                 display: "flex", justifyContent: "space-between", alignItems: "center",
               }}>
                 <span>{value || "—"}{suffix ? <span style={{ color: COLORS.gray }}> {suffix}</span> : null}</span>
-                {hint && <span style={{ fontSize: 11, color: COLORS.gray }}>{hint}</span>}
+                {hint && <span style={{ fontSize: 12, color: COLORS.gray }}>{hint}</span>}
               </div>
             </div>
           );
@@ -1217,7 +1218,7 @@ function MortgageComparison() {
                   border: `1.5px solid ${modeVal === mv ? COLORS.navy : COLORS.border}`,
                   background: modeVal === mv ? COLORS.navy : "transparent",
                   color: modeVal === mv ? "#fff" : COLORS.gray,
-                  fontSize: 11, fontWeight: 700,
+                  fontSize: 12, fontWeight: 700,
                 }}>{lbl}</button>
               ))}
             </>
@@ -1225,7 +1226,7 @@ function MortgageComparison() {
 
           // Section sub-header used by all four fields
           const FeeHdr = ({ label, fromFS }) => (
-            <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.navy, fontFamily: font,
+            <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.navy, fontFamily: font,
                           textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 10,
                           marginBottom: 6, paddingBottom: 4, borderBottom: `1.5px solid ${COLORS.border}`,
                           display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -1267,6 +1268,7 @@ function MortgageComparison() {
                         small
                         hint={isPct ? (dpAmt ? `= ${dpAmt}` : undefined) : (dpPtsHint || undefined)}
                         rightAddon={<Tgl modeKey="pointsMode" modeVal={dpMode} />}
+                        infoTip="Upfront fee paid to buy down the interest rate. Use the comparison to see when the monthly savings from a lower rate recoup the upfront cost of the points."
                       />
                     );
                   })()
@@ -1291,6 +1293,7 @@ function MortgageComparison() {
                         small
                         hint={isPct ? (scAmt ? `= ${scAmt}` : "Reduces cash to close") : scPctHint}
                         rightAddon={<Tgl modeKey="sellerConcMode" modeVal={scMode} />}
+                        infoTip="Credits from the seller toward the buyer's closing costs. Comparing scenarios with and without concessions shows how they affect the rate (often concessions are used to buy down the rate) and cash to close."
                       />
                     );
                   })()
@@ -1353,14 +1356,14 @@ function MortgageComparison() {
       {/* ══ Public note above comparison ═════════════════════════════════ */}
       <div style={{ marginBottom: 12, padding: "10px 14px", borderRadius: 8, fontFamily: font,
                     background: COLORS.bg, border: `1px solid ${COLORS.border}`,
-                    fontSize: 11, color: COLORS.gray, lineHeight: 1.6 }}>
+                    fontSize: 12, color: COLORS.gray, lineHeight: 1.6 }}>
         📋 <span style={{ fontWeight: 600, color: COLORS.navy }}>These scenarios are for illustration purposes only.</span>{" "}
         Your loan officer has put together these options based on your situation — reach out to them to discuss which program and structure makes the most sense for you.
       </div>
 
       {/* ══ Side-by-side comparison table ════════════════════════════════ */}
       <SectionCard title="SIDE-BY-SIDE COMPARISON">
-        <div style={{ fontSize: 10, color: COLORS.gray, fontFamily: font, marginBottom: 8, fontStyle: "italic" }}>
+        <div style={{ fontSize: 12, color: COLORS.gray, fontFamily: font, marginBottom: 8, fontStyle: "italic" }}>
           Scenario A closing costs, prepaids, and cash to close pull directly from the Fee Sheet.
           B &amp; C are estimates using your Fee Sheet settings (state-specific title, overrides, prepaid calendar).
         </div>
@@ -1380,7 +1383,7 @@ function MortgageComparison() {
               <tr>
                 <td colSpan={analyses.length + 1} style={{
                   background: COLORS.navy, color: "#fff",
-                  padding: "6px 12px", fontSize: 10, fontWeight: 700,
+                  padding: "6px 12px", fontSize: 12, fontWeight: 700,
                   textTransform: "uppercase", letterSpacing: "0.08em",
                   fontFamily: font,
                 }}>
@@ -1440,7 +1443,7 @@ function MortgageComparison() {
                     {analyses.map(a => (
                       <th key={a.id} style={{ padding: "10px 12px", textAlign: "right", fontSize: 12, fontWeight: 700, color: a.color }}>
                         {a.label}
-                        {a.customLabel && <div style={{ fontSize: 10, fontWeight: 600, color: COLORS.gray, marginTop: 2 }}>{a.customLabel}</div>}
+                        {a.customLabel && <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.gray, marginTop: 2 }}>{a.customLabel}</div>}
                       </th>
                     ))}
                   </tr>
@@ -1579,7 +1582,7 @@ function MortgageComparison() {
               </div>
 
               {!hasData ? (
-                <div style={{ fontSize: 11, color: COLORS.gray, fontFamily: font, padding: "10px 0" }}>
+                <div style={{ fontSize: 12, color: COLORS.gray, fontFamily: font, padding: "10px 0" }}>
                   Enter values for {compare.label} to see comparison
                 </div>
               ) : (
@@ -1593,7 +1596,7 @@ function MortgageComparison() {
                     <div style={{ fontSize: 30, fontWeight: 800, color: clr(piDelta), fontFamily: font, lineHeight: 1 }}>
                       {piDelta === 0 ? "—" : `${sign(piDelta)}${fmt2(Math.abs(piDelta))}`}
                     </div>
-                    <div style={{ fontSize: 10, color: clr(piDelta), fontFamily: font, marginTop: 3 }}>
+                    <div style={{ fontSize: 12, color: clr(piDelta), fontFamily: font, marginTop: 3 }}>
                       {subPi(piDelta)}
                     </div>
                   </div>
@@ -1609,7 +1612,7 @@ function MortgageComparison() {
                     <div style={{ fontSize: 30, fontWeight: 800, color: clr(ctcDelta), fontFamily: font, lineHeight: 1 }}>
                       {ctcDelta === 0 ? "—" : `${sign(ctcDelta)}${fmt(Math.abs(ctcDelta))}`}
                     </div>
-                    <div style={{ fontSize: 10, color: clr(ctcDelta), fontFamily: font, marginTop: 3 }}>
+                    <div style={{ fontSize: 12, color: clr(ctcDelta), fontFamily: font, marginTop: 3 }}>
                       {subCtc(ctcDelta)}
                     </div>
                   </div>
@@ -1633,16 +1636,16 @@ function MortgageComparison() {
         return (
           <div style={{ marginTop: 20, padding: "12px 16px", background: COLORS.bgAlt,
                         border: `1px solid ${COLORS.border}`, borderRadius: 8 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.gray, fontFamily: font,
+            <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.gray, fontFamily: font,
                           textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>
               LO Note — What This Comparison Updates vs. Holds Fixed
             </div>
             <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
               <div style={{ flex: "1 1 200px" }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.navy, fontFamily: font, marginBottom: 5 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.navy, fontFamily: font, marginBottom: 5 }}>
                   Updates per scenario
                 </div>
-                <ul style={{ margin: 0, padding: "0 0 0 14px", fontSize: 11, color: COLORS.navy, fontFamily: font, lineHeight: 1.8 }}>
+                <ul style={{ margin: 0, padding: "0 0 0 14px", fontSize: 12, color: COLORS.navy, fontFamily: font, lineHeight: 1.8 }}>
                   <li>Purchase price, down payment &amp; loan amount</li>
                   <li>Interest rate &amp; loan term</li>
                   <li>Monthly P&amp;I and PMI</li>
@@ -1653,10 +1656,10 @@ function MortgageComparison() {
                 </ul>
               </div>
               <div style={{ flex: "1 1 200px" }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.navy, fontFamily: font, marginBottom: 5 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.navy, fontFamily: font, marginBottom: 5 }}>
                   Held fixed from Fee Sheet
                 </div>
-                <ul style={{ margin: 0, padding: "0 0 0 14px", fontSize: 11, color: COLORS.navy, fontFamily: font, lineHeight: 1.8 }}>
+                <ul style={{ margin: 0, padding: "0 0 0 14px", fontSize: 12, color: COLORS.navy, fontFamily: font, lineHeight: 1.8 }}>
                   <li>Lender fees (origination, underwriting, processing)</li>
                   <li>Third-party fees (appraisal, credit report, flood, tax svc, etc.)</li>
                   <li>Title fees — owner's &amp; lender's policy, escrow, title search</li>

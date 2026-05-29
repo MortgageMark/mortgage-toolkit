@@ -11,6 +11,7 @@ const LabeledInput = window.LabeledInput;
 const Select = window.Select;
 const Button = window.Button;
 const Toggle = window.Toggle;
+const InfoTip = window.InfoTip;
 const DonutChart = window.DonutChart;
 const BalanceCurveChart = window.BalanceCurveChart;
 const PIStackedBarChart = window.PIStackedBarChart;
@@ -424,7 +425,7 @@ function AmortizationSchedule() {
             <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: text, fontFamily: font }}>EXTRA MONTHLY PAYMENTS</div>
               {extraEnabled === "false" && parseFloat(extraPrincipal) > 0 && (
-                <span style={{ fontSize: 11, fontWeight: 600, color: gray, fontFamily: font, background: border, borderRadius: 4, padding: "2px 7px", whiteSpace: "nowrap", flexShrink: 0 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: gray, fontFamily: font, background: border, borderRadius: 4, padding: "2px 7px", whiteSpace: "nowrap", flexShrink: 0 }}>
                   {fmt(Math.round(parseFloat(extraPrincipal)))}/mo · paused
                 </span>
               )}
@@ -442,6 +443,7 @@ function AmortizationSchedule() {
                 onChange={setExtraPrincipal}
                 useCommas
                 info="Applied to principal every month on top of your regular payment"
+                infoTip="Any additional principal you pay each month above the required payment. Even small extra payments applied directly to principal can shave years off your loan and save tens of thousands in interest. There is typically no prepayment penalty on conventional, FHA, VA, or USDA loans."
               />
               <div style={{ fontSize: 12, color: text, fontFamily: font, lineHeight: 1.7 }}>
                 This section is for adding a <strong style={{ color: navy }}>consistent, recurring amount</strong> to your principal every single month, rather than a one-time or sporadic payment. Even a modest addition can have a dramatic effect over time. Every extra dollar applied to principal reduces the balance that interest is calculated on the following month, which in turn reduces the interest charged, which lets even more of your regular payment go to principal. That compounding benefit grows every year the loan is outstanding.
@@ -477,7 +479,7 @@ function AmortizationSchedule() {
               {lumpsEnabled === "false" && (() => {
                 const n = lumps.filter(l => parseInt(l.month) > 0 && parseFloat(l.amount) > 0).length;
                 return n > 0 ? (
-                  <span style={{ fontSize: 11, fontWeight: 600, color: gray, fontFamily: font, background: border, borderRadius: 4, padding: "2px 7px", whiteSpace: "nowrap", flexShrink: 0 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: gray, fontFamily: font, background: border, borderRadius: 4, padding: "2px 7px", whiteSpace: "nowrap", flexShrink: 0 }}>
                     {n} lump sum{n > 1 ? "s" : ""} · paused
                   </span>
                 ) : null;
@@ -542,7 +544,7 @@ function AmortizationSchedule() {
                 <Button label="+ Add Lump Sum" onClick={addLump} small color={gold} />
               )}
               {lumps.length === 5 && (
-                <div style={{ fontSize: 11, color: gray, fontFamily: font, marginBottom: 14 }}>Maximum of 5 lump sums</div>
+                <div style={{ fontSize: 12, color: gray, fontFamily: font, marginBottom: 14 }}>Maximum of 5 lump sums</div>
               )}
 
               {/* ── Lump sum routing selector (only when 2nd lien active) ── */}
@@ -564,12 +566,12 @@ function AmortizationSchedule() {
                           fontFamily: font, textAlign: "center",
                         }}>
                           <div style={{ fontSize: 13, fontWeight: 700, color: isActive ? btnColor : gray }}>{opt.label}</div>
-                          {opt.sub && <div style={{ fontSize: 10, fontWeight: 600, color: isActive ? btnColor : gray }}>{opt.sub}</div>}
+                          {opt.sub && <div style={{ fontSize: 12, fontWeight: 600, color: isActive ? btnColor : gray }}>{opt.sub}</div>}
                         </button>
                       );
                     })}
                   </div>
-                  <div style={{ fontSize: 11, color: gray, fontFamily: font, marginTop: 8, lineHeight: 1.5 }}>
+                  <div style={{ fontSize: 12, color: gray, fontFamily: font, marginTop: 8, lineHeight: 1.5 }}>
                     {lumpsTarget === "second"
                       ? "✓ Lump sums are applied to the second lien (higher rate = more interest saved). The Piggyback Payoff Strategy card below shows your projected savings."
                       : "Lump sums will be applied directly to the first mortgage."}
@@ -634,16 +636,16 @@ function AmortizationSchedule() {
                     <div key={i} style={{ padding: 12, borderRadius: 10, border: `2px solid ${s.color}33`, background: s.color + "09", textAlign: "center" }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: s.color, fontFamily: font, marginBottom: 6, letterSpacing: "0.04em" }}>{s.label}</div>
                       <div style={{ fontSize: 14, fontWeight: 800, color: s.color, fontFamily: font }}>{s.pmt}</div>
-                      <div style={{ fontSize: 11, color: gray, fontFamily: font, marginTop: 5 }}>Payoff: <strong>{s.years} years</strong></div>
-                      <div style={{ fontSize: 11, color: gray, fontFamily: font }}>Total Interest: <strong style={{ color: s.color }}>{fmt(Math.round(s.interest))}</strong></div>
-                      {s.saved > 0 && <div style={{ marginTop: 8, padding: "3px 8px", background: s.color + "22", borderRadius: 6, fontSize: 11, fontWeight: 700, color: s.color, fontFamily: font }}>Save {fmt(Math.round(s.saved))}</div>}
+                      <div style={{ fontSize: 12, color: gray, fontFamily: font, marginTop: 5 }}>Payoff: <strong>{s.years} years</strong></div>
+                      <div style={{ fontSize: 12, color: gray, fontFamily: font }}>Total Interest: <strong style={{ color: s.color }}>{fmt(Math.round(s.interest))}</strong></div>
+                      {s.saved > 0 && <div style={{ marginTop: 8, padding: "3px 8px", background: s.color + "22", borderRadius: 6, fontSize: 12, fontWeight: 700, color: s.color, fontFamily: font }}>Save {fmt(Math.round(s.saved))}</div>}
                     </div>
                   ))}
                 </div>
                   );
                 })()}
                 {/* Savings summary */}
-                <div style={{ padding: "8px 12px", background: green + "18", borderRadius: 6, fontSize: 11, fontFamily: font }}>
+                <div style={{ padding: "8px 12px", background: green + "18", borderRadius: 6, fontSize: 12, fontFamily: font }}>
                   <span style={{ color: green, fontWeight: 700 }}>Bi-weekly saves {fmt(Math.round(biwCalc.biSaved))} </span>
                   <span style={{ color: gray }}>and pays off {biwCalc.biTimeSaved.toFixed(1)} years early, based on 26 half-payments per year, equal to 13 full payments.</span>
                 </div>
@@ -662,7 +664,7 @@ function AmortizationSchedule() {
                     {["", "Standard", "With Extras", "Saved"].map((h, i) => (
                       <th key={h} style={{
                         padding: "8px 12px", textAlign: i === 0 ? "left" : "right",
-                        fontSize: 10, fontWeight: 700, color: gray,
+                        fontSize: 12, fontWeight: 700, color: gray,
                         background: bgAlt, borderBottom: `2px solid ${border}`,
                       }}>{h}</th>
                     ))}
@@ -721,7 +723,7 @@ function AmortizationSchedule() {
                   Paid off in {fmtPayoff(cascadeCalc.cascadeMonth)}
                 </div>
                 {cascadeCalc.cascadeMonth < cascadeCalc.baseline2Payoff && (
-                  <div style={{ fontSize: 11, color: gray, fontFamily: font, marginTop: 2 }}>
+                  <div style={{ fontSize: 12, color: gray, fontFamily: font, marginTop: 2 }}>
                     {cascadeCalc.baseline2Payoff - cascadeCalc.cascadeMonth} months sooner than scheduled
                   </div>
                 )}
@@ -746,7 +748,7 @@ function AmortizationSchedule() {
                     {["", cascadeCalc.extra > 0 ? "Extra → 1st Lien" : "Normal Payments", "Cascade Strategy", "Saved"].map((h, i) => (
                       <th key={h} style={{
                         padding: "8px 12px", textAlign: i === 0 ? "left" : "right",
-                        fontSize: 10, fontWeight: 700, color: gray,
+                        fontSize: 12, fontWeight: 700, color: gray,
                         background: bgAlt, borderBottom: `2px solid ${border}`,
                       }}>{h}</th>
                     ))}
@@ -781,7 +783,7 @@ function AmortizationSchedule() {
 
             {/* Summary pill */}
             {cascadeCalc.savedInterest > 0 && (
-              <div style={{ padding: "8px 12px", background: green + "18", borderRadius: 6, fontSize: 11, fontFamily: font }}>
+              <div style={{ padding: "8px 12px", background: green + "18", borderRadius: 6, fontSize: 12, fontFamily: font }}>
                 <span style={{ color: green, fontWeight: 700 }}>Cascade saves {fmt(Math.round(cascadeCalc.savedInterest))} in combined interest </span>
                 <span style={{ color: gray }}>across both loans compared to {cascadeCalc.extra > 0 ? "applying extra payments to the first mortgage" : "normal payments on both loans"}.</span>
               </div>
@@ -794,7 +796,7 @@ function AmortizationSchedule() {
 
       {/* ── VIEW TOGGLE (above table) ── */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, marginTop: 4 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: gray, fontFamily: font, letterSpacing: "0.05em" }}>VIEW:</div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: gray, fontFamily: font, letterSpacing: "0.05em" }}>VIEW:</div>
         {["yearly", "monthly"].map(mode => (
           <button
             key={mode}
@@ -814,7 +816,7 @@ function AmortizationSchedule() {
 
       {/* ── HOME VALUE NOTE ── */}
       {parseFloat(pcHomePrice) > 0 && (
-        <div style={{ fontSize: 11, color: gray, fontFamily: font, marginBottom: 8, padding: "7px 12px", background: bgAlt, borderRadius: 8, border: `1px solid ${border}` }}>
+        <div style={{ fontSize: 12, color: gray, fontFamily: font, marginBottom: 8, padding: "7px 12px", background: bgAlt, borderRadius: 8, border: `1px solid ${border}` }}>
           <span style={{ fontWeight: 700, color: navy }}>Home Value</span> column starts at {fmt(Math.round(parseFloat(pcHomePrice)))} ({pcPurpose === "purchase" ? "purchase price" : "home value"} from Payment Calculator) and grows at <span style={{ fontWeight: 700, color: navy }}>{pcAppr}%/yr</span> — set in Payment Calculator.
         </div>
       )}
@@ -837,7 +839,7 @@ function AmortizationSchedule() {
                         <th key={h} style={{
                           padding: "10px 12px",
                           textAlign: h === headers[0] ? "left" : "right",
-                          fontSize: 10, fontWeight: 700, color: gray,
+                          fontSize: 12, fontWeight: 700, color: gray,
                           background: isBalCol ? blue + "18" : (isHvCol || isEqCol) ? green + "18" : bgAlt,
                           borderBottom: `2px solid ${border}`,
                           borderLeft: (isBalCol || isHvCol || isEqCol) ? `2px solid ${border}` : undefined,
@@ -887,7 +889,7 @@ function AmortizationSchedule() {
                             {isMonthly ? row.month : row.year}
                             {hasLump && (
                               <span style={{
-                                fontSize: 10, fontWeight: 700, color: gold,
+                                fontSize: 12, fontWeight: 700, color: gold,
                                 background: gold + "33", borderRadius: 4,
                                 padding: "1px 5px", whiteSpace: "nowrap",
                               }}>
@@ -994,7 +996,7 @@ function AmortizationSchedule() {
                           <th key={h} style={{
                             padding: "10px 12px",
                             textAlign: h === s2Headers[0] ? "left" : "right",
-                            fontSize: 10, fontWeight: 700, color: gray,
+                            fontSize: 12, fontWeight: 700, color: gray,
                             background: isBalCol ? blue + "18" : isEqCol ? green + "18" : bgAlt,
                             borderBottom: `2px solid ${border}`,
                             borderLeft: (isBalCol || isEqCol) ? `2px solid ${border}` : undefined,
@@ -1018,7 +1020,7 @@ function AmortizationSchedule() {
                               {isMonthly ? row.month : row.year}
                               {s2HasLump && (
                                 <span style={{
-                                  fontSize: 10, fontWeight: 700, color: gold,
+                                  fontSize: 12, fontWeight: 700, color: gold,
                                   background: gold + "33", borderRadius: 4,
                                   padding: "1px 5px", whiteSpace: "nowrap",
                                 }}>+{fmt2(s2LumpAmt)}</span>
@@ -1101,7 +1103,7 @@ function AmortizationSchedule() {
               centerLabel="Total Cost"
               centerValue={fmt(Math.round(enhanced.totalPrincipal + enhanced.totalInterest))}
             />
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center", fontSize: 11, fontFamily: font }}>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center", fontSize: 12, fontFamily: font }}>
               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                 <div style={{ width: 10, height: 10, borderRadius: "50%", background: green }} />
                 <span style={{ color: gray }}>Principal <strong style={{ color: text }}>{fmt(Math.round(enhanced.totalPrincipal))}</strong></span>
@@ -1131,7 +1133,7 @@ function AmortizationSchedule() {
                 centerLabel="Total Cost"
                 centerValue={fmt(Math.round(s2Sched.totalPrincipal + s2Sched.totalInterest))}
               />
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center", fontSize: 11, fontFamily: font }}>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center", fontSize: 12, fontFamily: font }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                   <div style={{ width: 10, height: 10, borderRadius: "50%", background: green }} />
                   <span style={{ color: gray }}>Principal <strong style={{ color: text }}>{fmt(Math.round(s2Sched.totalPrincipal))}</strong></span>
@@ -1221,7 +1223,7 @@ function AmortizationSchedule() {
                 borderRadius: 6,
                 padding: "2px 0",
               }}>
-                <div style={{ padding: "10px 8px", fontSize: 11, fontWeight: 600, color: gray, fontFamily: font }}>
+                <div style={{ padding: "10px 8px", fontSize: 12, fontWeight: 600, color: gray, fontFamily: font }}>
                   {row.label}
                 </div>
                 {[

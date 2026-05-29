@@ -140,7 +140,7 @@ function DisclaimerModal({ onAck }) {
           paddingTop: 16,
           borderTop: "1px solid #E5EEF4",
           textAlign: "center",
-          fontSize: 11,
+          fontSize: 12,
           color: "#8A9BAA",
           fontFamily: _font,
           lineHeight: 1.7,
@@ -165,7 +165,7 @@ function PersistentFooter() {
       borderTop: "1px solid rgba(255,255,255,0.10)",
       padding: "6px 20px",
       textAlign: "center",
-      fontSize: 11,
+      fontSize: 12,
       color: "rgba(255,255,255,0.68)",
       fontFamily: _font,
       lineHeight: 1.55,
@@ -291,7 +291,7 @@ function ChangePasswordScreen({ user, onComplete }) {
           {saving ? "Saving…" : "Set Password & Continue →"}
         </button>
 
-        <div style={{ textAlign: "center", marginTop: 16, fontSize: 11, color: "#94A3B0", fontFamily: _font }}>
+        <div style={{ textAlign: "center", marginTop: 16, fontSize: 12, color: "#94A3B0", fontFamily: _font }}>
           © {new Date().getFullYear()} Mortgage Mark · NMLS #729612
         </div>
       </div>
@@ -570,7 +570,7 @@ function ClientMyInfoPanel({ user, onClose, onLogout }) {
     margin: "22px 0 10px", fontFamily: _font,
     borderBottom: "1.5px solid #E5EEF4", paddingBottom: 5,
   };
-  var errTxt = { fontSize: 11, color: "#dc2626", marginTop: 3, fontFamily: _font };
+  var errTxt = { fontSize: 12, color: "#dc2626", marginTop: 3, fontFamily: _font };
 
   return (
     <div style={{ minHeight: "100vh", background: "#F0F4F8", fontFamily: _font, paddingBottom: 80 }}>
@@ -683,7 +683,7 @@ function ClientMyInfoPanel({ user, onClose, onLogout }) {
                   style={fieldErrs.emailPersonal ? iErrSt : iSt} placeholder="you@example.com" />
                 {fieldErrs.emailPersonal
                   ? <div style={errTxt}>⚠ {fieldErrs.emailPersonal}</div>
-                  : <div style={{ fontSize: 11, color: "#94A3B0", fontStyle: "italic", marginTop: 3 }}>
+                  : <div style={{ fontSize: 12, color: "#94A3B0", fontStyle: "italic", marginTop: 3 }}>
                       Login: {user && user.email}
                     </div>
                 }
@@ -741,7 +741,7 @@ function ClientMyInfoPanel({ user, onClose, onLogout }) {
                 }}
               >
                 <span>{showCoBorrower ? "👫 Co-Borrower / Spouse" : "➕ Add Co-Borrower / Spouse"}</span>
-                <span style={{ fontSize: 11, opacity: 0.65 }}>{showCoBorrower ? "▲ Remove" : "▼ Add"}</span>
+                <span style={{ fontSize: 12, opacity: 0.65 }}>{showCoBorrower ? "▲ Remove" : "▼ Add"}</span>
               </button>
 
               {showCoBorrower && (
@@ -818,6 +818,153 @@ function ClientMyInfoPanel({ user, onClose, onLogout }) {
   );
 }
 
+// ── LoginSettingsPanel ────────────────────────────────────────────────────────
+// Lets a borrower change their login email or password.
+function LoginSettingsPanel({ user, onClose }) {
+  const supa = window._supabaseClient;
+  const f = _font;
+
+  const [tab, setTab]           = React.useState("password"); // "password" | "email"
+  const [newPw, setNewPw]       = React.useState("");
+  const [confirmPw, setConfirmPw] = React.useState("");
+  const [newEmail, setNewEmail] = React.useState("");
+  const [saving, setSaving]     = React.useState(false);
+  const [msg, setMsg]           = React.useState(null); // { type: "ok"|"err", text }
+
+  const inputSt = {
+    width: "100%", padding: "11px 13px",
+    border: "1.5px solid #D1D9E0", borderRadius: 8,
+    fontSize: 14, fontFamily: f, color: "#0C4160",
+    background: "#F7FAFB", outline: "none", boxSizing: "border-box",
+  };
+  const labelSt = {
+    display: "block", fontSize: 10, fontWeight: 700,
+    letterSpacing: "0.09em", textTransform: "uppercase",
+    color: "#6B7D8A", marginBottom: 4, fontFamily: f,
+  };
+  const tabBtn = (id, label) => (
+    React.createElement("button", {
+      onClick: function() { setTab(id); setMsg(null); },
+      style: {
+        flex: 1, padding: "9px 0", border: "none", cursor: "pointer",
+        fontFamily: f, fontSize: 13, fontWeight: 700,
+        borderBottom: tab === id ? "2px solid #0C4160" : "2px solid transparent",
+        background: "none", color: tab === id ? "#0C4160" : "#6B7D8A",
+      }
+    }, label)
+  );
+
+  const handleChangePassword = async function() {
+    setMsg(null);
+    if (newPw.length < 6)    { setMsg({ type: "err", text: "Password must be at least 6 characters." }); return; }
+    if (newPw !== confirmPw) { setMsg({ type: "err", text: "Passwords don't match." }); return; }
+    setSaving(true);
+    const { error } = await supa.auth.updateUser({ password: newPw });
+    setSaving(false);
+    if (error) { setMsg({ type: "err", text: error.message || "Could not update password." }); }
+    else { setMsg({ type: "ok", text: "Password updated successfully." }); setNewPw(""); setConfirmPw(""); }
+  };
+
+  const handleChangeEmail = async function() {
+    setMsg(null);
+    if (!newEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(newEmail.trim())) {
+      setMsg({ type: "err", text: "Please enter a valid email address." }); return;
+    }
+    setSaving(true);
+    const { error } = await supa.auth.updateUser({ email: newEmail.trim() });
+    setSaving(false);
+    if (error) { setMsg({ type: "err", text: error.message || "Could not update email." }); }
+    else { setMsg({ type: "ok", text: "Confirmation email sent to " + newEmail.trim() + ". Check your inbox to confirm the change." }); setNewEmail(""); }
+  };
+
+  return (
+    React.createElement("div", {
+      style: { minHeight: "100vh", background: "#F0F4F8", fontFamily: f, paddingBottom: 80 }
+    },
+      // Header
+      React.createElement("div", {
+        style: { background: "linear-gradient(135deg, #0C4160 0%, #1A5E8A 100%)", padding: "16px 24px", display: "flex", alignItems: "center", gap: 14, color: "#fff" }
+      },
+        React.createElement("div", { style: { flex: 1 } },
+          React.createElement("div", { style: { fontSize: 18, fontWeight: 700 } }, "Login & Password"),
+          React.createElement("div", { style: { fontSize: 12, opacity: 0.75 } }, user && user.email ? "Signed in as " + user.email : "Account settings")
+        ),
+        React.createElement("button", {
+          onClick: onClose,
+          style: { background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.35)", color: "#fff", borderRadius: 8, padding: "7px 16px", fontSize: 13, cursor: "pointer", fontFamily: f, fontWeight: 600 }
+        }, "← Back")
+      ),
+
+      // Card
+      React.createElement("div", { style: { maxWidth: 480, margin: "32px auto", padding: "0 20px" } },
+        React.createElement("div", { style: { background: "#fff", borderRadius: 12, boxShadow: "0 2px 12px rgba(0,0,0,0.07)", overflow: "hidden" } },
+
+          // Tabs
+          React.createElement("div", { style: { display: "flex", borderBottom: "1px solid #E5EEF4" } },
+            tabBtn("password", "🔑 Change Password"),
+            tabBtn("email",    "✉️ Change Email")
+          ),
+
+          // Body
+          React.createElement("div", { style: { padding: "24px 24px 28px" } },
+
+            msg && React.createElement("div", {
+              style: {
+                padding: "11px 14px", borderRadius: 8, marginBottom: 16, fontSize: 13, fontFamily: f,
+                background: msg.type === "ok" ? "#F0FDF4" : "#FEF2F2",
+                border: "1.5px solid " + (msg.type === "ok" ? "#86EFAC" : "#FCA5A5"),
+                color: msg.type === "ok" ? "#166534" : "#B91C1C",
+              }
+            }, msg.text),
+
+            tab === "password" && React.createElement(React.Fragment, null,
+              React.createElement("label", { style: labelSt }, "New Password"),
+              React.createElement("input", {
+                type: "password", value: newPw,
+                onChange: function(e) { setNewPw(e.target.value); },
+                style: { ...inputSt, marginBottom: 12 },
+                placeholder: "At least 6 characters",
+                autoFocus: true,
+              }),
+              React.createElement("label", { style: labelSt }, "Confirm New Password"),
+              React.createElement("input", {
+                type: "password", value: confirmPw,
+                onChange: function(e) { setConfirmPw(e.target.value); },
+                style: { ...inputSt, marginBottom: 20 },
+                placeholder: "Re-enter password",
+                onKeyDown: function(e) { if (e.key === "Enter") handleChangePassword(); },
+              }),
+              React.createElement("button", {
+                onClick: handleChangePassword, disabled: saving,
+                style: { width: "100%", padding: "13px 24px", borderRadius: 9, border: "none", background: saving ? "#94A3B0" : "linear-gradient(135deg, #0C4160, #1A5E8A)", color: "#fff", fontSize: 14, fontWeight: 700, fontFamily: f, cursor: saving ? "wait" : "pointer" }
+              }, saving ? "Saving…" : "Update Password")
+            ),
+
+            tab === "email" && React.createElement(React.Fragment, null,
+              React.createElement("div", { style: { fontSize: 13, color: "#6B7D8A", lineHeight: 1.6, marginBottom: 16, fontFamily: f } },
+                "Enter a new email address below. We'll send a confirmation link to the new address — your email won't change until you click it."
+              ),
+              React.createElement("label", { style: labelSt }, "New Email Address"),
+              React.createElement("input", {
+                type: "email", value: newEmail,
+                onChange: function(e) { setNewEmail(e.target.value); },
+                style: { ...inputSt, marginBottom: 20 },
+                placeholder: "new@email.com",
+                autoFocus: true,
+                onKeyDown: function(e) { if (e.key === "Enter") handleChangeEmail(); },
+              }),
+              React.createElement("button", {
+                onClick: handleChangeEmail, disabled: saving,
+                style: { width: "100%", padding: "13px 24px", borderRadius: 9, border: "none", background: saving ? "#94A3B0" : "linear-gradient(135deg, #0C4160, #1A5E8A)", color: "#fff", fontSize: 14, fontWeight: 700, fontFamily: f, cursor: saving ? "wait" : "pointer" }
+              }, saving ? "Sending…" : "Send Confirmation Email")
+            )
+          )
+        )
+      )
+    )
+  );
+}
+
 function App() {
   const [loggedInUser, setLoggedInUser] = useLocalStorage("app_user", null);
   const [activeScenario, setActiveScenario] = useLocalStorage("active_scenario", null);
@@ -832,6 +979,7 @@ function App() {
   const [showTasksScenarios,   setShowTasksScenarios]   = React.useState(false);
   const [showTasksContacts,    setShowTasksContacts]    = React.useState(false);
   const [showChangePassword,   setShowChangePassword]   = React.useState(false);
+  const [showLoginSettings,    setShowLoginSettings]    = React.useState(false);
   const [sidebarPinned,        setSidebarPinned]        = React.useState(true);
   const [mobileSidebarOpen,    setMobileSidebarOpen]    = React.useState(false);
   const [isMobile,             setIsMobile]             = React.useState(window.innerWidth < 768);
@@ -950,6 +1098,7 @@ function App() {
               borrowerPermissions: profile.borrower_permissions || [],
             };
             setLoggedInUser(restoredUser);
+            setActiveScenario(null); // always land on Scenario Dashboard after session restore
 
             // Log session activity (daily dedup, fire-and-forget)
             if (window.logUserSession) window.logUserSession(restoredUser);
@@ -1160,6 +1309,7 @@ function App() {
     setShowTasksScenarios(false);
     setShowTasksContacts(false);
     setShowChangePassword(false);
+    setShowLoginSettings(false);
     setProfileContactId(null);
     setActiveScenario(null);
     setLoggedInUser(null);
@@ -1333,6 +1483,13 @@ function App() {
         onLogout={handleLogout}
       />
     );
+  } else if (showLoginSettings) {
+    pageContent = (
+      <LoginSettingsPanel
+        user={loggedInUser}
+        onClose={function() { setShowLoginSettings(false); }}
+      />
+    );
   } else if (showUsers) {
     pageContent = (
       <UsersPanel
@@ -1409,6 +1566,7 @@ function App() {
         onOpenContact={isInternal ? function(contactId) { setPendingContactId(contactId); setShowContacts(true); } : null}
         onUsers={loggedInUser && loggedInUser.role === "admin" ? function() { setShowUsers(true); } : null}
         onMyInfo={(!isInternal && loggedInUser && loggedInUser.supabaseUser) ? function() { setShowMyInfo(true); } : null}
+        onLoginSettings={(!isInternal && loggedInUser && loggedInUser.supabaseUser) ? function() { setShowLoginSettings(true); } : null}
       />
     );
   } else {
@@ -1422,6 +1580,8 @@ function App() {
         onBackToScenarios={showDashboard ? handleBackToScenarios : null}
         onOpenContact={(isInternal || (loggedInUser && (loggedInUser.role === "realtor" || loggedInUser.role === "builder"))) ? function(contactId) { setPendingContactId(contactId); setShowContacts(true); setActiveScenario(null); } : null}
         onOpenProfile={!isInternal ? function() { setShowMyInfo(true); } : null}
+        onContactInfo={!isInternal ? function() { setShowMyInfo(true); } : null}
+        onLoginSettings={!isInternal && loggedInUser && loggedInUser.supabaseUser ? function() { setShowLoginSettings(true); } : null}
         onTeam={loggedInUser && loggedInUser.role === "admin" ? function() { setShowUsers(true); } : null}
       />
     );
@@ -1496,7 +1656,7 @@ function App() {
           onClick={function() { setMobileSidebarOpen(true); }}
           title="Open menu"
           style={{
-            position: "fixed", top: 12, left: 12, zIndex: 200,
+            position: "fixed", top: "calc(env(safe-area-inset-top, 0px) + 12px)", left: "calc(env(safe-area-inset-left, 0px) + 12px)", zIndex: 200,
             background: "#1e3a5f", border: "none", borderRadius: 8,
             padding: "8px 10px", cursor: "pointer", color: "#fff",
             display: "flex", alignItems: "center", justifyContent: "center",
@@ -1613,76 +1773,35 @@ function App() {
           {(sidebarPinned || isMobile) && (
             <div style={{ flex: 1, overflowY: "auto", paddingTop: 8, paddingBottom: 8 }}>
 
-              {/* ── TO DO section ── */}
+              {/* ── DASHBOARD section ── */}
               <div style={{ padding: "8px 16px 4px", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.38)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                To Do
+                Dashboard
               </div>
-              {[
-                { key: "active",   label: "Active"   },
-                { key: "waiting",  label: "Waiting"  },
-                { key: "archived", label: "Archived" },
-              ].filter(function(t) { return isInternal || t.key !== "waiting"; })
-               .map(function(t) {
-                const active = !showContacts && !showTasksScenarios && !showTasksContacts && groupFilter === t.key;
-                return sidebarNavBtn(t.label, active, function() {
-                  setGroupFilter(t.key);
+              {(isInternal || isPartner) && sidebarNavBtn("Contacts", showContacts && !showTasksContacts, function() {
+                setTypeFilter("all");
+                // Always bump key — deselects any open contact and returns to list
+                setContactsKey(function(k) { return k + 1; });
+                setShowContacts(true);
+                setShowTasksScenarios(false);
+                setShowTasksContacts(false);
+                setShowUsers(false);
+                setPendingContactId(null);
+                if (isMobile) setMobileSidebarOpen(false);
+              })}
+              {(function() {
+                const active = !showContacts && !showTasksScenarios && !showTasksContacts && groupFilter === "active";
+                return sidebarNavBtn("Scenarios", active, function() {
+                  setGroupFilter("active");
                   setShowContacts(false);
                   setShowTasksScenarios(false);
                   setShowTasksContacts(false);
                   setShowUsers(false);
+                  // If a scenario is open in the toolkit, save and close it back to the dashboard
+                  if (activeScenario !== null) { handleBackToScenarios(); }
                   if (isMobile) setMobileSidebarOpen(false);
                 });
-              })}
+              })()}
 
-              {/* ── CONTACTS section ── */}
-              {(isInternal || isPartner) && (
-                <React.Fragment>
-                  <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "8px 16px 0" }} />
-                  <div style={{ padding: "8px 16px 4px", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.38)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                    Contacts
-                  </div>
-                  {[
-                    { key: "all",      label: "All"      },
-                    { key: "business", label: "Business" },
-                    { key: "client",   label: "Client"   },
-                  ].map(function(t) {
-                    const active = (showContacts || showTasksContacts) && typeFilter === t.key;
-                    return sidebarNavBtn(t.label, active, function() {
-                      setTypeFilter(t.key);
-                      setShowContacts(true);
-                      setShowTasksScenarios(false);
-                      setShowTasksContacts(false);
-                      setShowUsers(false);
-                      setPendingContactId(null);
-                      if (isMobile) setMobileSidebarOpen(false);
-                    });
-                  })}
-                </React.Fragment>
-              )}
-
-              {/* ── TASKS section (internal only) ── */}
-              {isInternal && (
-                <React.Fragment>
-                  <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "8px 16px 0" }} />
-                  <div style={{ padding: "8px 16px 4px", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.38)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                    Tasks
-                  </div>
-                  {sidebarNavBtn("Scenarios", inTasksSc, function() {
-                    setShowTasksScenarios(true);
-                    setShowContacts(false);
-                    setShowTasksContacts(false);
-                    setShowUsers(false);
-                    if (isMobile) setMobileSidebarOpen(false);
-                  })}
-                  {sidebarNavBtn("Contacts", inTasksCo, function() {
-                    setShowTasksContacts(true);
-                    setShowContacts(false);
-                    setShowTasksScenarios(false);
-                    setShowUsers(false);
-                    if (isMobile) setMobileSidebarOpen(false);
-                  })}
-                </React.Fragment>
-              )}
 
               {/* ── TEAM section (admin only) ── */}
               {loggedInUser && loggedInUser.role === "admin" && (

@@ -445,6 +445,7 @@ async function fetchContactsFromSupabase() {
 // --- saveContactToSupabase ---
 async function saveContactToSupabase({
   contactId, prefix, first_name, last_name, nickname,
+  company,
   contact_type, contact_category, referred_by_contact_id,
   // phone
   phone_cell, phone_work, phone_home, phone_best,
@@ -461,6 +462,8 @@ async function saveContactToSupabase({
   prefix2, first_name2, nickname2, last_name2, connection_to_contact1,
   phone2, phone2_work, phone2_home, phone2_best,
   email2, email2_work, email2_other, email2_best,
+  // assigned LO
+  assigned_lo_id,
   // legacy (kept for RLS / other reads)
   status, tags, source,
 } = {}) {
@@ -471,6 +474,7 @@ async function saveContactToSupabase({
     first_name: first_name || "",
     last_name:  last_name  || "",
     nickname:   nickname   || null,
+    company:    company    || null,
     contact_type:           contact_type           || "client",
     contact_category:       contact_category       || null,
     referred_by_contact_id: referred_by_contact_id || null,
@@ -518,6 +522,8 @@ async function saveContactToSupabase({
     email2_work:  email2_work  || null,
     email2_other: email2_other || null,
     email2_best:  email2_best  || null,
+    // assigned LO
+    assigned_lo_id: assigned_lo_id || null,
     // legacy
     status: status || "active",
     tags:   tags   || [],
@@ -545,6 +551,20 @@ async function archiveContactInSupabase(contactId) {
 // --- deleteContactFromSupabase (admin-only — blocked by RLS for non-admins) ---
 async function deleteContactFromSupabase(contactId) {
   const { error } = await supabase.from("contacts").delete().eq("id", contactId);
+  return { error };
+}
+
+// --- bulkUpdateContactsInSupabase (internal+ — updates multiple contacts in one query) ---
+async function bulkUpdateContactsInSupabase(ids, fields) {
+  if (!ids || ids.length === 0) return { error: null };
+  const { error } = await supabase.from("contacts").update(fields).in("id", ids);
+  return { error };
+}
+
+// --- bulkDeleteContactsInSupabase (admin-only) ---
+async function bulkDeleteContactsInSupabase(ids) {
+  if (!ids || ids.length === 0) return { error: null };
+  const { error } = await supabase.from("contacts").delete().in("id", ids);
   return { error };
 }
 
@@ -760,7 +780,7 @@ async function fetchSharedScenariosFromSupabase() {
 async function fetchPartnerProfiles() {
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, display_name, email, role")
+    .select("id, display_name, email, role, brokerage")
     .in("role", ["realtor", "builder"])
     .order("display_name", { ascending: true });
   return { data: data || [], error };
@@ -861,6 +881,27 @@ async function grantLiveScenarioAccess(scenarioId, clientEmail) {
   return { data, error };
 }
 
+// --- mergeContactsInSupabase ---
+// Merges two contacts: updates the keeper with mergedFields, re-points
+// all scenarios + notes from the loser to the keeper, then deletes the loser.
+async function mergeContactsInSupabase(keepId, deleteId, mergedFields) {
+  if (!supabase || !keepId || !deleteId) return { error: new Error("Missing params") };
+  // 1. Update the keeper record
+  const { error: updateErr } = await supabase
+    .from("contacts")
+    .update(mergedFields)
+    .eq("id", keepId);
+  if (updateErr) return { error: updateErr };
+  // 2. Re-point scenarios
+  await supabase.from("scenarios").update({ contact_id: keepId }).eq("contact_id", deleteId);
+  // 3. Re-point contact notes
+  await supabase.from("contact_notes").update({ contact_id: keepId }).eq("contact_id", deleteId);
+  // 4. Delete the loser
+  const { error: delErr } = await supabase.from("contacts").delete().eq("id", deleteId);
+  if (delErr) return { error: delErr };
+  return { error: null };
+}
+
 // --- Expose on window ---
 window.CALC_SECTION_NAMES         = CALC_SECTION_NAMES;
 window.snapshotCalculatorData     = snapshotCalculatorData;
@@ -886,8 +927,11 @@ window.fetchCoborrowerScenariosForBorrower   = fetchCoborrowerScenariosForBorrow
 window.fetchContactsFromSupabase     = fetchContactsFromSupabase;
 window.saveContactToSupabase         = saveContactToSupabase;
 window.archiveContactInSupabase      = archiveContactInSupabase;
-window.deleteContactFromSupabase     = deleteContactFromSupabase;
-window.patchContactInSupabase        = patchContactInSupabase;
+window.deleteContactFromSupabase          = deleteContactFromSupabase;
+window.bulkUpdateContactsInSupabase       = bulkUpdateContactsInSupabase;
+window.bulkDeleteContactsInSupabase       = bulkDeleteContactsInSupabase;
+window.mergeContactsInSupabase            = mergeContactsInSupabase;
+window.patchContactInSupabase             = patchContactInSupabase;
 window.fetchContactNotesFromSupabase = fetchContactNotesFromSupabase;
 window.addContactNoteToSupabase      = addContactNoteToSupabase;
 window.fetchTemplatesFromSupabase    = fetchTemplatesFromSupabase;
@@ -952,3 +996,49 @@ async function deleteWarningRule(id) {
 window.fetchWarningRules  = fetchWarningRules;
 window.saveWarningRule    = saveWarningRule;
 window.deleteWarningRule  = deleteWarningRule;
+
+// --- logUserSession ---
+// Records a login event to user_sessions (Supabase).
+// Deduplicates per user per calendar day via localStorage so page refreshes
+// don't create duplicate rows. Safe to call on every login/session-restore.
+async function logUserSession(user) {
+  if (!supabase || !user || !user.id || !user.supabaseUser) return;
+  const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+  const dedupeKey = "mtk_last_session_log_" + user.id + "_" + today;
+  if (localStorage.getItem(dedupeKey)) return; // already logged today
+  try {
+    const { error } = await supabase.from("user_sessions").insert({
+      user_id:      user.id,
+      email:        user.email        || "",
+      display_name: user.name         || "",
+      role:         user.role         || "borrower",
+    });
+    if (!error) {
+      localStorage.setItem(dedupeKey, "1");
+      // Clean up yesterday's dedup key to prevent localStorage bloat
+      try {
+        const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+        localStorage.removeItem("mtk_last_session_log_" + user.id + "_" + yesterday);
+      } catch(e) {}
+    }
+  } catch(e) {
+    console.warn("[logUserSession]", e);
+  }
+}
+
+// --- fetchUserSessions ---
+// Returns session rows for the last N days (default 15), admin-only via RLS.
+async function fetchUserSessions(days) {
+  if (!supabase) return { data: [], error: null };
+  days = days || 15;
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from("user_sessions")
+    .select("user_id, email, display_name, role, logged_in_at")
+    .gte("logged_in_at", since)
+    .order("logged_in_at", { ascending: false });
+  return { data: data || [], error };
+}
+
+window.logUserSession    = logUserSession;
+window.fetchUserSessions = fetchUserSessions;

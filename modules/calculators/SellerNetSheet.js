@@ -5,6 +5,7 @@ const SectionCard = window.SectionCard;
 const Select = window.Select;
 const Toggle = window.Toggle;
 const LabeledInput = window.LabeledInput;
+const InfoTip = window.InfoTip;
 const fmt = window.fmt;
 const fmtCredit = window.fmtCredit;
 const COLORS = window.COLORS;
@@ -106,7 +107,7 @@ function SellerNetSheet({ isInternal = false, user = null }) {
   const [escrowBal, setEscrowBal] = useLocalStorage("sns_escrow_bal", "");
 
   // Commission & credits
-  const [commissionPct, setCommissionPct]   = useLocalStorage("sns_comm", "5");
+  const [commissionPct, setCommissionPct]   = useLocalStorage("sns_comm", "6");
   const [sellerConc, setSellerConc]         = useLocalStorage("sns_conc", "");
   const [repairCredits, setRepairCredits]   = useLocalStorage("sns_repair", "");
   const [realtorCredit, setRealtorCredit]   = useLocalStorage("sns_realtor_credit", "");
@@ -120,9 +121,9 @@ function SellerNetSheet({ isInternal = false, user = null }) {
 
   // Options
   const [sellerPaysTitle, setSellerPaysTitle] = useLocalStorage("sns_title_on", true);
-  const [includeHW, setIncludeHW]             = useLocalStorage("sns_hw_on", false);
+  const [includeHW, setIncludeHW]             = useLocalStorage("sns_hw_on", true);
   const [hwAmt, setHwAmt]                     = useLocalStorage("sns_hw_amt", "550");
-  const [includeSurvey, setIncludeSurvey]     = useLocalStorage("sns_survey_on", false);
+  const [includeSurvey, setIncludeSurvey]     = useLocalStorage("sns_survey_on", true);
   const [surveyAmt, setSurveyAmt]             = useLocalStorage("sns_survey_amt", "450");
 
   // Internal fee overrides
@@ -255,7 +256,7 @@ function SellerNetSheet({ isInternal = false, user = null }) {
       <span style={{ fontSize: bold ? 14 : 13, fontWeight: bold ? 700 : 400, color: color || COLORS.navy, fontFamily: font, flex: 1 }}>
         {label}
       </span>
-      {isInternal && editKey ? (
+      {editKey ? (
         <input
           type="text" value={editValue} placeholder={fmt(defaultVal)}
           onChange={e => onEdit(e.target.value.replace(/[^0-9.]/g, ""))}
@@ -315,7 +316,6 @@ function SellerNetSheet({ isInternal = false, user = null }) {
 
           {/* SALE DETAILS */}
           <SectionCard title="SALE DETAILS" accent={COLORS.navy}>
-            <LabeledInput label="Seller Name" value={sellerName} onChange={setSellerName} />
             <Select label="State" value={selectedState} onChange={setSelectedState}
               options={STATE_LIST.map(s => ({ value: s.value, label: `${s.label} (${s.value})` }))} />
             <LabeledInput label="Sale Price" prefix="$" value={salePrice} onChange={setSalePrice} useCommas />
@@ -327,7 +327,7 @@ function SellerNetSheet({ isInternal = false, user = null }) {
                 style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLORS.border}`, borderRadius: 6,
                   fontSize: 13, fontFamily: font, color: COLORS.navy, background: "#fff", outline: "none", boxSizing: "border-box" }} />
               {closingDate && taxMode === "auto" && parseFloat(annualTax) > 0 && (
-                <div style={{ fontSize: 11, color: COLORS.grayLight, marginTop: 2, fontFamily: font }}>
+                <div style={{ fontSize: 12, color: COLORS.grayLight, marginTop: 2, fontFamily: font }}>
                   Day {dayOfYear(closingDate)} of year — tax prorate auto-calculated
                 </div>
               )}
@@ -338,32 +338,36 @@ function SellerNetSheet({ isInternal = false, user = null }) {
           <SectionCard title="MORTGAGE PAYOFFS" accent={COLORS.red}>
             <LabeledInput label="1st Mortgage Payoff" prefix="$" value={mort1} onChange={setMort1} useCommas />
             <LabeledInput label="2nd Mortgage Payoff" prefix="$" value={mort2} onChange={setMort2} useCommas />
-            <div style={{ margin: "2px 0 10px", padding: "9px 12px", borderRadius: 7, background: "#FFF8E7", border: "1px solid #F0D080", borderLeft: "3px solid #E6A817", fontSize: 11, color: "#7A5800", fontFamily: font, lineHeight: 1.6 }}>
+            <div style={{ margin: "2px 0 10px", padding: "9px 12px", borderRadius: 7, background: "#FFF8E7", border: "1px solid #F0D080", borderLeft: "3px solid #E6A817", fontSize: 12, color: "#7A5800", fontFamily: font, lineHeight: 1.6 }}>
               <span style={{ fontWeight: 700 }}>Your payoff is not the same as your balance.</span> Your payoff includes your remaining principal + accrued daily interest through the closing date + lender payoff processing fees ($150–$175). If you don't have the exact number, add $1,500–$2,000 to your current balance as a buffer — it's better to overestimate here than come up short at closing.
             </div>
             <LabeledInput label="Current Escrow Balance (add-back)" prefix="$" value={escrowBal} onChange={setEscrowBal} useCommas
-              hint="Returned to seller at closing" />
+              hint="Returned to seller at closing"
+              infoTip="This applies if the current mortgage has an escrow account — where the lender collects a portion of taxes and insurance each month. The balance built up in that account belongs to the seller and is returned at closing as an add-back. Check the most recent mortgage statement for this balance. Keep in mind: if another payment is made before closing, that balance will go up." />
           </SectionCard>
 
           {/* COMMISSION & CREDITS */}
           <SectionCard title="COMMISSION & CREDITS" accent={COLORS.gold || "#C9A84C"}>
             <LabeledInput label="Realtor Commission(s)" value={commissionPct} onChange={setCommissionPct} suffix="%"
-              hint={salePrice ? fmt(Math.round((parseFloat(salePrice) || 0) * (parseFloat(commissionPct) || 0) / 100)) : ""} />
-            <LabeledInput label="Seller Concessions" prefix="$" value={sellerConc} onChange={setSellerConc} useCommas />
-            <div style={{ fontSize: 11, color: COLORS.grayLight, marginTop: -8, marginBottom: 10, fontFamily: font, fontStyle: "italic", paddingLeft: 2 }}>
+              hint={salePrice ? fmt(Math.round((parseFloat(salePrice) || 0) * (parseFloat(commissionPct) || 0) / 100)) : ""}
+              infoTip="The total commission paid to both the listing agent (seller's side) and the buyer's agent, combined. This is deducted from the seller's proceeds at closing. Enter the total combined percentage — for example, 6% covers 3% to each side." />
+            <LabeledInput label="Seller Concessions" prefix="$" value={sellerConc} onChange={setSellerConc} useCommas
+              infoTip="A dollar amount the seller agrees to contribute toward the buyer's closing costs. This reduces the seller's net proceeds. Concessions are subject to program limits — FHA, VA, USDA, and Conventional loans each cap how much the seller can contribute based on loan type and LTV." />
+            <div style={{ fontSize: 12, color: COLORS.grayLight, marginTop: -8, marginBottom: 10, fontFamily: font, fontStyle: "italic", paddingLeft: 2 }}>
               Money paid to the buyer at closing
             </div>
-            <LabeledInput label="Repair Costs" prefix="$" value={repairCredits} onChange={setRepairCredits} useCommas />
+            <LabeledInput label="Repair Costs" prefix="$" value={repairCredits} onChange={setRepairCredits} useCommas
+              infoTip="A credit negotiated in the contract for repairs or improvements the seller agrees to cover. This is deducted from the seller's net proceeds at closing and credited to the buyer." />
             {(isInternal || (user && user.role === "realtor") || !!realtorCredit) && (
               <LabeledInput label="Realtor Credit (paid to Seller)" prefix="$" value={realtorCredit} onChange={setRealtorCredit} useCommas />
             )}
             {!!realtorCredit && (
-              <div style={{ fontSize: 11, color: "#2A9150", marginTop: -8, marginBottom: 4, fontFamily: font, fontStyle: "italic", paddingLeft: 2 }}>
+              <div style={{ fontSize: 12, color: "#2A9150", marginTop: -8, marginBottom: 4, fontFamily: font, fontStyle: "italic", paddingLeft: 2 }}>
                 ↑ Add-back — this amount is returned to the seller at closing
               </div>
             )}
             {(isInternal || (user && user.role === "realtor")) && (
-              <div style={{ fontSize: 11, color: "#5A6FA8", marginBottom: 10, fontFamily: font, paddingLeft: 2 }}>
+              <div style={{ fontSize: 12, color: "#5A6FA8", marginBottom: 10, fontFamily: font, paddingLeft: 2 }}>
                 🔒 Realtor Credit is hidden from the client until a dollar amount is entered.
               </div>
             )}
@@ -371,12 +375,13 @@ function SellerNetSheet({ isInternal = false, user = null }) {
 
           {/* PROPERTY & HOA */}
           <SectionCard title="PROPERTY & HOA" accent={COLORS.blue}>
-            <LabeledInput label="Annual Property Taxes" prefix="$" value={annualTax} onChange={setAnnualTax} useCommas />
+            <LabeledInput label="Annual Property Taxes" prefix="$" value={annualTax} onChange={setAnnualTax} useCommas
+              infoTip="Enter the most recent full-year property tax bill. This is used to calculate the seller's tax proration — the portion of the year's taxes owed for the days they owned the property. In Texas, taxes are paid in arrears, so the seller credits the buyer for the days already passed in the tax year." />
             <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
-              <button onClick={() => setTaxMode("auto")} style={{ flex: 1, padding: "6px 10px", borderRadius: 6, border: `1px solid ${taxMode === "auto" ? COLORS.blue : COLORS.border}`, background: taxMode === "auto" ? COLORS.blue : "#fff", color: taxMode === "auto" ? "#fff" : COLORS.navy, fontSize: 11, fontWeight: 600, fontFamily: font, cursor: "pointer" }}>
+              <button onClick={() => setTaxMode("auto")} style={{ flex: 1, padding: "6px 10px", borderRadius: 6, border: `1px solid ${taxMode === "auto" ? COLORS.blue : COLORS.border}`, background: taxMode === "auto" ? COLORS.blue : "#fff", color: taxMode === "auto" ? "#fff" : COLORS.navy, fontSize: 12, fontWeight: 600, fontFamily: font, cursor: "pointer" }}>
                 Auto Prorate
               </button>
-              <button onClick={() => setTaxMode("manual")} style={{ flex: 1, padding: "6px 10px", borderRadius: 6, border: `1px solid ${taxMode === "manual" ? COLORS.blue : COLORS.border}`, background: taxMode === "manual" ? COLORS.blue : "#fff", color: taxMode === "manual" ? "#fff" : COLORS.navy, fontSize: 11, fontWeight: 600, fontFamily: font, cursor: "pointer" }}>
+              <button onClick={() => setTaxMode("manual")} style={{ flex: 1, padding: "6px 10px", borderRadius: 6, border: `1px solid ${taxMode === "manual" ? COLORS.blue : COLORS.border}`, background: taxMode === "manual" ? COLORS.blue : "#fff", color: taxMode === "manual" ? "#fff" : COLORS.navy, fontSize: 12, fontWeight: 600, fontFamily: font, cursor: "pointer" }}>
                 Manual
               </button>
             </div>
@@ -384,25 +389,36 @@ function SellerNetSheet({ isInternal = false, user = null }) {
               <LabeledInput label="Tax Prorate (manual)" prefix="$" value={taxManual} onChange={setTaxManual} useCommas />
             )}
             {taxMode === "auto" && (
-              <div style={{ fontSize: 11, color: COLORS.grayLight, marginBottom: 8, fontFamily: font }}>
+              <div style={{ fontSize: 12, color: COLORS.grayLight, marginBottom: 8, fontFamily: font }}>
                 Auto: days elapsed ÷ 365 × annual taxes
               </div>
             )}
-            <LabeledInput label="HOA Transfer Fee" prefix="$" value={hoaTransfer} onChange={setHoaTransfer} useCommas />
+            <LabeledInput label="HOA Transfer Fee" prefix="$" value={hoaTransfer} onChange={setHoaTransfer} useCommas
+              infoTip="A fee charged by the HOA to transfer membership from the seller to the buyer. Who pays — and how much — is typically determined by the sales contract. For existing homes, $250 is common. For new construction, it can be $1,200 or more at closing." />
             <LabeledInput label="Prepaid HOA Dues (add-back)" prefix="$" value={prepaidHOA} onChange={setPrepaidHOA} useCommas
-              hint="Reimbursed to seller by buyer" />
+              hint="Reimbursed to seller by buyer"
+              infoTip="If the seller has already paid HOA dues covering a period beyond the closing date, the buyer reimburses the seller for those unused days. This is an add-back — it increases the seller's net proceeds rather than reducing them." />
           </SectionCard>
 
           {/* OPTIONAL: SELLER PAID ITEMS */}
           <SectionCard title="OPTIONAL: SELLER PAID ITEMS" accent={COLORS.blue}>
-            <Toggle label={"Title Policy (" + fmt(calc.titleAmtFull) + ")"} checked={sellerPaysTitle} onChange={setSellerPaysTitle} />
-            <Toggle label={"Home Warranty (" + fmt(calc.hwAmtFull) + ")"} checked={includeHW} onChange={setIncludeHW} />
-            <Toggle label={"Survey: Pay for New Survey (" + fmt(calc.survAmtFull) + ")"} checked={includeSurvey} onChange={setIncludeSurvey} />
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+              <div style={{ flex: 1 }}><Toggle label={"Title Policy (" + fmt(calc.titleAmtFull) + ")"} checked={sellerPaysTitle} onChange={setSellerPaysTitle} /></div>
+              <InfoTip text="The Owner's Title Insurance Policy protects the buyer against defects in the title — such as liens, forgeries, or ownership disputes — that occurred before closing. In most Texas transactions, the seller pays for the Owner's Policy as part of the deal." />
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+              <div style={{ flex: 1 }}><Toggle label={"Home Warranty (" + fmt(calc.hwAmtFull) + ")"} checked={includeHW} onChange={setIncludeHW} /></div>
+              <InfoTip text="A home warranty covers repair or replacement of major systems and appliances (HVAC, plumbing, electrical, etc.) for a period after closing — typically one year. Sellers often offer this as an incentive or it may be negotiated into the contract." />
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+              <div style={{ flex: 1 }}><Toggle label={"Survey: Pay for New Survey (" + fmt(calc.survAmtFull) + ")"} checked={includeSurvey} onChange={setIncludeSurvey} /></div>
+              <InfoTip text="A property survey defines the exact boundaries of the land. Lenders often require an up-to-date survey. If the seller doesn't have a recent one, a new survey is typically ordered. The contract determines who pays — it's often the seller in Texas." />
+            </div>
           </SectionCard>
 
           {/* OTHER EXPENSES */}
           <SectionCard title="OTHER EXPENSES" accent={COLORS.blue}>
-            <div style={{ fontSize: 11, color: COLORS.grayLight, marginBottom: 8, fontFamily: font }}>
+            <div style={{ fontSize: 12, color: COLORS.grayLight, marginBottom: 8, fontFamily: font }}>
               Add up to three additional seller expenses.
             </div>
             <div style={{ display: "flex", gap: 8, marginBottom: 6, alignItems: "flex-end" }}>
@@ -435,7 +451,7 @@ function SellerNetSheet({ isInternal = false, user = null }) {
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
               <div style={{ flex: 1 }}>
-                <input value={otherLabel3} onChange={e => setOtherLabel3(e.target.value)} placeholder="e.g. Lien Release"
+                <input value={otherLabel3} onChange={e => setOtherLabel3(e.target.value)} placeholder="e.g. State Tax Stamp"
                   style={{ width: "100%", padding: "7px 10px", border: `1px solid ${COLORS.border}`, borderRadius: 6, fontSize: 13, fontFamily: font, color: COLORS.navy, boxSizing: "border-box", outline: "none" }} />
               </div>
               <div style={{ width: 100 }}>
@@ -607,13 +623,13 @@ function SellerNetSheet({ isInternal = false, user = null }) {
                 </span>
               </div>
               {calc.netProceeds < 0 && (
-                <div style={{ fontSize: 11, color: "#FF8A80", marginTop: 6, fontFamily: font, textAlign: "center" }}>
+                <div style={{ fontSize: 12, color: "#FF8A80", marginTop: 6, fontFamily: font, textAlign: "center" }}>
                   ⚠ Negative proceeds — seller may need to bring funds to closing
                 </div>
               )}
             </div>
 
-            <div style={{ fontSize: 11, color: COLORS.grayLight, marginTop: 10, lineHeight: 1.5, fontFamily: font }}>
+            <div style={{ fontSize: 12, color: COLORS.grayLight, marginTop: 10, lineHeight: 1.5, fontFamily: font }}>
               * Estimates only. Fees vary by title company, county, and negotiated terms. Transfer tax and title rates are approximate — verify with your title company. Tax prorate is based on a 365-day year.
             </div>
           </SectionCard>

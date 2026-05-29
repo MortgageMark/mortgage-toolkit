@@ -1,5 +1,5 @@
 // modules/calculators/RecastCalculator.js
-const { useMemo } = React;
+const { useMemo, useState } = React;
 const useLocalStorage = window.useLocalStorage;
 const useThemeColors  = window.useThemeColors;
 const pmt             = window.pmt;
@@ -8,6 +8,7 @@ const fmt2            = window.fmt2;
 const SectionCard     = window.SectionCard;
 const LabeledInput    = window.LabeledInput;
 const font            = window.font;
+const InfoTip         = window.InfoTip;
 
 function stripCommas(v) { return String(v).replace(/,/g, ""); }
 function addCommas(v) {
@@ -17,7 +18,6 @@ function addCommas(v) {
   return dec !== undefined ? formatted + "." + dec : formatted;
 }
 
-// Remaining balance after m payments on a loan of L at monthly rate r over N months
 function balanceAfterPayments(L, r, N, m) {
   if (L <= 0 || N <= 0 || m < 0) return L;
   if (r === 0) return Math.max(0, L - (L / N) * m);
@@ -26,7 +26,6 @@ function balanceAfterPayments(L, r, N, m) {
   return Math.max(0, L * growth - P * (growth - 1) / r);
 }
 
-// Months to pay off balance B at fixed payment P and monthly rate r
 function monthsToPayoff(r, P, B) {
   if (B <= 0) return 0;
   if (P <= 0) return Infinity;
@@ -38,18 +37,16 @@ function monthsToPayoff(r, P, B) {
 
 function RecastCalculator() {
   const c = useThemeColors();
+  const [infoOpen, setInfoOpen] = useState(false);
 
-  // ── Read loan details from Payment Calculator (shared keys) ───────────────
   const [pcRate] = useLocalStorage("pc_rate", "");
   const [pcLa]   = useLocalStorage("pc_la",   "");
   const [pcTerm] = useLocalStorage("pc_term",  "30");
 
-  // ── Recast-specific inputs ─────────────────────────────────────────────────
   const [lumpSum,       setLumpSum]       = useLocalStorage("rc_lump",         "");
   const [recastAtMonth, setRecastAtMonth] = useLocalStorage("rc_recast_month", "");
 
-  // ── Calculation ────────────────────────────────────────────────────────────
-  const calc = useMemo(() => {
+  const calc = useMemo(function() {
     const annRate = parseFloat(pcRate)               || 0;
     const origLA  = parseFloat(stripCommas(pcLa))    || 0;
     const termYr  = parseInt(pcTerm)                 || 30;
@@ -73,13 +70,11 @@ function RecastCalculator() {
       return { currentPI, currentBal, remainingMonths, origPayment, mElapsed, r };
     }
 
-    // ── After recast ──────────────────────────────────────────────────────
     const newBal         = Math.max(0, currentBal - lump);
     const newPI          = newBal > 0 ? pmt(r, remainingMonths, newBal) : 0;
     const monthlySavings = Math.max(0, currentPI - newPI);
     const interestRecast = Math.max(0, newPI * remainingMonths - newBal);
 
-    // ── "Keep old payment" scenario ────────────────────────────────────────
     const n_extra = monthsToPayoff(r, origPayment, newBal);
     const interestExtraPrincipal = (n_extra < Infinity && origPayment > 0)
       ? Math.max(0, origPayment * n_extra - newBal)
@@ -102,153 +97,120 @@ function RecastCalculator() {
   const hasResult  = calc !== null && (parseFloat(stripCommas(lumpSum)) || 0) > 0;
   const hasDetails = (parseFloat(pcRate) > 0) && (parseFloat(stripCommas(pcLa)) > 0);
 
-  const labelStyle = {
-    fontSize: 11, fontWeight: 600,
-    color: c.gray || "#5A7A95",
-    textTransform: "uppercase", letterSpacing: "0.08em",
-    marginBottom: 5, display: "block", fontFamily: font,
+  // Standard label style used throughout the toolkit
+  const sectionLabel = {
+    fontSize: 11, fontWeight: 700, color: c.gray,
+    textTransform: "uppercase", letterSpacing: "0.06em",
+    fontFamily: font, marginBottom: 4,
   };
-
-  const ResultRow = ({ label, value, green, red, dim }) => (
-    <div style={{
-      display: "flex", justifyContent: "space-between", alignItems: "center",
-      padding: "10px 0", borderBottom: `1px solid ${c.border || "#E8F0F7"}`,
-      fontFamily: font,
-    }}>
-      <span style={{ fontSize: 13, fontFamily: font, fontWeight: 500, color: c.gray || "#6B7C93", flex: 1, paddingRight: 8, lineHeight: 1.4 }}>{label}</span>
-      <span style={{
-        fontSize: 15, fontWeight: 700, fontFamily: font,
-        color: green ? (c.green || "#166534")
-             : red   ? "#DC2626"
-             : dim   ? (c.grayLight || "#94A3B8")
-             :         (c.navy || "#133155"),
-        whiteSpace: "nowrap",
-      }}>{value}</span>
-    </div>
-  );
 
   return (
     <div style={{ maxWidth: 640, margin: 0, padding: "16px 12px", fontFamily: font }}>
 
-      {/* ── What is a Recast? ───────────────────────────────────────────────── */}
-      <SectionCard title="WHAT IS A LOAN RECAST?">
-        <div style={{ fontSize: 13, color: c.text || c.navy, fontFamily: font, lineHeight: 1.8, marginBottom: 14 }}>
-          A <strong>recast</strong> (also called re-amortization) is when you make a large lump-sum payment toward your principal balance, then ask your loan servicer to recalculate your monthly payment based on the new, lower balance — keeping your existing interest rate and remaining loan term exactly the same.
-        </div>
+      {/* ── Collapsible info ─────────────────────────────────────────────────── */}
+      <div style={{
+        marginBottom: 16,
+        border: `1px solid ${c.border}`,
+        borderRadius: 8,
+        overflow: "hidden",
+        background: c.bgAlt,
+      }}>
+        <button
+          onClick={function() { setInfoOpen(function(o) { return !o; }); }}
+          style={{
+            width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "10px 14px", background: "transparent", border: "none", cursor: "pointer",
+            fontFamily: font,
+          }}
+        >
+          <span style={{ fontSize: 12, fontWeight: 700, color: c.navy, letterSpacing: "0.04em" }}>ℹ️  What is a Loan Recast?</span>
+          <span style={{ fontSize: 11, color: c.gray }}>{infoOpen ? "▲ Hide" : "▼ Show"}</span>
+        </button>
 
-        {/* Key fact chips */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
-          {[
-            { label: "Not a refinance", sub: "This is not a refinance. Your interest rate and loan duration do not change — only the monthly payment is recalculated.", color: c.green || "#166534", bg: "#F0FDF4", border: "#86EFAC" },
-            { label: "One-time", sub: "Most servicers — the company you make your mortgage payments to — only allow one recast over the life of the loan.", color: c.navy, bg: c.bgAlt || "#F0F6FB", border: c.border },
-            { label: "Costs $300–$500", sub: "The cost varies by servicer. Typical range is $300–$500, paid as a one-time fee when you request the recast.", color: "#92400E", bg: "#FFFBEB", border: "#FDE68A" },
-            { label: "Term stays the same", sub: "Your loan end date and interest rate are unchanged. Only the required monthly payment drops.", color: c.gray, bg: c.bgAlt || "#F0F6FB", border: c.border },
-            { label: "Minimum lump sum required", sub: "Most servicers require a minimum payment before they will process a recast — often $10,000 or more. Check with your servicer before planning.", color: c.navy, bg: c.bgAlt || "#F0F6FB", border: c.border, span: true },
-          ].map(f => (
-            <div key={f.label} style={{ padding: "10px 12px", background: f.bg, border: `1px solid ${f.border}`, borderRadius: 8, ...(f.span ? { gridColumn: "1 / -1" } : {}) }}>
-              <div style={{ fontSize: 11, fontWeight: 800, color: f.color, fontFamily: font, marginBottom: 3 }}>{f.label}</div>
-              <div style={{ fontSize: 11, color: c.gray, fontFamily: font, lineHeight: 1.5 }}>{f.sub}</div>
+        {infoOpen && (
+          <div style={{ padding: "0 14px 14px", borderTop: `1px solid ${c.border}` }}>
+            <p style={{ fontSize: 13, color: c.text || c.navy, lineHeight: 1.7, margin: "12px 0 12px" }}>
+              A <strong>recast</strong> means you make a large lump-sum payment toward your principal, then ask your servicer to recalculate your monthly payment based on the new lower balance — keeping your rate and remaining term the same.
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+              {[
+                { label: "Not a refinance", text: "Rate and loan term stay the same." },
+                { label: "One-time only", text: "Most servicers allow just one recast per loan." },
+                { label: "$300–$500 fee", text: "One-time fee paid to your servicer." },
+                { label: "$10K+ minimum", text: "Most servicers require at least $10,000." },
+              ].map(function(f) {
+                return React.createElement("div", {
+                  key: f.label,
+                  style: { padding: "8px 10px", background: c.bg, border: `1px solid ${c.border}`, borderRadius: 6 },
+                },
+                  React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: c.navy, marginBottom: 2, fontFamily: font } }, f.label),
+                  React.createElement("div", { style: { fontSize: 11, color: c.gray, lineHeight: 1.5, fontFamily: font } }, f.text)
+                );
+              })}
             </div>
-          ))}
-        </div>
-
-        {/* Recast vs. keeping payment */}
-        <div style={{ fontSize: 12, fontWeight: 700, color: c.navy, fontFamily: font, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>Recast vs. Keeping Your Current Payment</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-          <div style={{ padding: "10px 12px", background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 8 }}>
-            <div style={{ fontSize: 11, fontWeight: 800, color: "#DC2626", marginBottom: 4 }}>Recast (lower payment)</div>
-            <div style={{ fontSize: 11, color: "#374151", lineHeight: 1.6 }}>Your monthly P&I drops permanently. Payoff date stays the same. You'll pay more in total interest because the balance is spread over the full remaining term.</div>
+            <div style={{ fontSize: 11, color: c.gray, lineHeight: 1.6, padding: "8px 10px", background: c.bg, borderRadius: 6, border: `1px solid ${c.border}` }}>
+              <strong style={{ color: c.navy }}>Rule of thumb:</strong> Need lower monthly payments? Recast. Want to pay less interest and own your home sooner? Keep the higher payment.
+            </div>
           </div>
-          <div style={{ padding: "10px 12px", background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: 8 }}>
-            <div style={{ fontSize: 11, fontWeight: 800, color: "#166534", marginBottom: 4 }}>Keep the payment (faster payoff)</div>
-            <div style={{ fontSize: 11, color: "#374151", lineHeight: 1.6 }}>If you skip the recast and simply keep making your normal payment, the lump sum still reduces your balance — so a larger portion of each payment goes toward principal. The loan pays off faster than originally scheduled, and you pay less in total interest.</div>
-          </div>
-        </div>
-        <div style={{ fontSize: 11, color: c.gray, fontFamily: font, lineHeight: 1.6, padding: "8px 10px", background: c.bgAlt || "#F0F6FB", borderRadius: 6 }}>
-          <strong style={{ color: c.navy }}>Rule of thumb:</strong> If you need cash flow relief, recast. If you want to build wealth faster and pay less interest, keep the higher payment. The "Should You Recast?" section below runs both scenarios with your numbers.
-        </div>
-      </SectionCard>
+        )}
+      </div>
 
-      {/* ── Loan details + inputs ────────────────────────────────────────────── */}
-      <SectionCard title="Recast: Lump Sum Details">
-
-        {/* Source note */}
+      {/* ── No loan details warning ──────────────────────────────────────────── */}
+      {!hasDetails && (
         <div style={{
           marginBottom: 14, padding: "10px 12px",
-          background: c.bgAlt || "#F0F6FB",
-          borderRadius: 8, border: `1.5px solid ${c.border || "#D1E3F0"}`,
-          fontSize: 13, color: c.gray, lineHeight: 1.6, fontFamily: font,
+          background: "#FEF2F2", borderRadius: 8, border: "1px solid #FCA5A5",
+          fontSize: 13, color: "#DC2626", fontFamily: font, lineHeight: 1.6,
         }}>
-          {hasDetails
-            ? <>Enter the month you plan to do the recast and the lump-sum amount you intend to put down. Your original loan amount is <strong>{fmt(Math.round(parseFloat(stripCommas(pcLa))))}</strong> at <strong>{pcRate}%</strong> on a <strong>{pcTerm}-year</strong> term.</>
-            : <span style={{ color: "#DC2626" }}>Please enter your loan details in the Payment Calculator tab first — rate, loan amount, and term are needed to run this calculator.</span>
-          }
+          Enter your loan details in the <strong>Payment Calculator</strong> tab first — rate, loan amount, and term are needed.
         </div>
+      )}
 
-        {/* Recast at Month # */}
-        <div style={{ marginBottom: 14 }}>
-          <label style={labelStyle}>Planned Recast — Month #</label>
-          <div style={{ display: "flex", alignItems: "center", background: c.bg, border: `1.5px solid ${c.border}`, borderRadius: 8, overflow: "hidden" }}>
-            <input
-              type="number"
-              min="1"
-              max={(parseInt(pcTerm) || 30) * 12 - 1}
-              value={recastAtMonth}
-              onChange={e => {
-                const v = e.target.value;
-                if (v === "" || parseInt(v) >= 1) setRecastAtMonth(v);
-              }}
-              placeholder=""
-              style={{ flex: 1, border: "none", outline: "none", background: "transparent", padding: "10px 12px", fontSize: 15, fontWeight: 500, color: c.text || c.navy, fontFamily: font, width: "100%" }}
-            />
-          </div>
-          <div style={{ fontSize: 11, color: c.gray, marginTop: 4, lineHeight: 1.5, fontFamily: font }}>
-            {calc && calc.mElapsed > 0
-              ? <>
-                  Month {calc.mElapsed} = {Math.floor(calc.mElapsed / 12) > 0 ? `${Math.floor(calc.mElapsed / 12)}yr ` : ""}{calc.mElapsed % 12 > 0 ? `${calc.mElapsed % 12}mo ` : ""}into the loan · <strong>{Math.floor(calc.remainingMonths / 12)}yr {calc.remainingMonths % 12}mo</strong> remaining
-                </>
-              : "Enter the month you want to recast"
-            }
-          </div>
-        </div>
+      {/* ── Inputs ──────────────────────────────────────────────────────────── */}
+      <SectionCard title="Lump Sum Details">
 
-        {/* Lump sum */}
+        {hasDetails && (
+          <div style={{
+            marginBottom: 14, padding: "8px 12px",
+            background: c.bgAlt, borderRadius: 6, border: `1px solid ${c.border}`,
+            fontSize: 13, color: c.gray, lineHeight: 1.6, fontFamily: font,
+          }}>
+            Loan: <strong style={{ color: c.navy }}>{fmt(Math.round(parseFloat(stripCommas(pcLa))))}</strong> at{" "}
+            <strong style={{ color: c.navy }}>{pcRate}%</strong> · <strong style={{ color: c.navy }}>{pcTerm}-year</strong> term
+          </div>
+        )}
+
         <LabeledInput
-          label="Lump sum payment toward principal"
-          prefix="$"
-          value={addCommas(lumpSum)}
-          onChange={v => setLumpSum(stripCommas(v))}
-          useCommas
-          hint="Most servicers require a minimum of $10,000 or more"
+          label="Planned Recast — Month #"
+          value={recastAtMonth}
+          onChange={function(v) { if (v === "" || parseInt(v) >= 1) setRecastAtMonth(v); }}
+          hint={calc && calc.mElapsed > 0
+            ? "Remaining: " + Math.floor(calc.remainingMonths / 12) + "yr " + (calc.remainingMonths % 12) + "mo"
+            : "Month number into your loan"}
         />
 
-        {/* Balance at recast / new balance */}
+        <LabeledInput
+          label="Lump Sum Payment"
+          prefix="$"
+          value={addCommas(lumpSum)}
+          onChange={function(v) { setLumpSum(stripCommas(v)); }}
+          useCommas
+          hint="Most servicers require a minimum of $10,000"
+          infoTip="The extra principal payment you're making to trigger the recast. Most lenders require a minimum of $5,000-$10,000. This payment is applied directly to your principal balance, reducing what you owe."
+        />
+
         {calc && calc.currentBal > 0 && (
           <div style={{ display: "grid", gridTemplateColumns: hasResult ? "1fr 1fr" : "1fr", gap: 10, marginTop: 4 }}>
-            <div>
-              <label style={labelStyle}>Balance at Recast</label>
-              <div style={{
-                padding: "10px 12px", background: c.bgAlt || "#F0F6FB",
-                border: `1.5px solid ${c.border || "#D1E3F0"}`, borderRadius: 8,
-                fontSize: 15, fontWeight: 500, color: c.navy || "#133155", fontFamily: font,
-              }}>
-                {fmt(Math.round(calc.currentBal))}
-              </div>
-              <div style={{ fontSize: 11, color: c.gray, marginTop: 3, fontFamily: font }}>From amortization schedule · read-only</div>
+            <div style={{ padding: "10px 12px", background: c.bgAlt, border: `1px solid ${c.border}`, borderRadius: 8 }}>
+              <div style={sectionLabel}>Balance at Recast</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: c.navy, fontFamily: font }}>{fmt(Math.round(calc.currentBal))}</div>
+              <div style={{ fontSize: 11, color: c.gray, marginTop: 2, fontFamily: font }}>From amortization · read-only</div>
             </div>
             {hasResult && (
-              <div>
-                <label style={labelStyle}>New Balance After Lump Sum</label>
-                <div style={{
-                  padding: "10px 12px", background: c.bgAlt || "#F0F6FB",
-                  border: `1.5px solid ${c.border || "#D1E3F0"}`, borderRadius: 8,
-                  fontSize: 15, fontWeight: 500, color: c.green || "#166534", fontFamily: font,
-                }}>
-                  {fmt(Math.round(calc.newBal))}
-                </div>
-                <div style={{ fontSize: 11, color: c.gray, marginTop: 3, fontFamily: font }}>
-                  Reduced by {fmt(Math.round(calc.lump))}
-                </div>
+              <div style={{ padding: "10px 12px", background: c.bgAlt, border: `1px solid ${c.border}`, borderRadius: 8 }}>
+                <div style={sectionLabel}>New Balance</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: c.green || "#166534", fontFamily: font }}>{fmt(Math.round(calc.newBal))}</div>
+                <div style={{ fontSize: 11, color: c.gray, marginTop: 2, fontFamily: font }}>After {fmt(Math.round(calc.lump))} lump sum</div>
               </div>
             )}
           </div>
@@ -256,20 +218,43 @@ function RecastCalculator() {
 
       </SectionCard>
 
-      {/* ── Monthly Payment ────────────────────────────────────────────────── */}
+      {/* ── Payment results ─────────────────────────────────────────────────── */}
       {calc !== null && (
         <SectionCard title="Monthly Payment">
-          <ResultRow label="Current P&I at recast date" value={fmt2(calc.currentPI)} bold />
+          <div style={{ display: "grid", gridTemplateColumns: hasResult ? "1fr 1fr" : "1fr", gap: 10 }}>
+
+            <div style={{ padding: "10px 12px", background: c.bgAlt, border: `1px solid ${c.border}`, borderRadius: 8 }}>
+              <div style={sectionLabel}>Current P&I</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: c.navy, fontFamily: font }}>{fmt2(calc.currentPI)}</div>
+              <div style={{ fontSize: 11, color: c.gray, marginTop: 2, fontFamily: font }}>At recast date</div>
+            </div>
+
+            {hasResult && (
+              <div style={{ padding: "10px 12px", background: c.bgAlt, border: `1px solid ${c.border}`, borderRadius: 8 }}>
+                <div style={sectionLabel}>New P&I</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: c.navy, fontFamily: font }}>{fmt2(calc.newPI)}</div>
+                <div style={{ fontSize: 11, color: c.gray, marginTop: 2, fontFamily: font }}>After recast</div>
+              </div>
+            )}
+
+          </div>
+
           {hasResult && (
-            <>
-              <ResultRow label="New P&I after recast" value={fmt2(calc.newPI)} bold />
-              <ResultRow label="Monthly savings" value={fmt2(calc.monthlySavings) + " / mo"} large green />
-              <ResultRow
-                label="Term after recast"
-                value={`${Math.floor(calc.remainingMonths / 12)}yr ${calc.remainingMonths % 12}mo (unchanged)`}
-                dim
-              />
-            </>
+            <div style={{
+              marginTop: 10, padding: "10px 14px",
+              background: c.bgAlt, border: `1px solid ${c.border}`, borderRadius: 8,
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+            }}>
+              <div>
+                <div style={sectionLabel}>Monthly Savings</div>
+                <div style={{ fontSize: 11, color: c.gray, fontFamily: font }}>
+                  Term unchanged · {Math.floor(calc.remainingMonths / 12)}yr {calc.remainingMonths % 12}mo remaining
+                </div>
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: c.green || "#166534", fontFamily: font }}>
+                {fmt2(calc.monthlySavings)}<span style={{ fontSize: 13, fontWeight: 500 }}>/mo</span>
+              </div>
+            </div>
           )}
         </SectionCard>
       )}
@@ -278,50 +263,53 @@ function RecastCalculator() {
       {hasResult && calc.extraInterestFromRecast !== null && (
         <SectionCard title="Should You Recast?">
 
-          {/* Option A — Recast */}
-          <div style={{
-            borderLeft: "4px solid #FCA5A5", borderRadius: "0 8px 8px 0",
-            background: "#FEF2F2", padding: "12px 14px", marginBottom: 10,
-          }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#DC2626", marginBottom: 8, fontFamily: font }}>If you recast</div>
-            <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.8, fontFamily: font }}>
-              <div>Monthly payment drops to <strong style={{ color: "#133155" }}>{fmt2(calc.newPI)}</strong>, saving you <strong style={{ color: "#166534" }}>{fmt2(calc.monthlySavings)}/mo</strong></div>
-              <div>Remaining term stays at <strong>{Math.floor(calc.remainingMonths / 12)}yr {calc.remainingMonths % 12}mo</strong> (unchanged)</div>
-              <div>Total interest you'll still pay: <strong style={{ color: "#DC2626" }}>{fmt(Math.round(calc.interestRecast))}</strong></div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+
+            <div style={{ padding: "12px", background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 8 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#DC2626", marginBottom: 10, fontFamily: font, textTransform: "uppercase", letterSpacing: "0.06em" }}>↓ Recast It</div>
+              <div style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 11, color: "#6B7280", fontFamily: font, marginBottom: 2 }}>New payment</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: "#133155", fontFamily: font }}>{fmt2(calc.newPI)}<span style={{ fontSize: 11, fontWeight: 400, color: "#6B7280" }}>/mo</span></div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: "#6B7280", fontFamily: font, marginBottom: 2 }}>Total interest</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "#DC2626", fontFamily: font }}>{fmt(Math.round(calc.interestRecast))}</div>
+              </div>
+              <div style={{ fontSize: 11, color: "#6B7280", lineHeight: 1.5, borderTop: "1px solid #FCA5A5", paddingTop: 8, marginTop: 10, fontFamily: font }}>
+                Best if: you need lower monthly cash flow
+              </div>
             </div>
+
+            <div style={{ padding: "12px", background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: 8 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#166534", marginBottom: 10, fontFamily: font, textTransform: "uppercase", letterSpacing: "0.06em" }}>→ Keep Paying</div>
+              <div style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 11, color: "#6B7280", fontFamily: font, marginBottom: 2 }}>Payment stays</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: "#133155", fontFamily: font }}>{fmt2(calc.origPayment)}<span style={{ fontSize: 11, fontWeight: 400, color: "#6B7280" }}>/mo</span></div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: "#6B7280", fontFamily: font, marginBottom: 2 }}>Total interest</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "#166534", fontFamily: font }}>{fmt(Math.round(calc.interestExtraPrincipal))}</div>
+              </div>
+              <div style={{ fontSize: 11, color: "#6B7280", lineHeight: 1.5, borderTop: "1px solid #86EFAC", paddingTop: 8, marginTop: 10, fontFamily: font }}>
+                {calc.monthsSaved && calc.monthsSaved > 0
+                  ? "Pays off " + (Math.floor(calc.monthsSaved / 12) > 0 ? Math.floor(calc.monthsSaved / 12) + "yr " : "") + (calc.monthsSaved % 12 > 0 ? calc.monthsSaved % 12 + "mo " : "") + "sooner · best if: you want to build equity faster"
+                  : "Best if: you want to pay less interest overall"
+                }
+              </div>
+            </div>
+
           </div>
 
-          {/* Option B — Keep payment */}
-          <div style={{
-            borderLeft: "4px solid #86EFAC", borderRadius: "0 8px 8px 0",
-            background: "#F0FDF4", padding: "12px 14px", marginBottom: 14,
-          }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#166534", marginBottom: 8, fontFamily: font }}>If you keep your current payment instead</div>
-            <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.8, fontFamily: font }}>
-              <div>Monthly payment stays at <strong style={{ color: "#133155" }}>{fmt2(calc.origPayment)}</strong></div>
-              {calc.n_extra < Infinity && (
-                <div>Loan paid off in <strong>{Math.floor(calc.n_extra / 12)}yr {calc.n_extra % 12}mo</strong>
-                  {calc.monthsSaved !== null && calc.monthsSaved > 0 &&
-                    <span style={{ color: "#166534" }}>, paying off <strong>{Math.floor(calc.monthsSaved / 12) > 0 ? `${Math.floor(calc.monthsSaved / 12)}yr ` : ""}{calc.monthsSaved % 12 > 0 ? `${calc.monthsSaved % 12}mo ` : ""}sooner</strong></span>
-                  }
-                </div>
-              )}
-              <div>Total interest you'll still pay: <strong style={{ color: "#166534" }}>{fmt(Math.round(calc.interestExtraPrincipal))}</strong>, saving you <strong style={{ color: "#166634" }}>{fmt(Math.round(calc.extraInterestFromRecast))}</strong> compared to recasting</div>
-            </div>
-          </div>
-
-          {/* Bottom line */}
           <div style={{
             padding: "10px 12px",
-            background: "#FFFBEB", border: "1.5px solid #FDE68A",
+            background: "#FFFBEB", border: "1px solid #FDE68A",
             borderRadius: 8, fontSize: 13, color: "#78350F", lineHeight: 1.7, fontFamily: font,
           }}>
-            <strong>Bottom line:</strong> A recast gives you a lower payment but costs you {fmt(Math.round(calc.extraInterestFromRecast))} more in total interest. If cash flow is tight, recast. If you want to pay less overall and own your home sooner, keep the higher payment.
+            <strong>Bottom line:</strong> Recasting costs {fmt(Math.round(calc.extraInterestFromRecast))} more in total interest but saves {fmt2(calc.monthlySavings)}/mo. If your rate is low, keeping the higher payment usually wins.
           </div>
 
         </SectionCard>
       )}
-
 
     </div>
   );

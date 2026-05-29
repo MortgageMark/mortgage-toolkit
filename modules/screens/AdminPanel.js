@@ -24,6 +24,12 @@ function AdminPanel({ currentUser, onClose }) {
     const [permsSaving, setPermsSaving] = useState({});
     const [permsSaved, setPermsSaved] = useState({});
 
+    // Activity tracking state
+    const [actSessions, setActSessions]   = useState(null); // null = not loaded
+    const [actProfiles, setActProfiles]   = useState([]);
+    const [actLoading, setActLoading]     = useState(false);
+    const [actTab, setActTab]             = useState("all");
+
     // Team Access state
     const [teamProfiles, setTeamProfiles] = useState([]);
     const [teamRoles, setTeamRoles] = useState({});
@@ -82,6 +88,7 @@ function AdminPanel({ currentUser, onClose }) {
                 fax: p.fax || "",
                 title: p.title || "",
                 company: p.company || "",
+                brokerage: p.brokerage || "",
                 companyNMLS: p.company_nmls || "",
                 branchNmls: p.branch_nmls || "",
                 website: p.website || "",
@@ -119,12 +126,30 @@ function AdminPanel({ currentUser, onClose }) {
 
     const isAdmin = currentUser && currentUser.role === "admin";
 
+    // Fetch activity data when admin panel mounts (admin only)
+    useEffect(function() {
+      if (!supabase || !(currentUser && currentUser.role === "admin")) return;
+      setActLoading(true);
+      var since = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
+      Promise.all([
+        window.fetchUserSessions ? window.fetchUserSessions(15) : Promise.resolve({ data: [], error: null }),
+        supabase.from("profiles").select("id, display_name, email, role").order("display_name", { ascending: true })
+      ]).then(function(results) {
+        var sessResult = results[0];
+        var profResult = results[1];
+        if (!sessResult.error) setActSessions(sessResult.data || []);
+        if (!profResult.error) setActProfiles(profResult.data || []);
+        setActLoading(false);
+      }).catch(function() { setActLoading(false); });
+    }, []);
+
     // New member form state
     const emptyMember = {
       id: "",
       name: "",
       title: "Loan Officer",
       company: "CMG Home Loans",
+      brokerage: "",
       companyNMLS: "",
       phone: "",
       email: "",
@@ -193,6 +218,7 @@ function AdminPanel({ currentUser, onClose }) {
             cell_phone:    formData.cell              || null,
             fax:           formData.fax               || null,
             company:       formData.company           || null,
+            brokerage:     formData.brokerage         || null,
             company_nmls:  formData.companyNMLS       || null,
             branch_nmls:   formData.branchNmls        || null,
             nmls:          formData.nmls              || null,
@@ -453,6 +479,219 @@ function AdminPanel({ currentUser, onClose }) {
           })
     );
 
+    // ── User Activity section ──
+    var ACT_TABS = [
+      { id: "all",      label: "All" },
+      { id: "internal", label: "LO / Internal" },
+      { id: "borrower", label: "Clients" },
+      { id: "builder",  label: "Builders" },
+      { id: "realtor",  label: "Realtors" },
+    ];
+
+    // Build per-user activity summary from session rows
+    var actByUser = {};
+    if (actSessions) {
+      actSessions.forEach(function(s) {
+        if (!actByUser[s.user_id]) {
+          actByUser[s.user_id] = {
+            user_id:      s.user_id,
+            email:        s.email,
+            display_name: s.display_name,
+            role:         s.role,
+            sessions:     [],
+            lastSeen:     null,
+          };
+        }
+        var entry = actByUser[s.user_id];
+        entry.sessions.push(s.logged_in_at);
+        if (!entry.lastSeen || s.logged_in_at > entry.lastSeen) {
+          entry.lastSeen = s.logged_in_at;
+        }
+      });
+    }
+
+    // Merge profiles so we also show users with zero sessions
+    var actUserIds = new Set(Object.keys(actByUser));
+    var actAllUsers = actProfiles.map(function(p) {
+      if (actByUser[p.id]) {
+        return Object.assign({}, actByUser[p.id], {
+          display_name: p.display_name || actByUser[p.id].display_name,
+          email:        p.email        || actByUser[p.id].email,
+          role:         p.role         || actByUser[p.id].role,
+          _fromProfile: true,
+        });
+      }
+      return {
+        user_id:      p.id,
+        email:        p.email,
+        display_name: p.display_name,
+        role:         p.role,
+        sessions:     [],
+        lastSeen:     null,
+        _fromProfile: true,
+      };
+    });
+
+    // Filter by selected tab
+    var actFiltered = actAllUsers.filter(function(u) {
+      if (actTab === "all") return true;
+      if (actTab === "internal") return u.role === "admin" || u.role === "internal";
+      return u.role === actTab;
+    });
+
+    // Sort: active users first (by lastSeen desc), then inactive alphabetically
+    actFiltered.sort(function(a, b) {
+      if (a.lastSeen && b.lastSeen) return b.lastSeen.localeCompare(a.lastSeen);
+      if (a.lastSeen) return -1;
+      if (b.lastSeen) return 1;
+      return (a.display_name || a.email || "").localeCompare(b.display_name || b.email || "");
+    });
+
+    // Relative date helper
+    function actRelDate(isoStr) {
+      if (!isoStr) return null;
+      var ms = Date.now() - new Date(isoStr).getTime();
+      var days = Math.floor(ms / 86400000);
+      if (days === 0) return "Today";
+      if (days === 1) return "Yesterday";
+      return days + " days ago";
+    }
+
+    // Activity dot color: green (<= 3 days), yellow (<= 7), orange (<= 15), gray (none)
+    function actDotColor(lastSeen) {
+      if (!lastSeen) return "#D1D5DB";
+      var days = Math.floor((Date.now() - new Date(lastSeen).getTime()) / 86400000);
+      if (days <= 3) return "#22C55E";
+      if (days <= 7) return "#F59E0B";
+      return "#F97316";
+    }
+
+    var actRoleColors = { admin: "#D4920B", internal: "#1a5fa8", borrower: "#6B7280", builder: "#7C3AED", realtor: "#9B59B6" };
+    var actRoleLabels = { admin: "Admin", internal: "LO", borrower: "Client", builder: "Builder", realtor: "Realtor" };
+
+    var activitySection = !supabase || !isAdmin ? null : React.createElement(React.Fragment, null,
+      React.createElement("hr", { style: { margin: "24px 0", border: "none", borderTop: "1px solid " + c.border } }),
+      React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 } },
+        React.createElement("div", null,
+          React.createElement("h3", {
+            style: { fontSize: 15, fontWeight: 700, color: c.text || c.navy, margin: "0 0 2px 0", fontFamily: font }
+          }, "📈 User Activity — Last 15 Days"),
+          React.createElement("p", {
+            style: { fontSize: 12, color: c.gray, fontFamily: font, margin: "0 0 14px 0" }
+          }, "Shows who has logged in. Green = active this week. Orange = active but not recently. Gray = not active at all.")
+        ),
+        React.createElement("button", {
+          onClick: function() {
+            setActLoading(true);
+            Promise.all([
+              window.fetchUserSessions ? window.fetchUserSessions(15) : Promise.resolve({ data: [], error: null }),
+              supabase.from("profiles").select("id, display_name, email, role").order("display_name", { ascending: true })
+            ]).then(function(results) {
+              if (!results[0].error) setActSessions(results[0].data || []);
+              if (!results[1].error) setActProfiles(results[1].data || []);
+              setActLoading(false);
+            }).catch(function() { setActLoading(false); });
+          },
+          style: { background: "none", border: "1px solid " + c.border, borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontSize: 12, color: c.gray, fontFamily: font, flexShrink: 0, marginTop: 2 }
+        }, actLoading ? "Loading…" : "↺ Refresh")
+      ),
+
+      // Role filter tabs
+      React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" } },
+        ACT_TABS.map(function(tab) {
+          var countInTab = tab.id === "all"
+            ? actAllUsers.length
+            : actAllUsers.filter(function(u) {
+                if (tab.id === "internal") return u.role === "admin" || u.role === "internal";
+                return u.role === tab.id;
+              }).length;
+          var isActive = actTab === tab.id;
+          return React.createElement("button", {
+            key: tab.id,
+            onClick: function() { setActTab(tab.id); },
+            style: {
+              padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600,
+              fontFamily: font, cursor: "pointer", border: "1.5px solid " + (isActive ? c.navy : c.border),
+              background: isActive ? c.navy : "transparent", color: isActive ? "#fff" : (c.text || c.navy),
+            }
+          }, tab.label + " (" + countInTab + ")");
+        })
+      ),
+
+      // Loading state
+      actLoading && actSessions === null && React.createElement("div", {
+        style: { fontSize: 13, color: c.gray, fontFamily: font, padding: "16px 0", textAlign: "center" }
+      }, "Loading activity data…"),
+
+      // User rows
+      !actLoading && actFiltered.length === 0 && React.createElement("div", {
+        style: { fontSize: 13, color: c.gray, fontFamily: font, padding: "12px 0" }
+      }, "No users found for this filter."),
+
+      actFiltered.map(function(u) {
+        var sessionCount = u.sessions ? u.sessions.length : 0;
+        var dotColor = actDotColor(u.lastSeen);
+        var lastLabel = actRelDate(u.lastSeen);
+        var roleColor = actRoleColors[u.role] || "#888";
+        var roleLbl = actRoleLabels[u.role] || (u.role || "?");
+        var name = u.display_name || u.email || u.user_id;
+
+        return React.createElement("div", {
+          key: u.user_id,
+          style: {
+            display: "flex", alignItems: "center", gap: 12,
+            padding: "10px 14px", borderRadius: 8,
+            border: "1px solid " + c.border,
+            marginBottom: 6,
+            background: u.lastSeen ? c.white : (c.bg || "#fafafa"),
+          }
+        },
+          // Activity dot
+          React.createElement("div", {
+            style: {
+              width: 10, height: 10, borderRadius: "50%",
+              background: dotColor, flexShrink: 0
+            }
+          }),
+          // Info
+          React.createElement("div", { style: { flex: 1, minWidth: 0 } },
+            React.createElement("div", {
+              style: { display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }
+            },
+              React.createElement("span", {
+                style: { fontSize: 13, fontWeight: 600, color: u.lastSeen ? (c.text || c.navy) : c.gray, fontFamily: font }
+              }, name),
+              React.createElement("span", {
+                style: {
+                  fontSize: 10, fontWeight: 700, color: "#fff", padding: "1px 7px",
+                  borderRadius: 4, background: roleColor,
+                  textTransform: "uppercase", letterSpacing: "0.05em", flexShrink: 0
+                }
+              }, roleLbl)
+            ),
+            u.email && u.display_name && React.createElement("div", {
+              style: { fontSize: 11, color: c.gray, fontFamily: font, marginTop: 1 }
+            }, u.email)
+          ),
+          // Last seen + count
+          React.createElement("div", {
+            style: { textAlign: "right", flexShrink: 0 }
+          },
+            lastLabel
+              ? React.createElement("div", {
+                  style: { fontSize: 12, fontWeight: 600, color: c.text || c.navy, fontFamily: font }
+                }, lastLabel)
+              : React.createElement("div", {
+                  style: { fontSize: 12, fontWeight: 500, color: "#D1D5DB", fontFamily: font }
+                }, "Not active"),
+            sessionCount > 0 && React.createElement("div", {
+              style: { fontSize: 11, color: c.gray, fontFamily: font, marginTop: 2 }
+            }, sessionCount + " session" + (sessionCount !== 1 ? "s" : ""))
+          )
+        );
+      })
+    );
+
     // ── Team Access section ──
     const ROLE_ORDER = { admin: 0, internal: 1, realtor: 2, borrower: 3 };
     const roleTagColors = { admin: "#D4920B", internal: "#1a5fa8", borrower: "#888", realtor: "#9B59B6" };
@@ -579,6 +818,7 @@ function AdminPanel({ currentUser, onClose }) {
             fieldRow("Cell Phone", "cell", "(555) 123-4567", "tel", phoneBlur("cell")),
             fieldRow("Fax", "fax", "(555) 123-4568", "tel", phoneBlur("fax")),
             fieldRow("Website URL", "website", "https://", "url"),
+            fieldRow("Brokerage", "brokerage", "Keller Williams, Compass, etc."),
             React.createElement("div", { style: { marginBottom: 12 }, key: "role" },
               React.createElement("label", { style: labelSt }, "ROLE"),
               React.createElement("select", {
@@ -861,7 +1101,8 @@ function AdminPanel({ currentUser, onClose }) {
         }, "No team members found."),
 
         teamSection,
-        borrowerSection
+        borrowerSection,
+        activitySection
       )
     );
   }

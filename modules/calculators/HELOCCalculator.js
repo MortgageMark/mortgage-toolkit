@@ -9,6 +9,7 @@ const DonutChart = window.DonutChart;
 const COLORS = window.COLORS;
 const fmt = window.fmt;
 const font = window.font;
+const InfoTip = window.InfoTip;
 
 function HELOCCalculator() {
   const c = useThemeColors();
@@ -50,8 +51,8 @@ function HELOCCalculator() {
     <div>
       <SectionCard title="Home Equity Position" subtitle="Your current equity and borrowing power">
         <div className="mtk-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <LabeledInput label="Home Value" value={homeValue} onChange={setHomeValue} prefix="$" useCommas />
-          <LabeledInput label="Mortgage Balance" value={mortBal} onChange={setMortBal} prefix="$" useCommas />
+          <LabeledInput label="Home Value" value={homeValue} onChange={setHomeValue} prefix="$" useCommas infoTip="The current appraised or estimated market value of your home. HELOC limits are based on a percentage of your home's value minus what you owe — typically up to 85% combined loan-to-value (CLTV)." />
+          <LabeledInput label="Mortgage Balance" value={mortBal} onChange={setMortBal} prefix="$" useCommas infoTip="What you currently owe on your first mortgage. The lender subtracts this from your maximum HELOC limit to determine how much equity you can access." />
           <LabeledInput label="Current Mortgage Payment" value={mortPayment} onChange={setMortPayment} prefix="$" useCommas />
           <LabeledInput label="Current Mortgage Rate" value={mortRate} onChange={setMortRate} suffix="%" step="0.125" />
         </div>
@@ -64,9 +65,9 @@ function HELOCCalculator() {
       </div>
       <SectionCard title="HELOC / Home Equity Loan" subtitle="Calculate payments on equity borrowing">
         <div className="mtk-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <LabeledInput label="HELOC Amount" value={helocAmt} onChange={setHelocAmt} prefix="$" useCommas />
-          <LabeledInput label="HELOC Rate" value={helocRate} onChange={setHelocRate} suffix="%" step="0.25" />
-          <LabeledInput label="Repayment Term (years)" value={helocTerm} onChange={setHelocTerm} suffix="yr" />
+          <LabeledInput label="HELOC Amount" value={helocAmt} onChange={setHelocAmt} prefix="$" useCommas infoTip="The maximum amount you can draw from the line of credit. You don't have to use the full limit — you only pay interest on what you actually draw. Think of it like a credit card secured by your home." />
+          <LabeledInput label="HELOC Rate" value={helocRate} onChange={setHelocRate} suffix="%" step="0.25" infoTip="HELOCs typically have variable rates tied to the Prime Rate plus a margin. This means your payment can change as rates move. Some lenders allow you to convert a portion to a fixed rate." />
+          <LabeledInput label="Repayment Term (years)" value={helocTerm} onChange={setHelocTerm} suffix="yr" infoTip="After the draw period ends, you can no longer borrow and must repay the outstanding balance — typically over 10-20 years. Monthly payments increase significantly since you're now paying both principal and interest." />
           <LabeledInput label="Max CLTV Allowed" value={maxLTV} onChange={setMaxLTV} suffix="%" />
         </div>
         {!requestedOk && (

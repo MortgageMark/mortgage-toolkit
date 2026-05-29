@@ -5,6 +5,9 @@ const fetchContactsFromSupabase         = window.fetchContactsFromSupabase;
 const saveContactToSupabase             = window.saveContactToSupabase;
 const archiveContactInSupabase          = window.archiveContactInSupabase;
 const deleteContactFromSupabase         = window.deleteContactFromSupabase;
+const bulkUpdateContactsInSupabase      = window.bulkUpdateContactsInSupabase;
+const bulkDeleteContactsInSupabase      = window.bulkDeleteContactsInSupabase;
+const mergeContactsInSupabase           = window.mergeContactsInSupabase;
 const ContactDetail                     = window.ContactDetail;
 const AppHeader                         = window.AppHeader;
 const useLocalStorage                   = window.useLocalStorage;
@@ -45,6 +48,7 @@ function ctFormatPhone(val) {
 
 const EMPTY_FORM_CT = {
   prefix: "", first_name: "", nickname: "", last_name: "",
+  company: "",
   contact_type: "client", contact_category: "Client",
   referred_by_contact_id: null,
   phone_cell: "", phone_work: "", phone_home: "", phone_best: "",
@@ -271,6 +275,14 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
   const [sortBy,          setSortBy]          = useState("created_at");
   const [sortDir,         setSortDir]         = useState("desc");
   const [deletingId,      setDeletingId]      = useState(null);
+  const [selectedCIds,   setSelectedCIds]   = useState([]);
+  const [bulkField,      setBulkField]      = useState("");
+  const [bulkValue,      setBulkValue]      = useState("");
+  const [bulkApplying,   setBulkApplying]   = useState(false);
+  const [bulkDeleting,   setBulkDeleting]   = useState(false);
+  const [bulkResult,     setBulkResult]     = useState(null);
+  const [showMerge,      setShowMerge]      = useState(false);
+  const [merging,        setMerging]        = useState(false);
 
   // ── Auto-open contact when navigating from toolkit ───────────────────
   useEffect(function() {
@@ -360,6 +372,57 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
       setSortBy(col);
       setSortDir(col === "created_at" || col === "fu_date" ? "desc" : "asc");
     }
+  }
+
+  // ── Bulk update handler (internal+) ──────────────────────────────────
+  async function handleBulkUpdate() {
+    if (!bulkField || selectedCIds.length === 0) return;
+    const payload = { [bulkField]: bulkValue || null };
+    setBulkApplying(true);
+    setBulkResult(null);
+    const { error } = await bulkUpdateContactsInSupabase(selectedCIds, payload);
+    if (error) {
+      setBulkResult({ error: error.message });
+    } else {
+      setContacts(function(prev) {
+        return prev.map(function(c) {
+          return selectedCIds.includes(c.id) ? Object.assign({}, c, payload) : c;
+        });
+      });
+      setBulkResult({ ok: selectedCIds.length });
+      setSelectedCIds([]);
+      setBulkField("");
+      setBulkValue("");
+    }
+    setBulkApplying(false);
+  }
+
+  // ── Bulk delete handler (admin only) ─────────────────────────────────
+  async function handleBulkDelete() {
+    if (selectedCIds.length === 0) return;
+    const { data: linked } = await supabase
+      .from("scenarios").select("id").in("contact_id", selectedCIds);
+    const scCount = (linked || []).length;
+    const msg = [
+      "Permanently delete " + selectedCIds.length + " contact" + (selectedCIds.length === 1 ? "" : "s") + "?",
+      scCount > 0
+        ? "⚠️ " + scCount + " linked scenario" + (scCount === 1 ? "" : "s") + " will also be deleted."
+        : "",
+      "This cannot be undone.",
+    ].filter(Boolean).join("\n\n");
+    if (!window.confirm(msg)) return;
+    setBulkDeleting(true);
+    try {
+      if (scCount > 0) {
+        await supabase.from("scenarios").delete().in("contact_id", selectedCIds);
+      }
+      const { error } = await bulkDeleteContactsInSupabase(selectedCIds);
+      if (error) { alert("Delete failed: " + error.message); return; }
+      setContacts(function(prev) { return prev.filter(function(c) { return !selectedCIds.includes(c.id); }); });
+      setSelectedCIds([]);
+    } catch (err) {
+      alert("Delete failed: " + err.message);
+    } finally { setBulkDeleting(false); }
   }
 
   // ── Delete handler (admin only) ───────────────────────────────────────
@@ -467,9 +530,13 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
     const dir = sortDir === "asc" ? 1 : -1;
     list.sort(function(a, b) {
       if (sortBy === "name") {
-        const la = ((a.last_name || "") + (a.first_name || "")).toLowerCase();
-        const lb = ((b.last_name || "") + (b.first_name || "")).toLowerCase();
-        return dir * la.localeCompare(lb);
+        const firstA = (a.first_name || "").toLowerCase();
+        const firstB = (b.first_name || "").toLowerCase();
+        const cmp = firstA.localeCompare(firstB);
+        if (cmp !== 0) return dir * cmp;
+        const lastA = (a.last_name  || "").toLowerCase();
+        const lastB = (b.last_name  || "").toLowerCase();
+        return dir * lastA.localeCompare(lastB);
       }
       if (sortBy === "category") {
         const ca = (a.contact_category || a.contact_type || "").toLowerCase();
@@ -545,6 +612,225 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
       setAddSaving(false);
       setAddError(err.message || "Unexpected error saving contact.");
     });
+  }
+
+  // ── Merge contacts modal ──────────────────────────────────────────────
+  function MergeContactsModal() {
+    if (!showMerge || selectedCIds.length !== 2) return null;
+    var cA = contacts.find(function(c) { return c.id === selectedCIds[0]; });
+    var cB = contacts.find(function(c) { return c.id === selectedCIds[1]; });
+    if (!cA || !cB) return null;
+
+    // Local state lives inside this component (re-created each open)
+    var _keep  = useState(cA.id);
+    var keepId = _keep[0]; var setKeepId = _keep[1];
+    var deleteId = keepId === cA.id ? cB.id : cA.id;
+    var K = keepId === cA.id ? cA : cB;  // keeper object
+    var D = keepId === cA.id ? cB : cA;  // deleter object
+
+    // Field-level picks: "K" = use keeper's value, "D" = use deleter's, "custom" = typed
+    var FIELDS = [
+      { key: "first_name",        label: "First Name" },
+      { key: "last_name",         label: "Last Name" },
+      { key: "company",           label: "Company" },
+      { key: "contact_type",      label: "Type" },
+      { key: "contact_category",  label: "Category" },
+      { key: "email_personal",    label: "Email (Personal)" },
+      { key: "email_work",        label: "Email (Work)" },
+      { key: "phone_cell",        label: "Phone (Cell)" },
+      { key: "phone_work",        label: "Phone (Work)" },
+      { key: "address1_street",   label: "Address" },
+      { key: "address1_city",     label: "City" },
+      { key: "address1_state",    label: "State" },
+      { key: "fu_who",            label: "FU Who" },
+      { key: "fu_priority",       label: "FU Priority" },
+      { key: "fu_date",           label: "FU Date" },
+      { key: "note_quick",        label: "Quick Note" },
+    ];
+
+    var initPicks = {};
+    FIELDS.forEach(function(f) {
+      // Auto-pick whichever side has a value; prefer keeper's
+      initPicks[f.key] = (K[f.key] || "") ? "K" : ((D[f.key] || "") ? "D" : "K");
+    });
+    var _picks = useState(initPicks);
+    var picks = _picks[0]; var setPicks = _picks[1];
+    var _err = useState(""); var mergeErr = _err[0]; var setMergeErr = _err[1];
+
+    function setPick(fieldKey, side) {
+      setPicks(function(prev) { return Object.assign({}, prev, { [fieldKey]: side }); });
+    }
+
+    async function doMerge() {
+      setMerging(true); setMergeErr("");
+      // Build merged fields from picks
+      var merged = {};
+      FIELDS.forEach(function(f) {
+        merged[f.key] = picks[f.key] === "D" ? (D[f.key] || null) : (K[f.key] || null);
+      });
+      const { error } = await mergeContactsInSupabase(keepId, deleteId, merged);
+      if (error) {
+        setMergeErr(error.message || "Merge failed.");
+        setMerging(false);
+        return;
+      }
+      // Update local state: patch keeper, remove deleter
+      setContacts(function(prev) {
+        return prev
+          .filter(function(c) { return c.id !== deleteId; })
+          .map(function(c) { return c.id === keepId ? Object.assign({}, c, merged) : c; });
+      });
+      setSelectedCIds([]);
+      setShowMerge(false);
+      setMerging(false);
+      setBulkResult({ ok: "merged" });
+    }
+
+    var ov = { // overlay
+      position: "fixed", inset: 0, zIndex: 10000,
+      background: "rgba(0,0,0,0.7)",
+      display: "flex", alignItems: "center", justifyContent: "center", padding: "20px",
+    };
+    var box = {
+      background: "#fff", borderRadius: "16px",
+      boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+      width: "100%", maxWidth: "820px", maxHeight: "90vh",
+      display: "flex", flexDirection: "column",
+      fontFamily: "'Inter', system-ui, sans-serif", overflow: "hidden",
+    };
+    var hdr = {
+      padding: "20px 24px 16px", borderBottom: "1px solid #e2e8f0",
+      display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0,
+    };
+    var nameOf = function(c) { return ((c.first_name || "") + " " + (c.last_name || "")).trim() || "Unnamed"; };
+
+    // Pill for picking a side
+    function SidePill(props) {
+      var active = picks[props.fieldKey] === props.side;
+      var val = props.side === "K" ? (K[props.fieldKey] || "") : (D[props.fieldKey] || "");
+      if (!val) val = <em style={{ color: "#94a3b8" }}>(empty)</em>;
+      return React.createElement("div", {
+        onClick: function() { setPick(props.fieldKey, props.side); },
+        style: {
+          flex: 1, padding: "8px 10px", borderRadius: "8px", cursor: "pointer",
+          border: "2px solid " + (active ? "#2563eb" : "#e2e8f0"),
+          background: active ? "#eff6ff" : "#f8fafc",
+          fontSize: "12px", color: active ? "#1e3a5f" : "#475569",
+          fontWeight: active ? 700 : 400,
+          transition: "all 0.1s",
+        }
+      },
+        React.createElement("div", { style: { fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: active ? "#2563eb" : "#94a3b8", marginBottom: "3px" } },
+          props.side === "K" ? "Primary" : "Duplicate"
+        ),
+        React.createElement("div", null, val)
+      );
+    }
+
+    return React.createElement("div", { style: ov, onClick: function(e) { if (e.target === e.currentTarget && !merging) setShowMerge(false); } },
+      React.createElement("div", { style: box },
+
+        // Header
+        React.createElement("div", { style: hdr },
+          React.createElement("div", null,
+            React.createElement("h2", { style: { margin: 0, fontSize: "18px", fontWeight: 800, color: "#1e3a5f" } }, "Merge Contacts"),
+            React.createElement("p", { style: { margin: "4px 0 0", fontSize: "13px", color: "#64748b" } },
+              "Choose which value to keep for each field. Notes from both contacts will be combined."
+            )
+          ),
+          React.createElement("button", {
+            onClick: function() { if (!merging) setShowMerge(false); },
+            style: { background: "#f1f5f9", border: "none", borderRadius: "8px", padding: "7px 12px", cursor: "pointer", fontSize: "13px", color: "#475569" }
+          }, "✕ Cancel")
+        ),
+
+        // Primary contact picker
+        React.createElement("div", {
+          style: { padding: "14px 24px", background: "#f8fafc", borderBottom: "1px solid #e2e8f0", flexShrink: 0 }
+        },
+          React.createElement("div", { style: { fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#64748b", marginBottom: "8px" } },
+            "Which contact is the primary? (This ID is kept, the other is deleted)"
+          ),
+          React.createElement("div", { style: { display: "flex", gap: "10px" } },
+            [cA, cB].map(function(c) {
+              var active = keepId === c.id;
+              return React.createElement("button", {
+                key: c.id,
+                onClick: function() { setKeepId(c.id); },
+                style: {
+                  flex: 1, padding: "10px 14px", borderRadius: "10px", cursor: "pointer",
+                  border: "2px solid " + (active ? "#2563eb" : "#e2e8f0"),
+                  background: active ? "#eff6ff" : "#fff",
+                  color: active ? "#1e3a5f" : "#475569",
+                  fontFamily: "'Inter', system-ui, sans-serif",
+                  fontWeight: active ? 700 : 400, fontSize: "13px", textAlign: "left",
+                }
+              },
+                active && React.createElement("span", { style: { fontSize: "10px", background: "#2563eb", color: "#fff", borderRadius: "4px", padding: "1px 6px", marginRight: "8px", fontWeight: 700 } }, "PRIMARY"),
+                nameOf(c),
+                React.createElement("span", { style: { marginLeft: "8px", fontSize: "11px", color: "#94a3b8", fontWeight: 400 } }, c.email_personal || c.email_work || "")
+              );
+            })
+          )
+        ),
+
+        // Field comparison (scrollable)
+        React.createElement("div", { style: { overflowY: "auto", padding: "16px 24px", flex: 1 } },
+          React.createElement("div", { style: { display: "grid", gridTemplateColumns: "120px 1fr 1fr", gap: "8px", alignItems: "center", marginBottom: "8px" } },
+            React.createElement("div", null),
+            React.createElement("div", { style: { fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#2563eb" } }, "Primary — " + nameOf(K)),
+            React.createElement("div", { style: { fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#64748b" } }, "Duplicate — " + nameOf(D))
+          ),
+          FIELDS.filter(function(f) {
+            // Only show rows where at least one side has a value, or both are empty for required fields
+            return (K[f.key] || "") || (D[f.key] || "") || ["first_name","last_name"].includes(f.key);
+          }).map(function(f) {
+            var kVal = K[f.key] || "";
+            var dVal = D[f.key] || "";
+            var same = kVal === dVal;
+            return React.createElement("div", {
+              key: f.key,
+              style: {
+                display: "grid", gridTemplateColumns: "120px 1fr 1fr",
+                gap: "8px", alignItems: "stretch", marginBottom: "6px",
+                opacity: same ? 0.6 : 1,
+              }
+            },
+              React.createElement("div", { style: { fontSize: "11px", fontWeight: 600, color: "#64748b", display: "flex", alignItems: "center" } },
+                f.label,
+                same && React.createElement("span", { style: { marginLeft: "5px", fontSize: "9px", color: "#94a3b8" } }, "(same)")
+              ),
+              React.createElement(SidePill, { fieldKey: f.key, side: "K" }),
+              React.createElement(SidePill, { fieldKey: f.key, side: "D" })
+            );
+          })
+        ),
+
+        // Footer
+        React.createElement("div", {
+          style: { padding: "16px 24px", borderTop: "1px solid #e2e8f0", display: "flex", alignItems: "center", gap: "12px", flexShrink: 0 }
+        },
+          mergeErr && React.createElement("span", { style: { fontSize: "13px", color: "#dc2626", flex: 1 } }, "⚠ " + mergeErr),
+          !mergeErr && React.createElement("span", { style: { fontSize: "12px", color: "#94a3b8", flex: 1 } },
+            "\"" + nameOf(D) + "\" will be permanently deleted. Linked scenarios and notes will transfer to \"" + nameOf(K) + "\"."
+          ),
+          React.createElement("button", {
+            onClick: function() { if (!merging) setShowMerge(false); },
+            style: { padding: "10px 20px", borderRadius: "8px", border: "1px solid #e2e8f0", background: "#f1f5f9", color: "#475569", fontSize: "14px", cursor: "pointer" }
+          }, "Cancel"),
+          React.createElement("button", {
+            onClick: doMerge,
+            disabled: merging,
+            style: {
+              padding: "10px 24px", borderRadius: "8px", border: "none",
+              background: merging ? "#94a3b8" : "linear-gradient(135deg,#7c3aed,#5b21b6)",
+              color: "#fff", fontSize: "14px", fontWeight: 700,
+              cursor: merging ? "wait" : "pointer",
+            }
+          }, merging ? "Merging…" : "Merge Contacts")
+        )
+      )
+    );
   }
 
   // ── If a contact is selected → render ContactDetail full-screen ───────
@@ -727,23 +1013,29 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
     // ── Body ────────────────────────────────────────────────────────────
     React.createElement("div", { style: S.body },
 
-      // Type tabs shown inline only when not controlled by global sidebar (non-internal/partner users)
-      !typeFilterProp && React.createElement("div", {
-        style: { display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "8px" }
-      },
-        TYPE_TABS_CT.map(function(tab) {
-          return React.createElement(TypeTab, { key: tab.key, tab: tab });
-        })
-      ),
-
-      // Category sub-pills (only when a specific type is selected)
-      typeFilter !== "all" && React.createElement("div", {
-        style: { display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "16px" },
-      },
-        [null].concat(typeFilter === "business" ? BUSINESS_CATEGORIES_CT : CLIENT_CATEGORIES_CT)
-          .map(function(cat) {
-            return React.createElement(CategoryPill, { key: cat || "__all__", cat: cat });
+      // ── Type tags + subcategory pills (always visible) ───────────────
+      React.createElement("div", { style: { marginBottom: "16px" } },
+        // Row 1: type pills
+        React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: typeFilter !== "all" ? "10px" : "0" } },
+          TYPE_TABS_CT.map(function(tab) {
+            return React.createElement(TypeTab, { key: tab.key, tab: tab });
           })
+        ),
+        // Row 2: subcategory pills — shown when Business or Client is active
+        typeFilter !== "all" && React.createElement("div", {
+          style: {
+            display: "flex", flexWrap: "wrap", gap: "6px",
+            padding: "10px 14px",
+            background: "rgba(255,255,255,0.05)",
+            borderRadius: "10px",
+            border: "1px solid rgba(255,255,255,0.1)",
+          },
+        },
+          [null].concat(typeFilter === "business" ? BUSINESS_CATEGORIES_CT : CLIENT_CATEGORIES_CT)
+            .map(function(cat) {
+              return React.createElement(CategoryPill, { key: cat || "__all__", cat: cat });
+            })
+        )
       ),
 
       // Toolbar: search + filters + status toggle + add button
@@ -757,8 +1049,8 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
         }),
 
         // Clear filters pill (only when a filter is active)
-        (fuWhoFilter || fuPriorityFilter || fuDateFilter) && React.createElement("button", {
-          onClick: function() { setFuWhoFilter(""); setFuPriorityFilter(""); setFuDateFilter(""); },
+        (fuWhoFilter || fuPriorityFilter || fuDateFilter || categoryFilter) && React.createElement("button", {
+          onClick: function() { setFuWhoFilter(""); setFuPriorityFilter(""); setFuDateFilter(""); setCategoryFilter(null); setTypeFilter("all"); },
           style: {
             padding: "7px 12px", borderRadius: "8px", cursor: "pointer",
             background: "rgba(239,68,68,0.15)", color: "#fca5a5",
@@ -895,6 +1187,16 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
                 )
               )
             ),
+            // Company
+            React.createElement("div", { style: { marginBottom: "14px" } },
+              React.createElement("label", { style: { display: "block", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#64748b", marginBottom: "5px" } }, "Company"),
+              React.createElement("input", {
+                style: { width: "100%", padding: "10px 12px", border: "1.5px solid #e2e8f0", borderRadius: "8px", fontSize: "14px", color: "#1e293b", outline: "none", boxSizing: "border-box" },
+                value: addForm.company,
+                placeholder: "Acme Realty, CMG, etc.",
+                onChange: function(e) { setAddField("company", e.target.value); }
+              })
+            ),
             // Referred By
             React.createElement("div", { style: { marginBottom: "20px" } },
               React.createElement("label", { style: { display: "block", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#64748b", marginBottom: "5px" } }, "Referred By"),
@@ -980,6 +1282,163 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
           : "No contacts match your current filters."
         ),
 
+      // ── Bulk action bar ───────────────────────────────────────────────
+      selectedCIds.length > 0 && React.createElement("div", {
+        style: {
+          marginBottom: "12px", padding: "12px 16px",
+          background: "rgba(37,99,235,0.08)", border: "1.5px solid rgba(37,99,235,0.3)",
+          borderRadius: "10px", display: "flex", flexWrap: "wrap",
+          alignItems: "center", gap: "10px",
+        }
+      },
+        React.createElement("span", {
+          style: { fontSize: "13px", fontWeight: "700", color: "#60a5fa", whiteSpace: "nowrap" },
+        }, selectedCIds.length + " selected"),
+
+        // Field picker
+        (isInternal || isPartner) && React.createElement("select", {
+          value: bulkField,
+          onChange: function(e) { setBulkField(e.target.value); setBulkValue(""); setBulkResult(null); },
+          style: {
+            padding: "5px 8px", borderRadius: "6px",
+            border: "1px solid rgba(255,255,255,0.18)",
+            background: bulkField ? "rgba(37,99,235,0.12)" : "rgba(255,255,255,0.07)",
+            color: bulkField ? "#93c5fd" : "#94a3b8",
+            fontSize: "12px", cursor: "pointer", outline: "none",
+          },
+        },
+          React.createElement("option", { value: "" }, "Update field…"),
+          React.createElement("option", { value: "contact_type" },     "Type"),
+          React.createElement("option", { value: "contact_category" }, "Category"),
+          React.createElement("option", { value: "status" },           "Status"),
+          React.createElement("option", { value: "fu_who" },           "FU Who"),
+          React.createElement("option", { value: "fu_priority" },      "FU Priority"),
+          React.createElement("option", { value: "fu_date" },          "FU Date"),
+          React.createElement("option", { value: "company" },          "Company"),
+          React.createElement("option", { value: "note_quick" },       "Quick Note"),
+          React.createElement("option", { value: "source" },           "Source")
+        ),
+
+        // Value input — changes based on field
+        (isInternal || isPartner) && bulkField === "contact_type" && React.createElement("select", {
+          value: bulkValue,
+          onChange: function(e) { setBulkValue(e.target.value); },
+          style: { padding: "5px 8px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.07)", color: "#f8fafc", fontSize: "12px", outline: "none" },
+        },
+          React.createElement("option", { value: "" }, "Pick type…"),
+          React.createElement("option", { value: "client" },   "Client"),
+          React.createElement("option", { value: "business" }, "Business")
+        ),
+        (isInternal || isPartner) && bulkField === "contact_category" && React.createElement("select", {
+          value: bulkValue,
+          onChange: function(e) { setBulkValue(e.target.value); },
+          style: { padding: "5px 8px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.07)", color: "#f8fafc", fontSize: "12px", outline: "none" },
+        },
+          React.createElement("option", { value: "" }, "Pick category…"),
+          React.createElement("optgroup", { label: "— Business —" },
+            BUSINESS_CATEGORIES_CT.map(function(c) { return React.createElement("option", { key: c, value: c }, c); })
+          ),
+          React.createElement("optgroup", { label: "— Client —" },
+            CLIENT_CATEGORIES_CT.map(function(c) { return React.createElement("option", { key: c, value: c }, c); })
+          )
+        ),
+        (isInternal || isPartner) && bulkField === "status" && React.createElement("select", {
+          value: bulkValue,
+          onChange: function(e) { setBulkValue(e.target.value); },
+          style: { padding: "5px 8px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.07)", color: "#f8fafc", fontSize: "12px", outline: "none" },
+        },
+          React.createElement("option", { value: "" }, "Pick status…"),
+          React.createElement("option", { value: "active" },    "Active"),
+          React.createElement("option", { value: "archived" },  "Archived"),
+          React.createElement("option", { value: "converted" }, "Converted")
+        ),
+        (isInternal || isPartner) && bulkField === "fu_priority" && React.createElement("select", {
+          value: bulkValue,
+          onChange: function(e) { setBulkValue(e.target.value); },
+          style: { padding: "5px 8px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.07)", color: "#f8fafc", fontSize: "12px", outline: "none" },
+        },
+          React.createElement("option", { value: "" }, "Pick priority…"),
+          React.createElement("option", { value: "High" },   "🔴 High"),
+          React.createElement("option", { value: "Medium" }, "🟡 Medium"),
+          React.createElement("option", { value: "Low" },    "⚪ Low"),
+          React.createElement("option", { value: "" }, "— Clear —")
+        ),
+        (isInternal || isPartner) && bulkField === "fu_date" && React.createElement("input", {
+          type: "date", value: bulkValue,
+          onChange: function(e) { setBulkValue(e.target.value); },
+          style: { padding: "5px 8px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.07)", color: "#f8fafc", fontSize: "12px", outline: "none" },
+        }),
+        (isInternal || isPartner) && (bulkField === "fu_who" || bulkField === "note_quick" || bulkField === "source" || bulkField === "company") && React.createElement("input", {
+          type: "text", value: bulkValue, placeholder: "New value…",
+          onChange: function(e) { setBulkValue(e.target.value); },
+          style: { padding: "5px 8px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.07)", color: "#f8fafc", fontSize: "12px", outline: "none", width: "140px" },
+        }),
+
+        // Apply button
+        (isInternal || isPartner) && bulkField && React.createElement("button", {
+          onClick: handleBulkUpdate,
+          disabled: bulkApplying || !bulkField,
+          style: {
+            padding: "6px 14px", borderRadius: "6px", border: "none",
+            background: bulkApplying ? "rgba(37,99,235,0.4)" : "#2563eb",
+            color: "#fff", fontSize: "12px", fontWeight: "700",
+            cursor: bulkApplying ? "wait" : "pointer", whiteSpace: "nowrap",
+            opacity: (bulkApplying || !bulkField) ? 0.5 : 1,
+          },
+        }, bulkApplying ? "Applying…" : "Apply to " + selectedCIds.length),
+
+        // Delete button (admin only)
+        isAdmin && React.createElement("button", {
+          onClick: handleBulkDelete,
+          disabled: bulkDeleting,
+          style: {
+            padding: "6px 14px", borderRadius: "6px",
+            border: "1px solid rgba(239,68,68,0.4)",
+            background: "rgba(239,68,68,0.12)", color: "#f87171",
+            fontSize: "12px", fontWeight: "700",
+            cursor: bulkDeleting ? "wait" : "pointer", whiteSpace: "nowrap",
+          },
+        }, bulkDeleting ? "Deleting…" : "🗑 Delete " + selectedCIds.length),
+
+        // Merge button (only when exactly 2 selected)
+        (isInternal || isPartner) && selectedCIds.length === 2 && React.createElement("button", {
+          onClick: function() { setShowMerge(true); },
+          style: {
+            padding: "6px 14px", borderRadius: "6px",
+            border: "1px solid rgba(168,85,247,0.45)",
+            background: "rgba(168,85,247,0.12)", color: "#c084fc",
+            fontSize: "12px", fontWeight: "700",
+            cursor: "pointer", whiteSpace: "nowrap",
+          },
+        }, "⇄ Merge 2 Contacts"),
+
+        // Deselect
+        React.createElement("button", {
+          onClick: function() { setSelectedCIds([]); setBulkField(""); setBulkValue(""); setBulkResult(null); },
+          style: {
+            padding: "5px 10px", borderRadius: "6px",
+            border: "1px solid rgba(255,255,255,0.18)",
+            background: "transparent", color: "#94a3b8",
+            fontSize: "12px", cursor: "pointer", whiteSpace: "nowrap",
+          },
+        }, "✕ Deselect"),
+
+        // Result badge
+        bulkResult && bulkResult.ok && React.createElement("span", {
+          style: { fontSize: "12px", fontWeight: "600", color: "#4ade80" },
+        }, bulkResult.ok === "merged" ? "✅ Contacts merged" : "✅ Updated " + bulkResult.ok),
+        bulkResult && bulkResult.error && React.createElement("span", {
+          style: { fontSize: "12px", fontWeight: "600", color: "#f87171" },
+        }, "⚠️ " + bulkResult.error),
+
+        React.createElement("span", {
+          style: { fontSize: "11px", color: "#475569", marginLeft: "auto" },
+        }, "Only the chosen field will be changed.")
+      ),
+
+      // ── Merge modal ───────────────────────────────────────────────────
+      showMerge && React.createElement(MergeContactsModal, null),
+
       // ── Contact table ─────────────────────────────────────────────────
       !cloudLoading && !cloudError && filteredContacts.length > 0 &&
         React.createElement("div", {
@@ -1012,34 +1471,98 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
                     background: "rgba(255,255,255,0.07)", color: "#94a3b8",
                     cursor: "pointer", outline: "none",
                   };
+                  var allFilteredIds = filteredContacts.map(function(c) { return c.id; });
+                  var allSelected = allFilteredIds.length > 0 && allFilteredIds.every(function(id) { return selectedCIds.includes(id); });
                   return [
-                    // Category — sortable
-                    React.createElement("th", { key: "cat", style: Object.assign({}, clkTh, { width: "150px" }),
-                      onClick: function() { handleSort("category"); } },
-                      React.createElement("span", null, "Category"), arrow("category")
+                    // Checkbox column
+                    (isInternal || isPartner) && React.createElement("th", {
+                      key: "chk", style: Object.assign({}, thStyle, { width: "36px", textAlign: "center", padding: "8px 6px" }),
+                      onClick: function(e) { e.stopPropagation(); },
+                    },
+                      React.createElement("input", {
+                        type: "checkbox",
+                        title: allSelected ? "Deselect all" : "Select all visible",
+                        checked: allSelected,
+                        onChange: function(e) {
+                          if (e.target.checked) {
+                            setSelectedCIds(function(prev) {
+                              var next = prev.slice();
+                              allFilteredIds.forEach(function(id) { if (!next.includes(id)) next.push(id); });
+                              return next;
+                            });
+                          } else {
+                            setSelectedCIds(function(prev) { return prev.filter(function(id) { return !allFilteredIds.includes(id); }); });
+                          }
+                        },
+                      })
+                    ),
+                    // Category — sortable + filterable
+                    React.createElement("th", { key: "cat", style: Object.assign({}, clkTh, { width: "160px" }) },
+                      React.createElement("div", { onClick: function() { handleSort("category"); }, style: { display: "inline-block" } },
+                        React.createElement("span", null, "Category"), arrow("category")
+                      ),
+                      React.createElement("select", {
+                        value: categoryFilter || "",
+                        onChange: function(e) { e.stopPropagation(); setCategoryFilter(e.target.value || null); setTypeFilter("all"); },
+                        onClick: function(e) { e.stopPropagation(); },
+                        style: fltSel,
+                      },
+                        React.createElement("option", { value: "" }, "All"),
+                        React.createElement("optgroup", { label: "── Business ──" },
+                          BUSINESS_CATEGORIES_CT.map(function(c) { return React.createElement("option", { key: c, value: c }, c); })
+                        ),
+                        React.createElement("optgroup", { label: "── Client ──" },
+                          CLIENT_CATEGORIES_CT.map(function(c) { return React.createElement("option", { key: c, value: c }, c); })
+                        )
+                      )
                     ),
                     // Contact — sortable by name
                     React.createElement("th", { key: "name", style: clkTh,
                       onClick: function() { handleSort("name"); } },
                       React.createElement("span", null, "Contact"), arrow("name")
                     ),
-                    // Phone — sortable
-                    React.createElement("th", { key: "phone", style: Object.assign({}, clkTh, { width: "130px" }),
-                      onClick: function() { handleSort("phone"); } },
-                      React.createElement("span", null, "Phone"), arrow("phone")
-                    ),
-                    // Email — sortable
-                    React.createElement("th", { key: "email", style: clkTh,
-                      onClick: function() { handleSort("email"); } },
-                      React.createElement("span", null, "Email"), arrow("email")
-                    ),
-                    // Contact 2 — not sortable
+                    // Contact 2 — always visible
                     React.createElement("th", { key: "contact2", style: thStyle }, "Contact 2"),
-                    // FU columns (task view only)
-                    isTaskView && React.createElement("th", { key: "fu_date",     style: Object.assign({}, thStyle, { width: "80px"   }) }, "FU Next"),
-                    isTaskView && React.createElement("th", { key: "fu_who",      style: Object.assign({}, thStyle, { width: "100px"  }) }, "FU Who"),
-                    isTaskView && React.createElement("th", { key: "fu_priority", style: Object.assign({}, thStyle, { width: "90px"   }) }, "FU Priority"),
-                    isTaskView && React.createElement("th", { key: "note_quick",  style: Object.assign({}, thStyle, { minWidth: "140px" }) }, "Quick Notes"),
+                    // FU Next — sortable
+                    React.createElement("th", { key: "fu_date", style: Object.assign({}, clkTh, { width: "80px" }),
+                      onClick: function() { handleSort("fu_date"); } },
+                      React.createElement("span", null, "FU Next"), arrow("fu_date")
+                    ),
+                    // FU Who — sortable + filterable
+                    React.createElement("th", { key: "fu_who", style: Object.assign({}, clkTh, { width: "110px" }) },
+                      React.createElement("div", { onClick: function() { handleSort("fu_who"); }, style: { display: "inline-block" } },
+                        React.createElement("span", null, "FU Who"), arrow("fu_who")
+                      ),
+                      React.createElement("select", {
+                        value: fuWhoFilter,
+                        onChange: function(e) { e.stopPropagation(); setFuWhoFilter(e.target.value); },
+                        onClick: function(e) { e.stopPropagation(); },
+                        style: fltSel,
+                      },
+                        React.createElement("option", { value: "" }, "All"),
+                        React.createElement("option", { value: "_none" }, "— None —"),
+                        fuWhoOptions.map(function(w) { return React.createElement("option", { key: w, value: w }, w); })
+                      )
+                    ),
+                    // FU Priority — sortable + filterable
+                    React.createElement("th", { key: "fu_priority", style: Object.assign({}, clkTh, { width: "100px" }) },
+                      React.createElement("div", { onClick: function() { handleSort("fu_priority"); }, style: { display: "inline-block" } },
+                        React.createElement("span", null, "FU Priority"), arrow("fu_priority")
+                      ),
+                      React.createElement("select", {
+                        value: fuPriorityFilter,
+                        onChange: function(e) { e.stopPropagation(); setFuPriorityFilter(e.target.value); },
+                        onClick: function(e) { e.stopPropagation(); },
+                        style: fltSel,
+                      },
+                        React.createElement("option", { value: "" }, "All"),
+                        React.createElement("option", { value: "_none" }, "— None —"),
+                        React.createElement("option", { value: "High" }, "High"),
+                        React.createElement("option", { value: "Medium" }, "Medium"),
+                        React.createElement("option", { value: "Low" }, "Low")
+                      )
+                    ),
+                    React.createElement("th", { key: "note_quick",  style: Object.assign({}, thStyle, { minWidth: "140px" }) }, "Quick Notes"),
                     // Created (hidden in task view)
                     !isTaskView && React.createElement("th", { key: "created", style: Object.assign({}, clkTh, { width: "95px" }),
                       onClick: function() { handleSort("created_at"); } },
@@ -1070,13 +1593,35 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
                 var phone2  = ctFormatPhone(contact.phone2 || contact.phone2_cell || contact.phone2_work || "");
                 var email2  = contact.email2 || contact.email2_personal || contact.email2_work || null;
 
+                var isChecked = selectedCIds.includes(contact.id);
                 return React.createElement("tr", {
                   key: contact.id,
                   onClick: function() { setSelectedContact(contact); },
-                  style: { borderBottom: "1px solid rgba(255,255,255,0.07)", cursor: "pointer" },
-                  onMouseEnter: function(e) { e.currentTarget.style.background = "rgba(255,255,255,0.06)"; },
-                  onMouseLeave: function(e) { e.currentTarget.style.background = ""; },
+                  style: {
+                    borderBottom: "1px solid rgba(255,255,255,0.07)", cursor: "pointer",
+                    background: isChecked ? "rgba(37,99,235,0.07)" : "",
+                  },
+                  onMouseEnter: function(e) { if (!isChecked) e.currentTarget.style.background = "rgba(255,255,255,0.06)"; },
+                  onMouseLeave: function(e) { e.currentTarget.style.background = isChecked ? "rgba(37,99,235,0.07)" : ""; },
                 },
+
+                  // Checkbox cell
+                  (isInternal || isPartner) && React.createElement("td", {
+                    style: Object.assign({}, tdStyle, { textAlign: "center", padding: "10px 6px" }),
+                    onClick: function(e) { e.stopPropagation(); },
+                  },
+                    React.createElement("input", {
+                      type: "checkbox",
+                      checked: isChecked,
+                      onChange: function(e) {
+                        var id = contact.id;
+                        setSelectedCIds(function(prev) {
+                          return e.target.checked ? [...prev, id] : prev.filter(function(x) { return x !== id; });
+                        });
+                        setBulkResult(null);
+                      },
+                    })
+                  ),
 
                   // Category badge
                   React.createElement("td", { style: tdStyle },
@@ -1103,25 +1648,6 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
                     }, scCount + (scCount === 1 ? " scenario" : " scenarios"))
                   ),
 
-                  // Phone
-                  React.createElement("td", {
-                    style: Object.assign({}, tdStyle, { color: "#94a3b8", whiteSpace: "nowrap" }),
-                  },
-                    phone || React.createElement("span", { style: { color: "#334155" } }, "—")
-                  ),
-
-                  // Email
-                  React.createElement("td", {
-                    style: Object.assign({}, tdStyle, { color: "#94a3b8", overflow: "hidden" }),
-                  },
-                    email
-                      ? React.createElement("span", {
-                          title: email,
-                          style: { display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-                        }, email)
-                      : React.createElement("span", { style: { color: "#334155" } }, "—")
-                  ),
-
                   // Contact 2
                   React.createElement("td", { style: Object.assign({}, tdStyle, { color: "#94a3b8" }) },
                     (name2 || phone2 || email2)
@@ -1136,25 +1662,25 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
                       : React.createElement("span", { style: { color: "#334155" } }, "—")
                   ),
 
-                  // FU Next (task view only)
-                  isTaskView && React.createElement("td", { style: Object.assign({}, tdStyle, { whiteSpace: "nowrap", fontSize: "12px" }) },
+                  // FU Next
+                  React.createElement("td", { style: Object.assign({}, tdStyle, { whiteSpace: "nowrap", fontSize: "12px" }) },
                     contact.fu_date
                       ? new Date(contact.fu_date + "T00:00:00").toLocaleDateString("en-US", { month: "2-digit", day: "2-digit" })
                       : React.createElement("span", { style: { color: "#334155" } }, "—")
                   ),
 
-                  // FU Who (task view only)
-                  isTaskView && React.createElement("td", { style: Object.assign({}, tdStyle, { whiteSpace: "nowrap", fontSize: "12px" }) },
+                  // FU Who
+                  React.createElement("td", { style: Object.assign({}, tdStyle, { whiteSpace: "nowrap", fontSize: "12px" }) },
                     contact.fu_who || React.createElement("span", { style: { color: "#334155" } }, "—")
                   ),
 
-                  // FU Priority (task view only)
-                  isTaskView && React.createElement("td", { style: Object.assign({}, tdStyle, { whiteSpace: "nowrap", fontSize: "12px" }) },
+                  // FU Priority
+                  React.createElement("td", { style: Object.assign({}, tdStyle, { whiteSpace: "nowrap", fontSize: "12px" }) },
                     contact.fu_priority || React.createElement("span", { style: { color: "#334155" } }, "—")
                   ),
 
-                  // Quick Notes (task view only)
-                  isTaskView && React.createElement("td", { style: Object.assign({}, tdStyle, { fontSize: "12px" }) },
+                  // Quick Notes
+                  React.createElement("td", { style: Object.assign({}, tdStyle, { fontSize: "12px" }) },
                     contact.note_quick
                       ? React.createElement("span", { style: { display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, contact.note_quick)
                       : React.createElement("span", { style: { color: "#334155" } }, "—")

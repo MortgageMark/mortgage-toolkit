@@ -13,6 +13,8 @@ function AppHeader({
   onContacts,
   onScenarios,
   onMyProfile,
+  onContactInfo,
+  onLoginSettings,
   onTeam,
   onTemplates,
   onWarnings,
@@ -98,18 +100,39 @@ function AppHeader({
   const divider = { margin: "4px 0", borderTop: "1px solid #E5EAF0", borderBottom: "none" };
 
   const roleLabels = {
-    admin: "Admin View",
-    lo: "Loan Officer",
-    realtor: "Realtor Partner",
+    admin:   "Admin View",
+    lo:      "LO View",
+    realtor: "Realtor View",
     builder: "Builder View",
-    client: "Client View",
+    client:  "Client View",
   };
 
   const initials = getInitials(user);
 
   return (
-    <div ref={rootRef} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+    <div ref={rootRef} style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
 
+      {/* ── View label ── */}
+      {userRole && (
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)",
+            textTransform: "uppercase", letterSpacing: "0.07em",
+            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          }}>
+            {roleLabels[userRole] || userRole}
+          </div>
+          {(user?.name || user?.email) && (
+            <div style={{
+              fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.7)",
+              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+              marginTop: 1,
+            }}>
+              {user.name || user.email}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Profile circle dropdown (includes all settings) ── */}
       <div style={{ position: "relative" }}>
@@ -139,7 +162,25 @@ function AppHeader({
               </>
             )}
 
-            {onMyProfile && (
+            {onContactInfo && (
+              <button
+                style={dropItem}
+                onClick={() => { onContactInfo(); setShowProfile(false); }}
+              >
+                📋 Update Contact Info
+              </button>
+            )}
+
+            {onLoginSettings && (
+              <button
+                style={dropItem}
+                onClick={() => { onLoginSettings(); setShowProfile(false); }}
+              >
+                🔑 Login & Password
+              </button>
+            )}
+
+            {onMyProfile && !onContactInfo && (
               <button
                 style={dropItem}
                 onClick={() => { onMyProfile(); setShowProfile(false); }}

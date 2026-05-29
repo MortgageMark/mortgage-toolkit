@@ -35,9 +35,9 @@ const PriceVsIncentiveTab = window.PriceVsIncentiveTab;
 const BuyerQualifierTab  = window.BuyerQualifierTab;
 const BuildersBuyerTab  = window.BuildersBuyerTab;
 const LLPATab = window.LLPATab;
+const ContactLenderTab = window.ContactLenderTab;
 const SettingsPanel = window.SettingsPanel;
 const LOSelector = window.LOSelector;
-const AdminPanel = window.AdminPanel;
 const snapshotCalculatorData = window.snapshotCalculatorData;
 const fetchContactNotesFromSupabase = window.fetchContactNotesFromSupabase;
 const addContactNoteToSupabase = window.addContactNoteToSupabase;
@@ -58,6 +58,7 @@ const ThemeContext = window.ThemeContext;
 // MODULES array with component refs — built here since all components are loaded
 const MODULES = [
   // ── Primary tabs (visible to all roles in order) ──
+  { id: "contactlender",   label: "Contact Lender",      icon: "\uD83D\uDCEC", component: ContactLenderTab },
   { id: "refi",         label: "Refi: Existing Loan",    icon: "\uD83D\uDD04", component: RefinanceAnalyzer },
   { id: "payment",      label: "Payment Calculator",     icon: "\uD83D\uDD22", component: PaymentCalculator },
   { id: "refi-analysis",label: "Refi: Analysis",         icon: "\uD83D\uDCCA", component: RefinanceAnalysis },
@@ -102,7 +103,7 @@ const INTERNAL_MODULE_IDS = ["builder", "buydowns", "permbuyd", "targetpmt", "bb
 
 // All tabs that a borrower could potentially see (base set + grantable extras).
 // Used by the "Client sees" strip so the LO can tell at a glance what's shared.
-const CLIENT_TAB_IDS = ["payment", "fees", "breakeven", "amort", "recast", "dti", "prequal", "sellernet", "rentvsbuy", "refi", "refi-analysis", "compare"];
+const CLIENT_TAB_IDS = ["payment", "fees", "breakeven", "amort", "recast", "dti", "prequal", "sellernet", "rentvsbuy", "refi", "refi-analysis", "compare", "contactlender"];
 
 // These tabs are grouped under the "Internal" section header in the left sidebar.
 const INTERNAL_SIDEBAR_IDS = ["interestrates", "titleendorsements"];
@@ -223,7 +224,7 @@ function ScenarioContactPanel({ contactId, scenarioId, scenario, darkMode, color
     fontSize: 13, fontFamily: font, boxSizing: "border-box",
   };
   const labelStyle = {
-    fontSize: 11, fontWeight: 700,
+    fontSize: 12, fontWeight: 700,
     color: darkMode ? "#7ba9cc" : "#4a6a85",
     textTransform: "uppercase", letterSpacing: "0.05em",
     marginBottom: 4, display: "block",
@@ -304,7 +305,7 @@ function ScenarioContactPanel({ contactId, scenarioId, scenario, darkMode, color
             </div>
           </div>
         </div>
-        <div style={{ fontSize: 11, color: c.textSecondary || "#64748b", textAlign: "right" }}>
+        <div style={{ fontSize: 12, color: c.textSecondary || "#64748b", textAlign: "right" }}>
           {contact.contact_type}{contact.contact_category ? " · " + contact.contact_category : ""}
         </div>
       </div>
@@ -363,7 +364,7 @@ function ScenarioContactPanel({ contactId, scenarioId, scenario, darkMode, color
               placeholder="Brief call reminder…"
               style={inputStyle}
             />
-            <div style={{ fontSize: 10, color: c.textSecondary || "#64748b", marginTop: 4, textAlign: "right" }}>
+            <div style={{ fontSize: 12, color: c.textSecondary || "#64748b", marginTop: 4, textAlign: "right" }}>
               {editForm.note_quick.length}/120
             </div>
           </div>
@@ -393,7 +394,7 @@ function ScenarioContactPanel({ contactId, scenarioId, scenario, darkMode, color
               })}
             </select>
             {savingStatus && (
-              <span style={{ fontSize: 11, color: c.textSecondary || "#64748b", marginTop: 3, display: "block" }}>Saving…</span>
+              <span style={{ fontSize: 12, color: c.textSecondary || "#64748b", marginTop: 3, display: "block" }}>Saving…</span>
             )}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -455,7 +456,7 @@ function ScenarioContactPanel({ contactId, scenarioId, scenario, darkMode, color
                 border: "1px solid " + (c.border || "#E2EAF0"),
                 borderRadius: 7, padding: "10px 14px",
               }}>
-                <div style={{ fontSize: 11, color: c.textSecondary || "#64748b", marginBottom: 4 }}>
+                <div style={{ fontSize: 12, color: c.textSecondary || "#64748b", marginBottom: 4 }}>
                   {new Date(n.created_at).toLocaleString("en-US", { month: "2-digit", day: "2-digit", hour: "numeric", minute: "2-digit" })}
                 </div>
                 <div style={{ fontSize: 13, color: c.text || (darkMode ? "#E0EAF0" : "#1B2A3B"), lineHeight: 1.5 }}>
@@ -480,7 +481,7 @@ function ScenarioContactPanel({ contactId, scenarioId, scenario, darkMode, color
                 padding: "8px 0",
                 borderBottom: i < auditLog.length - 1 ? "1px solid " + (c.border || "#E2EAF0") : "none",
               }}>
-                <div style={{ fontSize: 11, color: c.textSecondary || "#64748b", whiteSpace: "nowrap", minWidth: 140 }}>
+                <div style={{ fontSize: 12, color: c.textSecondary || "#64748b", whiteSpace: "nowrap", minWidth: 140 }}>
                   {new Date(entry.created_at).toLocaleString("en-US", { month: "2-digit", day: "2-digit", hour: "numeric", minute: "2-digit" })}
                 </div>
                 <div style={{ flex: 1 }}>
@@ -503,7 +504,7 @@ function ScenarioContactPanel({ contactId, scenarioId, scenario, darkMode, color
   );
 }
 
-function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, onOpenContact, onOpenProfile }) {
+function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, onOpenContact, onOpenProfile, onContactInfo, onLoginSettings, onTeam }) {
   const [activeModule, setActiveModule] = useLocalStorage("app_mod", "payment");
   const [userRole, setUserRole] = useLocalStorage("app_role", "admin");
   const [darkMode, setDarkMode] = useLocalStorage("app_dark", false);
@@ -520,7 +521,6 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
   const [enabledModules, setEnabledModules] = useLocalStorage("app_enabled_mods", allModuleIds);
   const [pcProgram] = useLocalStorage("pc_prog", "conventional");
   const [pcPurpose] = useLocalStorage("pc_purpose", "purchase");
-  const [showAdmin, setShowAdmin] = useState(false);
   const [headerContact, setHeaderContact] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [navCollapsed, setNavCollapsed] = useLocalStorage("app_nav_collapsed", false);
@@ -529,6 +529,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
   const [livePanelPos,    setLivePanelPos]    = useState(null);
   const liveBtnRef   = useRef(null);
   const livePanelRef = useRef(null);
+  const contentRef   = useRef(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 768);
@@ -762,20 +763,20 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
     if (!showAdminTabs && ["fha", "va", "usda"].includes(pcProgram)) {
       mods = mods.filter(m => m.id !== "recast");
     }
-    const CLIENT_TABS = ["payment", "amort", "dti", "fees", "compare", "prequal", "sellernet", "rentvsbuy", "refi", "refi-analysis"];
-    const BUILDER_TABS = [...CLIENT_TABS.filter(id => id !== "refi" && id !== "refi-analysis"), "builder", "buydowns", "permbuyd", "targetpmt", "bbbuyer"];
+    const CLIENT_TABS = ["payment", "amort", "dti", "fees", "compare", "prequal", "sellernet", "rentvsbuy", "refi", "refi-analysis", "contactlender"];
+    const BUILDER_TABS = [...CLIENT_TABS.filter(id => id !== "refi" && id !== "refi-analysis" && id !== "dti"), "builder", "buydowns", "permbuyd", "targetpmt", "bbbuyer"];
     return mods.filter(m => {
       if (user && user.role === "borrower") {
         const isPurchase = !activeScenario || !activeScenario.loan_purpose || (activeScenario.loan_purpose || "").startsWith("purchase") || activeScenario.loan_purpose === "purchase";
         const base = isPurchase
-          ? ["payment", "fees", "breakeven", "amort", "recast", "dti", "prequal", "sellernet"]
-          : ["payment", "fees", "breakeven", "amort"];
+          ? ["payment", "fees", "breakeven", "amort", "recast", "prequal", "sellernet", "contactlender"]
+          : ["payment", "fees", "breakeven", "amort", "contactlender"];
         const extra = Array.isArray(user.borrowerPermissions) ? user.borrowerPermissions : [];
         return base.concat(extra).includes(m.id);
       }
       if (user && user.role === "realtor") {
         const isOwnScenario = activeScenario && user.supabaseUser && activeScenario.createdBy === user.supabaseUser.id;
-        const realtorTabs = isOwnScenario ? CLIENT_TABS : CLIENT_TABS.filter(id => id !== "dti");
+        const realtorTabs = CLIENT_TABS.filter(id => id !== "dti");
         return realtorTabs.includes(m.id);
       }
       if (user && user.role === "builder") return BUILDER_TABS.includes(m.id);
@@ -956,7 +957,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
         {brandLogo && <img src={brandLogo} alt="Logo" style={{ maxHeight: 40 }} />}
         <div>
           <div style={{ fontSize: 18, fontWeight: 800, color: brandColor }}>{brandName}</div>
-          <div style={{ fontSize: 10, color: "#666" }}>{brandSub}</div>
+          <div style={{ fontSize: 12, color: "#666" }}>{brandSub}</div>
         </div>
       </div>
 
@@ -986,13 +987,13 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                 </div>
                 {/* Scenario name — small line below contact name */}
                 {activeScenario && activeScenario.clientName && (
-                  <div style={{ fontSize: 11, opacity: 0.72, fontStyle: "italic", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: 1, fontFamily: font }}>
+                  <div style={{ fontSize: 12, opacity: 0.72, fontStyle: "italic", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: 1, fontFamily: font }}>
                     {activeScenario.clientName}
                   </div>
                 )}
                 {/* Lead Status */}
                 {activeScenario && activeScenario.lead_status && activeScenario.lead_status !== "?" && (
-                  <div style={{ display: "flex", gap: 10, marginTop: 2, fontSize: 10, opacity: 0.6, alignItems: "center" }}>
+                  <div style={{ display: "flex", gap: 10, marginTop: 2, fontSize: 12, opacity: 0.6, alignItems: "center" }}>
                     <span style={{ fontFamily: font }}>{activeScenario.lead_status}</span>
                   </div>
                 )}
@@ -1025,7 +1026,9 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                   onContacts={onOpenContact ? function() { onOpenContact(null); } : null}
                   onScenarios={onBackToScenarios || null}
                   onMyProfile={onOpenProfile || null}
-                  onTeam={isAdmin ? function() { setShowAdmin(true); } : null}
+                  onContactInfo={onContactInfo || null}
+                  onLoginSettings={onLoginSettings || null}
+                  onTeam={isAdmin && onTeam ? onTeam : null}
                   onTemplates={function() { setSettingsInitialTab(null); setSettingsOpen(true); }}
                   onWarnings={isInternal ? function() { setSettingsInitialTab("warnings"); setSettingsOpen(true); } : null}
                   onModules={isInternal ? function() { setActiveModule("__modules__"); } : null}
@@ -1081,7 +1084,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
             {filteredModules.filter(m => ADMIN_ONLY_MODULE_IDS.includes(m.id)).map((m) => (
               <button key={m.id} onClick={() => setActiveModule(m.id)} style={{
                 padding: "7px 13px", borderRadius: 6, border: "none", cursor: "pointer",
-                fontSize: 11, fontWeight: 600, fontFamily: font, whiteSpace: "nowrap", flexShrink: 0,
+                fontSize: 12, fontWeight: 600, fontFamily: font, whiteSpace: "nowrap", flexShrink: 0,
                 background: activeModule === m.id ? "rgba(255,255,255,0.18)" : "transparent",
                 color: activeModule === m.id ? "#fff" : "rgba(255,255,255,0.45)",
                 transition: "all 0.2s",
@@ -1106,7 +1109,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
             onClick={() => setSidebarOpen(true)}
             title="Open menu"
             style={{
-              position: "fixed", top: 12, left: 12, zIndex: 200,
+              position: "fixed", top: "calc(env(safe-area-inset-top, 0px) + 12px)", left: "calc(env(safe-area-inset-left, 0px) + 12px)", zIndex: 200,
               background: headerBg, border: "none", borderRadius: 8,
               padding: "8px 10px", cursor: "pointer", color: "#fff",
               display: "flex", alignItems: "center", justifyContent: "center",
@@ -1234,7 +1237,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
             <div style={{ flex: 1, overflowY: "auto", paddingBottom: 8 }}>
             {(() => {
               const sidebarMods  = filteredModules.filter(m => !ADMIN_ONLY_MODULE_IDS.includes(m.id));
-              const regularMods  = sidebarMods.filter(m => !INTERNAL_SIDEBAR_IDS.includes(m.id) && !BUILDER_SIDEBAR_IDS.includes(m.id));
+              const regularMods  = sidebarMods.filter(m => !INTERNAL_SIDEBAR_IDS.includes(m.id) && !BUILDER_SIDEBAR_IDS.includes(m.id) && m.id !== "contactlender");
               const builderMods  = sidebarMods.filter(m => BUILDER_SIDEBAR_IDS.includes(m.id));
               const internalMods = sidebarMods.filter(m => INTERNAL_SIDEBAR_IDS.includes(m.id));
               const navBtn = (isActive, onClick, icon, label, isClientVisible) => (
@@ -1263,10 +1266,8 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                 <React.Fragment>
                   {!navCollapsed && <div style={{ height: 6 }} />}
                   {/* ── Contacts + Scenarios shortcuts ── */}
-                  {!effectiveIsInternal
-                    ? navBtn(false, () => { setShowLenderPanel(true); setSidebarOpen(false); }, "📞", "Contact Lender")
-                    : (onOpenContact && navBtn(false, () => { onOpenContact(null); setSidebarOpen(false); }, <span style={{filter:"grayscale(1) invert(1) opacity(0.7)"}}>👥</span>, "Contacts"))
-                  }
+                  {effectiveIsInternal && onOpenContact && navBtn(false, () => { onOpenContact(null); setSidebarOpen(false); }, <span style={{filter:"grayscale(1) invert(1) opacity(0.7)"}}>👥</span>, "Contacts")}
+                  {!effectiveIsInternal && navBtn(activeModule === "contactlender", () => { setActiveModule("contactlender"); setSidebarOpen(false); }, "📬", "Contact Lender")}
                   {onBackToScenarios && navBtn(false, () => { onBackToScenarios(); setSidebarOpen(false); }, "🗂️", "Scenarios")}
                   {(!isInternal || onOpenContact || onBackToScenarios) && !navCollapsed && (
                     <div style={{ margin: "6px 15px 2px", borderBottom: "1px solid rgba(255,255,255,0.12)" }} />
@@ -1361,7 +1362,9 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                   onContacts={onOpenContact ? function() { onOpenContact(null); } : null}
                   onScenarios={onBackToScenarios || null}
                   onMyProfile={onOpenProfile || null}
-                  onTeam={isAdmin ? function() { setShowAdmin(true); } : null}
+                  onContactInfo={onContactInfo || null}
+                  onLoginSettings={onLoginSettings || null}
+                  onTeam={isAdmin && onTeam ? onTeam : null}
                   onTemplates={function() { setSettingsInitialTab(null); setSettingsOpen(true); }}
                   onWarnings={isInternal ? function() { setSettingsInitialTab("warnings"); setSettingsOpen(true); } : null}
                   onModules={isInternal ? function() { setActiveModule("__modules__"); } : null}
@@ -1380,7 +1383,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
         )}
 
         {/* ── Content ── */}
-        <div style={{ flex: 1, minWidth: 0, padding: isMobile ? "12px 12px 40px" : 20, overflowY: "auto", overflowX: "hidden" }}>
+        <div ref={contentRef} style={{ flex: 1, minWidth: 0, padding: isMobile ? "12px 12px 40px" : 20, overflowY: "auto", overflowX: "hidden" }}>
         {isSharedView && (
           <div style={{ padding: "8px 14px", background: darkMode ? "#1A3040" : "#E8F4FD", borderRadius: 8, marginBottom: 16, fontSize: 12, color: COLORS.blue, fontWeight: 600, fontFamily: font, border: `1px solid ${COLORS.blue}33` }}>
             {"\uD83D\uDCCE"} Shared View — Showing {filteredModules.length} selected tool{filteredModules.length !== 1 ? "s" : ""}. <a href={window.location.href.split("?")[0]} style={{ color: COLORS.blue, textDecoration: "underline" }}>{"View full toolkit \u2192"}</a>
@@ -1396,7 +1399,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                   : "Your Mortgage Scenario"}
               </span>
               <span style={{ fontSize: 12, opacity: 0.65, marginLeft: 8, color: darkMode ? "#A8D4F0" : COLORS.navy }}>
-                {"\u2014"} Review your loan details below. Reach out to your loan officer with any questions.
+                {"\u2014"} Review your loan details below. Reach out to your Loan Officer with any questions.
               </span>
             </div>
           </div>
@@ -1488,7 +1491,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
               );
             })()}
 
-            <div style={{ marginTop: 8, fontSize: 11, color: colors.gray, fontFamily: font }}>
+            <div style={{ marginTop: 8, fontSize: 12, color: colors.gray, fontFamily: font }}>
               👤 Logged in as: <strong>{user?.name}</strong> ({user?.email}) — Internal Team Member
             </div>
           </div>
@@ -1498,6 +1501,33 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
               <ActiveComponent isInternal={effectiveIsInternal} user={user} scenario={activeScenario} contact={headerContact} />
             </div>
         }
+
+        {/* ── Back to Top ── */}
+        <div style={{ textAlign: "center", padding: "24px 0 8px" }}>
+          <button
+            onClick={() => contentRef.current && contentRef.current.scrollTo({ top: 0, behavior: "smooth" })}
+            style={{
+              background: "none",
+              border: `1px solid ${colors.border}`,
+              borderRadius: 20,
+              padding: "7px 20px",
+              fontSize: 13,
+              fontWeight: 600,
+              color: colors.gray,
+              fontFamily: font,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              transition: "all 0.15s",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = colors.navy; e.currentTarget.style.borderColor = colors.navy; }}
+            onMouseLeave={e => { e.currentTarget.style.color = colors.gray; e.currentTarget.style.borderColor = colors.border; }}
+          >
+            ↑ Back to Top
+          </button>
+        </div>
+
       </div>
 
       </div>{/* end page-body flex */}
@@ -1553,10 +1583,6 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
     {/* ── Settings Panel ── */}
     <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} darkMode={darkMode} allModules={MODULES} openTab={settingsInitialTab} />
 
-    {showAdmin && user && user.role === "admin" && React.createElement(AdminPanel, {
-      currentUser: user,
-      onClose: function() { setShowAdmin(false); }
-    })}
 
     </ThemeContext.Provider>
   );

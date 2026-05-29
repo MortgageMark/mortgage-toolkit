@@ -16,6 +16,7 @@ const font = window.font;
 const STATE_LIST = window.STATE_LIST;
 const STATE_APPR_RATES = window.STATE_APPR_RATES;
 const exportToPDF = window.exportToPDF;
+const InfoTip = window.InfoTip;
 
 // ── Inline SVG equity timeline chart ──────────────────────────────────────
 function WbEquityChart({ timeline, c }) {
@@ -232,7 +233,7 @@ function WealthBuilder() {
         {/* LEFT — Loan Inputs */}
         <SectionCard title="LOAN INPUTS" accent={navy}>
           <div style={{ fontSize: 10, color: gray, fontFamily: font, marginBottom: 6, fontStyle: "italic" }}>Synced from Payment Calculator</div>
-          <LabeledInput label="Purchase Price" prefix="$" value={purchasePrice} onChange={setPurchasePrice} useCommas />
+          <LabeledInput label="Purchase Price" prefix="$" value={purchasePrice} onChange={setPurchasePrice} useCommas infoTip="The price you paid (or plan to pay) for the home. This is the starting point for all equity and wealth projections. Your equity is the home's value minus what you owe." />
           <LabeledInput label="Loan Amount" prefix="$" value={loanAmount} onChange={setLoanAmount} useCommas />
           <LabeledInput label="Interest Rate" value={wbRate} onChange={setWbRate} suffix="%" />
           <LabeledInput label="Loan Term" value={wbTerm} onChange={setWbTerm} suffix="years" />
@@ -247,8 +248,8 @@ function WealthBuilder() {
               * {wbState} FHFA avg ≈ {STATE_APPR_RATES[wbState]}%
             </div>
           )}
-          <LabeledInput label="Appreciation Rate" value={wbAppr} onChange={setWbAppr} suffix="%" />
-          <LabeledInput label="Market Return (renter invests DP)" value={wbMarket} onChange={setWbMarket} suffix="%" hint="Default 7% (historical S&P avg)" />
+          <LabeledInput label="Appreciation Rate" value={wbAppr} onChange={setWbAppr} suffix="%" infoTip="The estimated annual growth rate of the home's value. At 3% annually, a $400,000 home becomes $537,000 in 10 years — this appreciation is a major driver of homeownership wealth. Historical U.S. average is 3-4% per year." />
+          <LabeledInput label="Market Return (renter invests DP)" value={wbMarket} onChange={setWbMarket} suffix="%" hint="Default 7% (historical S&P avg)" infoTip="The expected return if you had invested your down payment in the stock market instead. This creates a fair comparison between building wealth through homeownership vs. investing. The S&amp;P 500 has averaged roughly 7-10% annually over the long term." />
           <LabeledInput label="Property Tax Rate" value={wbPropTax} onChange={setWbPropTax} suffix="% of value" />
           <Select label="Federal Tax Bracket" value={wbBracket} onChange={setWbBracket} options={[
             { value: "12", label: "12%" }, { value: "22", label: "22%" },

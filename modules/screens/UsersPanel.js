@@ -66,6 +66,7 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }
     company_nmls:  profile.company_nmls  || "",
     phone:         profile.phone         || "",
     cell_phone:    profile.cell_phone    || "",
+    brokerage:     profile.brokerage     || "",
     website:       profile.website       || "",
     address:       profile.address       || "",
     city:          profile.city          || "",
@@ -95,6 +96,7 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }
       company_nmls:  form.company_nmls  || null,
       phone:         form.phone         || null,
       cell_phone:    form.cell_phone    || null,
+      brokerage:     form.brokerage     || null,
       website:       form.website       || null,
       address:       form.address       || null,
       city:          form.city          || null,
@@ -119,22 +121,30 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }
     }
   }
 
+  const isPartnerRole = profile.role === "realtor" || profile.role === "builder";
+  const isLORole      = !isPartnerRole && profile.role !== "borrower";
+
   const FIELDS = [
     { key: "display_name",  label: "Display Name",         placeholder: "Full name",      span: 2 },
     { key: "email_display", label: "Email — PQ Letter",    placeholder: "name@email.com", span: 2 },
     { key: "title",         label: "Title",                placeholder: "Loan Officer"          },
     { key: "company",       label: "Company",              placeholder: "CMG Home Loans"        },
-    { key: "nmls",          label: "NMLS #",               placeholder: ""                      },
-    { key: "branch_nmls",   label: "Branch NMLS #",        placeholder: ""                      },
-    { key: "company_nmls",  label: "Company NMLS #",       placeholder: ""                      },
+    { key: "nmls",          label: "NMLS #",               placeholder: "",               loOnly: true },
+    { key: "branch_nmls",   label: "Branch NMLS #",        placeholder: "",               loOnly: true },
+    { key: "company_nmls",  label: "Company NMLS #",       placeholder: "",               loOnly: true },
     { key: "phone",         label: "Phone (Office)",       placeholder: "(555) 555-5555"        },
     { key: "cell_phone",    label: "Cell Phone",           placeholder: "(555) 555-5555"        },
+    { key: "brokerage",     label: "Brokerage",            placeholder: "Keller Williams, RE/MAX, etc.", partnerOnly: true },
     { key: "website",       label: "Website",              placeholder: "https://...",    span: 2 },
     { key: "address",       label: "Address",              placeholder: "Street address", span: 2 },
     { key: "city",          label: "City",                 placeholder: ""                      },
     { key: "state",         label: "State",                placeholder: "TX"                    },
     { key: "zip",           label: "Zip",                  placeholder: ""                      },
-  ];
+  ].filter(function(f) {
+    if (f.loOnly      && !isLORole)      return false;
+    if (f.partnerOnly && !isPartnerRole) return false;
+    return true;
+  });
 
   // Potential team leads = non-borrower profiles excluding self
   const potentialLeads = (teamProfiles || []).filter(function(p) { return p.id !== profile.id; });
@@ -163,8 +173,8 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }
             </div>
           </div>
 
-          {/* Team Lead + Branch — two-column dropdowns */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 20px", marginBottom: 18 }}>
+          {/* Team Lead + Branch — LO roles only */}
+          {isLORole && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 20px", marginBottom: 18 }}>
             <div>
               <label style={LABEL_ST}>Team Lead</label>
               <select
@@ -195,7 +205,7 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }
                 })}
               </select>
             </div>
-          </div>
+          </div>}
 
           {/* Editable fields */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 20px", marginBottom: 20 }}>
@@ -249,19 +259,105 @@ function UsersPanel({ user, onBack, onLogout }) {
   const [roleSaved,  setRoleSaved]  = useState({});
   const [roleError,  setRoleError]  = useState({});
 
-  // ── Password reset ────
-  const [pwSending, setPwSending] = useState({});
-  const [pwResult,  setPwResult]  = useState({});  // id → "sent" | "error"
-
   // ── Team share toggle ────
   const [teamShareEdit,   setTeamShareEdit]   = useState({});  // leadId → bool
   const [teamShareSaving, setTeamShareSaving] = useState({});
   const [teamShareSaved,  setTeamShareSaved]  = useState({});
 
-  // ── Borrower permissions ────
-  const [permsEdit,   setPermsEdit]   = useState({});
-  const [permsSaving, setPermsSaving] = useState({});
-  const [permsSaved,  setPermsSaved]  = useState({});
+  // ── Team bulk selection ────
+  const [selectedTeamIds, setSelectedTeamIds] = useState([]);
+  const [bulkRole,        setBulkRole]        = useState("");
+  const [bulkRoleSaving,  setBulkRoleSaving]  = useState(false);
+  const [bulkDeleting,    setBulkDeleting]    = useState(false);
+  const [bulkResult,      setBulkResult]      = useState(null);  // "deleted" | "role_saved"
+  const [confirmBulkDel,  setConfirmBulkDel]  = useState(false);
+
+  // ── Directory bulk selection + three-dot menu ────
+  const [selectedDirIds,   setSelectedDirIds]   = useState([]);
+  const [dirBulkRole,      setDirBulkRole]      = useState("");
+  const [dirBulkSaving,    setDirBulkSaving]    = useState(false);
+  const [dirBulkDeleting,  setDirBulkDeleting]  = useState(false);
+  const [dirBulkResult,    setDirBulkResult]    = useState(null);
+  const [dirConfirmDel,    setDirConfirmDel]    = useState(false);
+  const [dirMenuOpenId,    setDirMenuOpenId]    = useState(null);
+  const [dirConfirmSingle, setDirConfirmSingle] = useState(null); // profile to delete
+
+  function toggleTeamSelect(id) {
+    setSelectedTeamIds(function(prev) {
+      return prev.includes(id) ? prev.filter(function(x) { return x !== id; }) : prev.concat([id]);
+    });
+  }
+  function clearTeamSelection() { setSelectedTeamIds([]); setBulkRole(""); setBulkResult(null); }
+
+  async function handleBulkDelete() {
+    if (!supabase || selectedTeamIds.length === 0) return;
+    setBulkDeleting(true);
+    const { error } = await supabase.from("profiles").delete().in("id", selectedTeamIds);
+    setBulkDeleting(false);
+    setConfirmBulkDel(false);
+    if (!error) {
+      setAllProfiles(function(prev) { return prev.filter(function(p) { return !selectedTeamIds.includes(p.id); }); });
+      setBulkResult("deleted");
+      setSelectedTeamIds([]);
+      setTimeout(function() { setBulkResult(null); }, 3000);
+    }
+  }
+
+  async function handleBulkRoleChange() {
+    if (!supabase || selectedTeamIds.length === 0 || !bulkRole) return;
+    setBulkRoleSaving(true);
+    const { error } = await supabase.from("profiles").update({ role: bulkRole }).in("id", selectedTeamIds);
+    setBulkRoleSaving(false);
+    if (!error) {
+      setAllProfiles(function(prev) {
+        return prev.map(function(p) { return selectedTeamIds.includes(p.id) ? Object.assign({}, p, { role: bulkRole }) : p; });
+      });
+      setEditRoles(function(prev) {
+        var next = Object.assign({}, prev);
+        selectedTeamIds.forEach(function(id) { next[id] = bulkRole; });
+        return next;
+      });
+      setBulkResult("role_saved");
+      setSelectedTeamIds([]);
+      setBulkRole("");
+      setTimeout(function() { setBulkResult(null); }, 3000);
+    }
+  }
+
+  // ── Directory bulk handlers ────
+  async function handleDirBulkDelete() {
+    if (!supabase || selectedDirIds.length === 0) return;
+    setDirBulkDeleting(true);
+    const { error } = await supabase.from("profiles").delete().in("id", selectedDirIds);
+    setDirBulkDeleting(false);
+    setDirConfirmDel(false);
+    if (!error) {
+      setAllProfiles(function(prev) { return prev.filter(function(p) { return !selectedDirIds.includes(p.id); }); });
+      setDirBulkResult("deleted");
+      setSelectedDirIds([]);
+      setTimeout(function() { setDirBulkResult(null); }, 3000);
+    }
+  }
+  async function handleDirBulkRole() {
+    if (!supabase || selectedDirIds.length === 0 || !dirBulkRole) return;
+    setDirBulkSaving(true);
+    const { error } = await supabase.from("profiles").update({ role: dirBulkRole }).in("id", selectedDirIds);
+    setDirBulkSaving(false);
+    if (!error) {
+      setAllProfiles(function(prev) { return prev.map(function(p) { return selectedDirIds.includes(p.id) ? Object.assign({}, p, { role: dirBulkRole }) : p; }); });
+      setDirBulkResult("role_saved");
+      setSelectedDirIds([]);
+      setDirBulkRole("");
+      setTimeout(function() { setDirBulkResult(null); }, 3000);
+    }
+  }
+  async function handleDirDeleteSingle(profileId) {
+    if (!supabase) return;
+    await supabase.from("profiles").delete().eq("id", profileId);
+    setAllProfiles(function(prev) { return prev.filter(function(p) { return p.id !== profileId; }); });
+    setDirConfirmSingle(null);
+    setDirMenuOpenId(null);
+  }
 
   // ── Edit profile screen ────
   const [editingProfile, setEditingProfile] = useState(null);
@@ -275,25 +371,21 @@ function UsersPanel({ user, onBack, onLogout }) {
   const [branchError,     setBranchError]     = useState("");
   const [confirmDelBranch, setConfirmDelBranch] = useState(null);
 
-  // ── Local roster ────
-  const [roster,          setRoster]          = useLocalStorage("roster", []);
-  const [showAddForm,     setShowAddForm]     = useState(false);
-
   // ── Activity tab ────
-  const [actSessions,   setActSessions]   = useState(null);   // null=not-fetched, []=empty
+  const [actSessions,   setActSessions]   = useState(null);
   const [actLoading,    setActLoading]    = useState(false);
   const [actLoaded,     setActLoaded]     = useState(false);
   const [actSearch,     setActSearch]     = useState("");
   const [actRoleFilter, setActRoleFilter] = useState("all");
   const [actSort,       setActSort]       = useState({ col: "lastSeen", dir: "desc" });
-  const [editingMember,   setEditingMember]   = useState(null);
-  const [memberForm,      setMemberForm]      = useState({});
-  const [memberFormError, setMemberFormError] = useState("");
-  const [confirmDeact,    setConfirmDeact]    = useState(null);
-  const [rosterSearch,    setRosterSearch]    = useState("");
   const [dirSearch, setDirSearch] = useState("");
   const [dirRoleFilter, setDirRoleFilter] = useState("all");
   const [dirSort, setDirSort] = useState({ col: "name", dir: "asc" });
+
+  // ── Team tab search / sort ────
+  const [teamSearch,     setTeamSearch]     = useState("");
+  const [teamRoleFilter, setTeamRoleFilter] = useState("all");
+  const [teamSort,       setTeamSort]       = useState({ col: "name", dir: "asc" });
 
   const isAdmin      = user && ["super_admin", "admin"].includes(user.role);
   const isSuperAdmin = user && user.role === "super_admin";
@@ -303,7 +395,7 @@ function UsersPanel({ user, onBack, onLogout }) {
     if (!supabase) { setProfilesLoading(false); return; }
     supabase
       .from("profiles")
-      .select("id, display_name, email, email_display, role, nmls, phone, cell_phone, company, title, address, city, state, zip, branch_nmls, company_nmls, website, team_lead_id, team_share_scenarios, branch_id")
+      .select("id, display_name, email, email_display, role, nmls, phone, cell_phone, company, brokerage, title, address, city, state, zip, branch_nmls, company_nmls, website, team_lead_id, team_share_scenarios, branch_id")
       .order("display_name", { ascending: true })
       .then(function(res) {
         // If a column doesn't exist yet, retry with minimal safe set
@@ -331,26 +423,6 @@ function UsersPanel({ user, onBack, onLogout }) {
       });
   }, []);
 
-  // ── Load borrower_permissions lazily when Borrowers tab is opened ────
-  // Kept separate because the column may not exist in all deployments.
-  const [permsLoaded, setPermsLoaded] = useState(false);
-  useEffect(function() {
-    if (activeTab !== "borrowers" || permsLoaded || !supabase) return;
-    supabase
-      .from("profiles")
-      .select("id, borrower_permissions")
-      .eq("role", "borrower")
-      .then(function(res) {
-        setPermsLoaded(true);
-        if (res.error) return; // column missing — perms stay empty, savePerm will also fail gracefully
-        const init = {};
-        (res.data || []).forEach(function(p) {
-          init[p.id] = Array.isArray(p.borrower_permissions) ? p.borrower_permissions : [];
-        });
-        setPermsEdit(init);
-      });
-  }, [activeTab, permsLoaded]);
-
   // ── Load branches lazily when Branches tab is opened ────
   useEffect(function() {
     if ((activeTab !== "branches" && activeTab !== "directory") || branchesLoaded || !supabase) return;
@@ -376,8 +448,7 @@ function UsersPanel({ user, onBack, onLogout }) {
   }, [activeTab, actLoaded, isAdmin]);
 
   const ROLE_ORDER  = { super_admin: 0, admin: 1, branch_admin: 2, internal: 3, realtor: 4, builder: 5, borrower: 6 };
-  const teamProfiles     = allProfiles.filter(function(p) { return p.role !== "borrower"; });
-  const borrowerProfiles = allProfiles.filter(function(p) { return p.role === "borrower"; });
+  const teamProfiles = allProfiles.filter(function(p) { return p.role !== "borrower"; });
 
   // Build team groups: keyed by team lead ID, value = { lead, members[] }
   // A profile is a "member" if team_lead_id points to another profile's id
@@ -498,44 +569,6 @@ function UsersPanel({ user, onBack, onLogout }) {
     setConfirmDelBranch(null);
   }
 
-  // ── Password reset ────
-  async function sendPwReset(profile) {
-    if (!supabase || !profile.email) return;
-    setPwSending(function(p) { return Object.assign({}, p, { [profile.id]: true }); });
-    setPwResult(function(p)  { return Object.assign({}, p, { [profile.id]: null }); });
-    const { error } = await supabase.auth.resetPasswordForEmail(profile.email, {
-      redirectTo: window.location.href
-    });
-    setPwSending(function(p) { return Object.assign({}, p, { [profile.id]: false }); });
-    setPwResult(function(p)  { return Object.assign({}, p, { [profile.id]: error ? "error" : "sent" }); });
-    setTimeout(function() {
-      setPwResult(function(p) { return Object.assign({}, p, { [profile.id]: null }); });
-    }, 6000);
-  }
-
-  // ── Borrower permissions ────
-  const BASE_TABS    = ["about", "payment", "refi", "fees", "compare", "breakeven"];
-  const GRANTABLE    = MODULE_DEFS ? MODULE_DEFS.filter(function(m) { return !BASE_TABS.includes(m.id); }) : [];
-
-  function togglePerm(userId, tabId) {
-    setPermsEdit(function(prev) {
-      const cur  = prev[userId] || [];
-      const next = cur.includes(tabId) ? cur.filter(function(t) { return t !== tabId; }) : cur.concat([tabId]);
-      return Object.assign({}, prev, { [userId]: next });
-    });
-  }
-
-  async function savePerm(userId) {
-    if (!supabase) return;
-    setPermsSaving(function(p) { return Object.assign({}, p, { [userId]: true }); });
-    await supabase.from("profiles").update({ borrower_permissions: permsEdit[userId] || [] }).eq("id", userId);
-    setPermsSaving(function(p) { return Object.assign({}, p, { [userId]: false }); });
-    setPermsSaved(function(p)  { return Object.assign({}, p, { [userId]: true }); });
-    setTimeout(function() {
-      setPermsSaved(function(p) { return Object.assign({}, p, { [userId]: false }); });
-    }, 2500);
-  }
-
   // ── Edit profile callbacks ────
   function handleEditSave(updatedFields) {
     setAllProfiles(function(prev) {
@@ -544,47 +577,6 @@ function UsersPanel({ user, onBack, onLogout }) {
       });
     });
     setEditingProfile(null);
-  }
-
-  // ── Local roster helpers ────
-  const EMPTY_MEMBER = { id: "", name: "", title: "Loan Officer", company: "CMG Home Loans", phone: "", email: "", nmls: "", branchNmls: "", role: "internal", active: true, firstLogin: true, passwordHash: "" };
-
-  function startAddMember() {
-    setMemberForm(Object.assign({}, EMPTY_MEMBER));
-    setEditingMember(null);
-    setShowAddForm(true);
-    setMemberFormError("");
-  }
-  function startEditMember(m) {
-    setMemberForm(Object.assign({}, m));
-    setEditingMember(m);
-    setShowAddForm(true);
-    setMemberFormError("");
-  }
-  function cancelMemberForm() {
-    setShowAddForm(false);
-    setEditingMember(null);
-    setMemberForm({});
-    setMemberFormError("");
-  }
-  function saveMember() {
-    if (!memberForm.name || !memberForm.name.trim()) { setMemberFormError("Name is required."); return; }
-    const updated = roster.slice();
-    if (editingMember) {
-      const idx = updated.findIndex(function(m) { return m.id === editingMember.id; });
-      if (idx >= 0) updated[idx] = Object.assign({}, memberForm, { passwordHash: updated[idx].passwordHash });
-    } else {
-      updated.push(Object.assign({}, memberForm, { id: generateId() }));
-    }
-    setRoster(updated);
-    cancelMemberForm();
-  }
-  function deactivateMember(id) {
-    setRoster(roster.map(function(m) { return m.id === id ? Object.assign({}, m, { active: false }) : m; }));
-    setConfirmDeact(null);
-  }
-  function reactivateMember(id) {
-    setRoster(roster.map(function(m) { return m.id === id ? Object.assign({}, m, { active: true }) : m; }));
   }
 
   // ── Activity tab helpers ────
@@ -805,8 +797,6 @@ function UsersPanel({ user, onBack, onLogout }) {
       <div style={{ background: "#fff", borderBottom: "1px solid #E0E8E8", display: "flex", padding: "0 24px", overflowX: "auto" }}>
         {isAdmin && tabBtn("directory", "Directory", allProfiles.length)}
         {tabBtn("team",      "Internal Team", teamProfiles.length)}
-        {tabBtn("borrowers", "Borrowers",     borrowerProfiles.length)}
-        {tabBtn("roster",    "Local Roster",  roster.length)}
         {isAdmin && tabBtn("branches", "Branches", branches.length)}
         {isAdmin && tabBtn("activity",  "Activity",  actActiveCount !== null ? actActiveCount + " active" : "…")}
       </div>
@@ -825,352 +815,175 @@ function UsersPanel({ user, onBack, onLogout }) {
         {/* ── INTERNAL TEAM TAB ── */}
         {activeTab === "team" && !profilesLoading && !profilesError && (
           <div>
-            {teamProfiles.length === 0 && (
-              <div style={{ background: "#fff", borderRadius: 12, padding: "40px 24px", textAlign: "center", color: "#6B7D8A", fontSize: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-                No internal or admin accounts found.
-              </div>
-            )}
-
             {(function() {
-              const TH = { padding: "8px 12px", fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "#8A99A8", textAlign: "left", borderBottom: "2px solid #E8EEF4", whiteSpace: "nowrap" };
-              const TD = { padding: "9px 12px", fontSize: 13, color: "#0C4160", borderBottom: "1px solid #F0F4F8", verticalAlign: "middle" };
+              const TH = { padding: "8px 12px", fontSize: 11, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: "#64748b", textAlign: "left", borderBottom: "2px solid #E8EEF4", whiteSpace: "nowrap", userSelect: "none", cursor: "pointer" };
+              const TD = { padding: "10px 12px", fontSize: 13, color: "#0C4160", borderBottom: "1px solid #F0F4F8", verticalAlign: "middle" };
 
-              function ProfileRow({ p, isTeamLead, indent }) {
-                const isSelf       = p.id === user.id;
-                const selRole      = editRoles[p.id] || p.role || "borrower";
-                const hasChanged   = selRole !== (p.role || "borrower");
-                const resetResult  = pwResult[p.id];
-                const resetSending = pwSending[p.id];
-                return (
-                  <tr style={{ background: isSelf ? "rgba(12,65,96,0.04)" : "transparent" }}>
-                    <td style={TD}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: indent ? 20 : 0 }}>
-                        {indent && <span style={{ color: "#D1D9E6", fontSize: 14 }}>↳</span>}
-                        <span style={{ fontWeight: 600 }}>{p.display_name || "(no name)"}</span>
-                        {isSelf && <span style={{ fontSize: 9, color: "#1B8A5A", fontWeight: 700, background: "#E8F5E9", borderRadius: 99, padding: "1px 6px" }}>YOU</span>}
-                        {isTeamLead && <span style={{ fontSize: 9, color: "#3730A3", fontWeight: 700, background: "#E0E7FF", borderRadius: 99, padding: "1px 6px" }}>LEAD</span>}
-                      </div>
-                    </td>
-                    <td style={{ ...TD, color: "#6B7D8A", fontSize: 12 }}>{p.email}</td>
-                    <td style={{ ...TD, whiteSpace: "nowrap" }}><RoleBadge role={p.role} /></td>
-                    <td style={{ ...TD, color: "#8A99A8", fontSize: 12, whiteSpace: "nowrap" }}>{p.nmls ? "NMLS #" + p.nmls : ""}</td>
-                    <td style={{ ...TD, color: "#8A99A8", fontSize: 12, whiteSpace: "nowrap" }}>{p.phone ? upFmtPhone(p.phone) : ""}</td>
-                    <td style={{ ...TD, whiteSpace: "nowrap" }} onClick={function(e) { e.stopPropagation(); }}>
-                      {isAdmin && !isSelf && (
-                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                          <select
-                            value={selRole}
-                            onChange={function(e) { var v = e.target.value; setEditRoles(function(prev) { return Object.assign({}, prev, { [p.id]: v }); }); }}
-                            style={{ padding: "4px 7px", borderRadius: 6, border: "1px solid #E0E8E8", fontSize: 12, fontFamily: UP_FONT, background: "#fff", color: "#0C4160", cursor: "pointer" }}
-                          >
-                            <option value="borrower">Borrower</option>
-                            <option value="realtor">Realtor</option>
-                            <option value="builder">Builder</option>
-                            <option value="internal">Internal</option>
-                            <option value="branch_admin">Branch Admin</option>
-                            <option value="admin">Admin</option>
-                            {isSuperAdmin && <option value="super_admin">Super Admin</option>}
-                          </select>
-                          <button onClick={function() { saveRole(p.id); }} disabled={!hasChanged || roleSaving[p.id]}
-                            style={Object.assign({}, BTN_SM, { padding: "4px 9px", fontSize: 11 }, !hasChanged ? { opacity: 0.3, cursor: "default" } : {}, roleSaved[p.id] ? { background: "#1B8A5A" } : {})}>
-                            {roleSaved[p.id] ? "✓" : roleSaving[p.id] ? "…" : "Save"}
-                          </button>
-                        </div>
-                      )}
-                      {roleError[p.id] && <div style={{ fontSize: 11, color: "#B91C1C", marginTop: 3 }}>⚠ {roleError[p.id]}</div>}
-                    </td>
-                    <td style={{ ...TD, whiteSpace: "nowrap" }} onClick={function(e) { e.stopPropagation(); }}>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        {isAdmin && (
-                          <button onClick={function() { setEditingProfile(p); }} style={Object.assign({}, BTN_GHOST, { padding: "4px 10px", fontSize: 11 })}>✏️ Edit</button>
-                        )}
-                        {p.email && (
-                          <button onClick={function() { sendPwReset(p); }} disabled={resetSending}
-                            style={Object.assign({}, BTN_GHOST, { padding: "4px 10px", fontSize: 11 },
-                              resetResult === "sent"  ? { background: "#E8F5E9", color: "#1B8A5A", border: "1px solid #A7F3D0" } : {},
-                              resetResult === "error" ? { background: "#FEE2E2", color: "#B91C1C", border: "1px solid #FECACA" } : {},
-                              resetSending ? { opacity: 0.6, cursor: "wait" } : {}
-                            )}>
-                            {resetResult === "sent" ? "✓ Sent" : resetResult === "error" ? "✗ Failed" : resetSending ? "…" : "🔑 Reset PW"}
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
+              function thArrow(col) {
+                if (teamSort.col !== col) return <span style={{ opacity: 0.3, marginLeft: 3 }}>⇅</span>;
+                return <span style={{ marginLeft: 3, color: "#2563eb" }}>{teamSort.dir === "asc" ? "↑" : "↓"}</span>;
+              }
+              function toggleTeamSort(col) {
+                setTeamSort(function(prev) {
+                  if (prev.col === col) return { col: col, dir: prev.dir === "asc" ? "desc" : "asc" };
+                  return { col: col, dir: "asc" };
+                });
               }
 
-              function TeamTable({ rows }) {
-                return (
-                  <div style={{ background: "#fff", borderRadius: 10, overflow: "hidden", border: "1px solid #E8EEF4" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                      <thead>
-                        <tr style={{ background: "#F7FAFB" }}>
-                          <th style={TH}>Name</th>
-                          <th style={TH}>Email</th>
-                          <th style={TH}>Role</th>
-                          <th style={TH}>NMLS</th>
-                          <th style={TH}>Phone</th>
-                          <th style={TH}>Change Role</th>
-                          <th style={TH}>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>{rows}</tbody>
-                    </table>
-                  </div>
-                );
+              // Filter + sort
+              var teamFiltered = teamProfiles.slice();
+              if (teamSearch.trim()) {
+                var q = teamSearch.toLowerCase();
+                teamFiltered = teamFiltered.filter(function(p) {
+                  return (p.display_name || "").toLowerCase().includes(q) ||
+                         (p.email || "").toLowerCase().includes(q) ||
+                         (p.nmls || "").toLowerCase().includes(q);
+                });
               }
+              if (teamRoleFilter !== "all") {
+                var roleMap = { lo: ["admin","super_admin","branch_admin","internal"], builder: ["builder"], realtor: ["realtor"] };
+                var allowed = roleMap[teamRoleFilter] || [teamRoleFilter];
+                teamFiltered = teamFiltered.filter(function(p) { return allowed.includes(p.role); });
+              }
+              teamFiltered = teamFiltered.sort(function(a, b) {
+                var mul = teamSort.dir === "asc" ? 1 : -1;
+                if (teamSort.col === "name")  return mul * (a.display_name || a.email || "").localeCompare(b.display_name || b.email || "");
+                if (teamSort.col === "email") return mul * (a.email || "").localeCompare(b.email || "");
+                if (teamSort.col === "role")  return mul * (ROLE_ORDER[a.role] || 9) - mul * (ROLE_ORDER[b.role] || 9);
+                if (teamSort.col === "nmls")  return mul * (a.nmls || "").localeCompare(b.nmls || "");
+                if (teamSort.col === "phone") return mul * (a.phone || a.cell_phone || "").localeCompare(b.phone || b.cell_phone || "");
+                return 0;
+              });
+
+              var allIds = teamFiltered.filter(function(p) { return p.id !== user.id; }).map(function(p) { return p.id; });
+              var allSelected = allIds.length > 0 && allIds.every(function(id) { return selectedTeamIds.includes(id); });
 
               return (
                 <div>
-                  {/* ── Teams ── */}
-                  {teamGroups.teams.map(function(group) {
-                    const lead = group.lead;
-                    const sharing = teamShareEdit[lead.id] !== undefined ? teamShareEdit[lead.id] : !!lead.team_share_scenarios;
-                    const origShare = !!lead.team_share_scenarios;
-                    const shareChanged = sharing !== origShare;
-                    const rows = [<ProfileRow key={lead.id} p={lead} isTeamLead={true} indent={false} />].concat(
-                      group.members.slice().sort(function(a, b) { return (ROLE_ORDER[a.role] || 9) - (ROLE_ORDER[b.role] || 9); })
-                        .map(function(m) { return <ProfileRow key={m.id} p={m} isTeamLead={false} indent={true} />; })
-                    );
-                    return (
-                      <div key={lead.id} style={{ marginBottom: 24 }}>
-                        <div style={{ background: "linear-gradient(90deg, #0C4160 0%, #1A5E8A 100%)", borderRadius: "10px 10px 0 0", padding: "10px 16px", display: "flex", alignItems: "center", gap: 12 }}>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: "#fff", flex: 1 }}>
-                            👥 {lead.display_name || lead.email}'s Team
-                            <span style={{ fontSize: 11, fontWeight: 400, marginLeft: 8, opacity: 0.7 }}>{group.members.length + 1} members</span>
-                          </span>
-                          <label style={{ display: "flex", alignItems: "center", gap: 7, cursor: isAdmin ? "pointer" : "default" }}>
-                            <span style={{ fontSize: 11, color: "#fff", opacity: 0.85 }}>Share scenarios</span>
-                            <input type="checkbox" checked={sharing} disabled={!isAdmin}
-                              onChange={function(e) { if (!isAdmin) return; var v = e.target.checked; setTeamShareEdit(function(prev) { return Object.assign({}, prev, { [lead.id]: v }); }); }}
-                              style={{ width: 15, height: 15, cursor: isAdmin ? "pointer" : "default" }}
-                            />
-                            {isAdmin && (shareChanged || teamShareSaving[lead.id] || teamShareSaved[lead.id]) && (
-                              <button onClick={function() { saveTeamShare(lead.id); }} disabled={teamShareSaving[lead.id]}
-                                style={{ padding: "2px 9px", fontSize: 10, fontWeight: 700, borderRadius: 5, border: "none", cursor: "pointer", background: teamShareSaved[lead.id] ? "#1B8A5A" : "#fff", color: teamShareSaved[lead.id] ? "#fff" : "#0C4160" }}>
-                                {teamShareSaved[lead.id] ? "✓" : teamShareSaving[lead.id] ? "…" : "Save"}
-                              </button>
-                            )}
-                          </label>
-                        </div>
-                        <TeamTable rows={rows} />
-                      </div>
-                    );
-                  })}
+                  {/* ── Toolbar ── */}
+                  <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
+                    <input
+                      type="text" placeholder="Search by name, email, or NMLS…"
+                      value={teamSearch} onChange={function(e) { setTeamSearch(e.target.value); }}
+                      style={{ flex: "1 1 220px", padding: "9px 13px", borderRadius: 8, border: "1px solid #E0E8E8", background: "#fff", color: "#0C4160", fontSize: 13, fontFamily: UP_FONT, outline: "none" }}
+                    />
+                    <select value={teamRoleFilter} onChange={function(e) { setTeamRoleFilter(e.target.value); }}
+                      style={{ padding: "9px 12px", borderRadius: 8, border: "1px solid #E0E8E8", background: "#fff", color: "#0C4160", fontSize: 13, fontFamily: UP_FONT, cursor: "pointer" }}>
+                      <option value="all">All Roles</option>
+                      <option value="lo">LO / Admin</option>
+                      <option value="realtor">Realtors</option>
+                      <option value="builder">Builders</option>
+                    </select>
+                    <span style={{ fontSize: 13, color: "#8A99A8", whiteSpace: "nowrap" }}>{teamFiltered.length} member{teamFiltered.length !== 1 ? "s" : ""}</span>
+                  </div>
 
-                  {/* ── Standalone ── */}
-                  {teamGroups.standalone.length > 0 && (
-                    <div style={{ marginBottom: 24 }}>
-                      {teamGroups.teams.length > 0 && (
-                        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "#8A99A8", marginBottom: 8, fontFamily: UP_FONT }}>
-                          No Team Assigned
-                        </div>
-                      )}
-                      <TeamTable rows={
-                        teamGroups.standalone.slice()
-                          .sort(function(a, b) { return (ROLE_ORDER[a.role] || 9) - (ROLE_ORDER[b.role] || 9); })
-                          .map(function(p) { return <ProfileRow key={p.id} p={p} isTeamLead={false} indent={false} />; })
-                      } />
+                  {/* ── Bulk action bar ── */}
+                  {isAdmin && selectedTeamIds.length > 0 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "10px 16px", marginBottom: 14, background: "#0C4160", borderRadius: 10, fontSize: 13, fontFamily: UP_FONT }}>
+                      <span style={{ color: "#fff", fontWeight: 600 }}>{selectedTeamIds.length} selected</span>
+                      <button onClick={clearTeamSelection} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 6, padding: "4px 10px", fontSize: 11, cursor: "pointer", fontFamily: UP_FONT }}>✕ Clear</button>
+                      <div style={{ flex: 1 }} />
+                      <select value={bulkRole} onChange={function(e) { setBulkRole(e.target.value); }}
+                        style={{ padding: "5px 8px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.3)", fontSize: 12, fontFamily: UP_FONT, background: "rgba(255,255,255,0.12)", color: "#fff", cursor: "pointer" }}>
+                        <option value="">— Change role to… —</option>
+                        <option value="borrower">Borrower</option>
+                        <option value="realtor">Realtor</option>
+                        <option value="builder">Builder</option>
+                        <option value="internal">Internal</option>
+                        <option value="branch_admin">Branch Admin</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                      <button onClick={handleBulkRoleChange} disabled={!bulkRole || bulkRoleSaving}
+                        style={{ padding: "5px 12px", background: bulkResult === "role_saved" ? "#1B8A5A" : "#fff", color: bulkResult === "role_saved" ? "#fff" : "#0C4160", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: UP_FONT, opacity: (!bulkRole || bulkRoleSaving) ? 0.5 : 1 }}>
+                        {bulkResult === "role_saved" ? "✓ Saved" : bulkRoleSaving ? "Saving…" : "Apply Role"}
+                      </button>
+                      <button onClick={function() { setConfirmBulkDel(true); }}
+                        style={{ padding: "5px 14px", background: "#B91C1C", color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: UP_FONT }}>
+                        Delete {selectedTeamIds.length}
+                      </button>
                     </div>
                   )}
+
+                  {bulkResult === "deleted" && (
+                    <div style={{ background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#166534", fontFamily: UP_FONT }}>
+                      ✅ Profiles deleted. Their Supabase Auth login still exists — contact your Supabase admin to fully remove it if needed.
+                    </div>
+                  )}
+
+                  {/* ── Table ── */}
+                  <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #E8EEF4", overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr style={{ background: "#F7FAFB" }}>
+                          <th style={{ ...TH, width: 36, cursor: "default" }} onClick={function(e) { e.stopPropagation(); }}>
+                            {isAdmin && <input type="checkbox" checked={allSelected} onChange={function(e) {
+                              if (e.target.checked) setSelectedTeamIds(function(prev) { var next = prev.slice(); allIds.forEach(function(id) { if (!next.includes(id)) next.push(id); }); return next; });
+                              else setSelectedTeamIds(function(prev) { return prev.filter(function(id) { return !allIds.includes(id); }); });
+                            }} style={{ cursor: "pointer" }} />}
+                          </th>
+                          <th style={TH} onClick={function() { toggleTeamSort("name"); }}>Name {thArrow("name")}</th>
+                          <th style={TH} onClick={function() { toggleTeamSort("email"); }}>Email {thArrow("email")}</th>
+                          <th style={TH} onClick={function() { toggleTeamSort("role"); }}>Role {thArrow("role")}</th>
+                          <th style={TH} onClick={function() { toggleTeamSort("phone"); }}>Phone {thArrow("phone")}</th>
+                          <th style={TH} onClick={function() { toggleTeamSort("nmls"); }}>NMLS {thArrow("nmls")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {teamFiltered.length === 0 && (
+                          <tr><td colSpan={6} style={{ ...TD, textAlign: "center", color: "#8A99A8", padding: "32px 0" }}>No members match your search.</td></tr>
+                        )}
+                        {teamFiltered.map(function(p) {
+                          const isSelf     = p.id === user.id;
+                          const isSelected = selectedTeamIds.includes(p.id);
+                          return (
+                            <tr key={p.id}
+                              style={{ background: isSelected ? "rgba(12,65,96,0.06)" : "transparent", transition: "background 0.1s" }}
+                              onMouseEnter={function(e) { if (!isSelected) e.currentTarget.style.background = "rgba(12,65,96,0.03)"; }}
+                              onMouseLeave={function(e) { e.currentTarget.style.background = isSelected ? "rgba(12,65,96,0.06)" : "transparent"; }}
+                            >
+                              <td style={{ ...TD, width: 36 }} onClick={function(e) { e.stopPropagation(); }}>
+                                {isAdmin && !isSelf && (
+                                  <input type="checkbox" checked={isSelected} onChange={function() { toggleTeamSelect(p.id); }} style={{ cursor: "pointer" }} />
+                                )}
+                              </td>
+                              <td style={TD}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                                  {isAdmin && !isSelf
+                                    ? <button onClick={function() { setEditingProfile(p); }} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontWeight: 600, fontSize: 13, color: "#0C4160", fontFamily: UP_FONT, textDecoration: "underline", textDecorationColor: "#C5D5E4", textUnderlineOffset: 3 }}>{p.display_name || "(no name)"}</button>
+                                    : <span style={{ fontWeight: 600 }}>{p.display_name || "(no name)"}</span>
+                                  }
+                                  {isSelf && <span style={{ fontSize: 9, color: "#1B8A5A", fontWeight: 700, background: "#E8F5E9", borderRadius: 99, padding: "1px 6px" }}>YOU</span>}
+                                </div>
+                              </td>
+                              <td style={{ ...TD, color: "#6B7D8A", fontSize: 12 }}>{p.email_display || p.email || ""}</td>
+                              <td style={TD}><RoleBadge role={p.role} /></td>
+                              <td style={{ ...TD, color: "#6B7D8A", fontSize: 12, whiteSpace: "nowrap" }}>{p.phone ? upFmtPhone(p.phone) : p.cell_phone ? upFmtPhone(p.cell_phone) : ""}</td>
+                              <td style={{ ...TD, color: "#6B7D8A", fontSize: 12 }}>{p.nmls || ""}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               );
             })()}
-          </div>
-        )}
 
-        {/* ── BORROWERS TAB ── */}
-        {activeTab === "borrowers" && !profilesLoading && !profilesError && (
-          <div>
-            <p style={{ fontSize: 13, color: "#6B7D8A", margin: "0 0 20px 0", lineHeight: 1.5 }}>
-              Grant individual borrower accounts access to additional calculator tabs beyond the default 6 (About, Payment, Refi, Fee Sheet, Compare, Break-Even).
-            </p>
-
-            {borrowerProfiles.length === 0 && (
-              <div style={{ background: "#fff", borderRadius: 12, padding: "40px 24px", textAlign: "center", color: "#6B7D8A", fontSize: 14, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-                No borrower accounts found.
-              </div>
-            )}
-
-            {borrowerProfiles.map(function(b) {
-              const editPerms   = permsEdit[b.id] || [];
-              const resetResult = pwResult[b.id];
-              const rSending    = pwSending[b.id];
-              return (
-                <div key={b.id} style={{ background: "#fff", borderRadius: 14, padding: "20px 24px", marginBottom: 14, boxShadow: "0 2px 10px rgba(0,0,0,0.06)", border: "1px solid #E0E8E8" }}>
-
-                  {/* Header row */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-                    <div style={{ width: 38, height: 38, borderRadius: "50%", background: "#6B7D8A", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, flexShrink: 0 }}>
-                      {(b.display_name || b.email || "?").charAt(0).toUpperCase()}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: "#0C4160" }}>{b.display_name || "(no name)"}</div>
-                      <div style={{ fontSize: 12, color: "#6B7D8A" }}>{b.email}</div>
-                    </div>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                      {b.email && (
-                        <button
-                          onClick={function() { sendPwReset(b); }}
-                          disabled={rSending}
-                          style={Object.assign({}, BTN_GHOST, { fontSize: 11 },
-                            resetResult === "sent"  ? { background: "#E8F5E9", color: "#1B8A5A", border: "1px solid #A7F3D0" } : {},
-                            rSending ? { opacity: 0.6, cursor: "wait" } : {}
-                          )}
-                        >
-                          {resetResult === "sent" ? "✓ Reset Sent" : rSending ? "…" : "🔑 Reset PW"}
-                        </button>
-                      )}
-                      <button
-                        onClick={function() { savePerm(b.id); }}
-                        disabled={permsSaving[b.id]}
-                        style={Object.assign({}, BTN_SM, permsSaved[b.id] ? { background: "#1B8A5A" } : {})}
-                      >
-                        {permsSaved[b.id] ? "✓ Saved" : permsSaving[b.id] ? "Saving…" : "Save Permissions"}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Permission toggles */}
-                  {GRANTABLE.length === 0 ? (
-                    <div style={{ fontSize: 12, color: "#6B7D8A" }}>No additional tabs available.</div>
-                  ) : (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                      {GRANTABLE.map(function(tab) {
-                        const on = editPerms.includes(tab.id);
-                        return (
-                          <label key={tab.id} style={{
-                            display: "flex", alignItems: "center", gap: 5,
-                            fontSize: 12, fontWeight: 500, fontFamily: UP_FONT,
-                            color: "#0C4160", cursor: "pointer",
-                            padding: "5px 11px", borderRadius: 6,
-                            border: "1px solid " + (on ? "#0C4160" : "#D1D9E6"),
-                            background: on ? "rgba(12,65,96,0.09)" : "#F7FAFB",
-                            userSelect: "none",
-                          }}>
-                            <input type="checkbox" checked={on} onChange={function() { togglePerm(b.id, tab.id); }} style={{ cursor: "pointer" }} />
-                            {tab.icon} {tab.label}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* ── LOCAL ROSTER TAB ── */}
-        {activeTab === "roster" && (
-          <div>
-            <p style={{ fontSize: 13, color: "#6B7D8A", margin: "0 0 20px 0", lineHeight: 1.5 }}>
-              Local roster entries power the LO-of-record selector. Supabase-managed team members sync here automatically when they log in. Entries marked <strong>SUPABASE</strong> are cloud-managed.
-            </p>
-
-            {/* Controls */}
-            <div style={{ display: "flex", gap: 12, marginBottom: 16, alignItems: "center" }}>
-              <input
-                type="text"
-                placeholder="Search roster…"
-                value={rosterSearch}
-                onChange={function(e) { setRosterSearch(e.target.value); }}
-                style={Object.assign({}, INPUT_ST, { maxWidth: 280, flex: 1 })}
-              />
-              <button onClick={startAddMember} style={BTN_PRIMARY}>+ Add Member</button>
-            </div>
-
-            {/* Add / Edit form */}
-            {showAddForm && (
-              <div style={{ background: "#fff", borderRadius: 14, padding: "24px 28px", marginBottom: 20, boxShadow: "0 2px 14px rgba(0,0,0,0.10)", border: "2px solid #0C4160" }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: "#0C4160", marginBottom: 18 }}>
-                  {editingMember ? "Edit Member" : "Add New Member"}
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 20px", marginBottom: 16 }}>
-                  {[
-                    ["Name *",        "name",       "Full name"],
-                    ["Email",         "email",      "email@example.com"],
-                    ["Title",         "title",      "Loan Officer"],
-                    ["Company",       "company",    "CMG Home Loans"],
-                    ["NMLS #",        "nmls",       ""],
-                    ["Branch NMLS #", "branchNmls", ""],
-                    ["Phone",         "phone",      "(555) 555-5555"],
-                  ].map(function(row) {
-                    return (
-                      <div key={row[1]}>
-                        <label style={LABEL_ST}>{row[0]}</label>
-                        <input
-                          type="text"
-                          style={INPUT_ST}
-                          value={memberForm[row[1]] || ""}
-                          placeholder={row[2]}
-                          onChange={function(e) {
-                            var v = e.target.value;
-                            setMemberForm(function(prev) { return Object.assign({}, prev, { [row[1]]: v }); });
-                          }}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-                {memberFormError && <div style={{ color: "#B91C1C", fontSize: 13, marginBottom: 12 }}>⚠ {memberFormError}</div>}
-                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-                  <button onClick={cancelMemberForm} style={BTN_SECONDARY}>Cancel</button>
-                  <button onClick={saveMember} style={BTN_PRIMARY}>Save</button>
-                </div>
-              </div>
-            )}
-
-            {/* Roster list */}
-            {roster
-              .filter(function(m) {
-                if (!rosterSearch) return true;
-                var q = rosterSearch.toLowerCase();
-                return (m.name || "").toLowerCase().includes(q) || (m.email || "").toLowerCase().includes(q);
-              })
-              .map(function(m) {
-                return (
-                  <div key={m.id} style={{
-                    background: "#fff", borderRadius: 12, padding: "16px 20px", marginBottom: 10,
-                    boxShadow: "0 1px 6px rgba(0,0,0,0.06)",
-                    border: "1px solid " + (m.active ? "#E0E8E8" : "#FECACA"),
-                    opacity: m.active ? 1 : 0.68,
-                  }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                          <span style={{ fontSize: 14, fontWeight: 700, color: "#0C4160" }}>{m.name}</span>
-                          {!m.active && <span style={{ fontSize: 10, color: "#B91C1C", background: "#FEE2E2", borderRadius: 99, padding: "1px 7px", fontWeight: 700 }}>INACTIVE</span>}
-                          {m.passwordHash === "supabase-managed" && <span style={{ fontSize: 10, color: "#1a5fa8", background: "#DBEAFE", borderRadius: 99, padding: "1px 7px", fontWeight: 700 }}>SUPABASE</span>}
-                        </div>
-                        <div style={{ fontSize: 12, color: "#6B7D8A", marginTop: 2 }}>
-                          {[m.email, m.title, m.nmls ? "NMLS #" + m.nmls : null, m.phone ? upFmtPhone(m.phone) : null].filter(Boolean).join(" · ")}
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                        <button onClick={function() { startEditMember(m); }} style={BTN_GHOST}>Edit</button>
-                        {m.active
-                          ? <button onClick={function() { setConfirmDeact(m); }} style={Object.assign({}, BTN_GHOST, { color: "#B91C1C", border: "1px solid #FECACA", background: "#FEF2F2" })}>Deactivate</button>
-                          : <button onClick={function() { reactivateMember(m.id); }} style={Object.assign({}, BTN_GHOST, { color: "#1B8A5A", border: "1px solid #A7F3D0", background: "#F0FDF4" })}>Reactivate</button>
-                        }
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-
-            {/* Deactivate confirm overlay */}
-            {confirmDeact && (
+            {/* ── Bulk delete confirm modal ── */}
+            {confirmBulkDel && (
               <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-                <div style={{ background: "#fff", borderRadius: 16, padding: "28px 24px", maxWidth: 400, width: "100%", boxShadow: "0 12px 40px rgba(0,0,0,0.2)" }}>
-                  <h3 style={{ fontSize: 17, fontWeight: 700, color: "#0C4160", margin: "0 0 12px 0", fontFamily: UP_FONT }}>Deactivate Member?</h3>
-                  <p style={{ fontSize: 14, color: "#6B7D8A", margin: "0 0 20px 0", fontFamily: UP_FONT }}>
-                    Deactivate {confirmDeact.name}? They will no longer appear as an LO-of-record option. You can reactivate them at any time.
+                <div style={{ background: "#fff", borderRadius: 16, padding: "28px 24px", maxWidth: 420, width: "100%", boxShadow: "0 12px 40px rgba(0,0,0,0.2)", fontFamily: UP_FONT }}>
+                  <h3 style={{ fontSize: 17, fontWeight: 700, color: "#B91C1C", margin: "0 0 10px 0" }}>Delete {selectedTeamIds.length} user{selectedTeamIds.length > 1 ? "s" : ""}?</h3>
+                  <p style={{ fontSize: 13, color: "#6B7D8A", margin: "0 0 8px 0", lineHeight: 1.6 }}>
+                    This removes their <strong>profile record</strong> from the app. Their Supabase Auth login will still exist — contact your Supabase admin to fully remove the auth account if needed.
                   </p>
+                  <p style={{ fontSize: 13, color: "#B91C1C", margin: "0 0 20px 0", lineHeight: 1.6, fontWeight: 600 }}>This cannot be undone.</p>
                   <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-                    <button onClick={function() { setConfirmDeact(null); }} style={BTN_SECONDARY}>Cancel</button>
-                    <button onClick={function() { deactivateMember(confirmDeact.id); }} style={Object.assign({}, BTN_PRIMARY, { background: "#B91C1C" })}>Deactivate</button>
+                    <button onClick={function() { setConfirmBulkDel(false); }} style={BTN_SECONDARY}>Cancel</button>
+                    <button onClick={handleBulkDelete} disabled={bulkDeleting}
+                      style={Object.assign({}, BTN_PRIMARY, { background: "#B91C1C" }, bulkDeleting ? { opacity: 0.6, cursor: "wait" } : {})}>
+                      {bulkDeleting ? "Deleting…" : "Yes, Delete"}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1485,23 +1298,19 @@ function UsersPanel({ user, onBack, onLogout }) {
           <div>
             {/* Toolbar */}
             <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
-              <input
-                type="text"
-                value={dirSearch}
-                onChange={function(e) { setDirSearch(e.target.value); }}
+              <input type="text" value={dirSearch} onChange={function(e) { setDirSearch(e.target.value); }}
                 placeholder="Search name, email, company, NMLS…"
-                style={Object.assign({}, INPUT_ST, { maxWidth: 300, flex: "1 1 200px" })}
-              />
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", flex: "1 1 auto" }}>
+                style={Object.assign({}, INPUT_ST, { maxWidth: 320, flex: "1 1 200px" })} />
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {DIR_ROLE_FILTERS.map(function(f) {
                   var active = dirRoleFilter === f.id;
-                  var count = dirRoleCounts[f.id] !== undefined ? dirRoleCounts[f.id] : 0;
+                  var count  = dirRoleCounts[f.id] !== undefined ? dirRoleCounts[f.id] : 0;
                   return (
                     <button key={f.id} onClick={function() { setDirRoleFilter(f.id); }} style={{
-                      padding: "6px 14px", borderRadius: 99, fontSize: 12, fontWeight: 600, fontFamily: UP_FONT, cursor: "pointer",
+                      padding: "6px 14px", borderRadius: 99, fontSize: 12, fontWeight: 600,
+                      fontFamily: UP_FONT, cursor: "pointer",
                       border: "1.5px solid " + (active ? "#0C4160" : "#D1D9E6"),
-                      background: active ? "#0C4160" : "#F0F4F8",
-                      color: active ? "#fff" : "#0C4160",
+                      background: active ? "#0C4160" : "#F0F4F8", color: active ? "#fff" : "#0C4160",
                       display: "flex", alignItems: "center", gap: 6,
                     }}>
                       {f.label}
@@ -1510,167 +1319,198 @@ function UsersPanel({ user, onBack, onLogout }) {
                   );
                 })}
               </div>
+              <span style={{ fontSize: 12, color: "#8A99A8", whiteSpace: "nowrap" }}>{dirFiltered.length} of {allProfiles.length}</span>
             </div>
 
-            {/* Count hint */}
-            <div style={{ fontSize: 12, color: "#8A99A8", marginBottom: 10, fontFamily: UP_FONT }}>
-              Showing {dirFiltered.length} of {allProfiles.length} people · Click column headers to sort
-            </div>
+            {/* Bulk action bar */}
+            {selectedDirIds.length > 0 && (
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "10px 16px", marginBottom: 14, background: "#0C4160", borderRadius: 10, fontSize: 13, fontFamily: UP_FONT }}>
+                <span style={{ color: "#fff", fontWeight: 600 }}>{selectedDirIds.length} selected</span>
+                <button onClick={function() { setSelectedDirIds([]); setDirBulkRole(""); setDirBulkResult(null); }}
+                  style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 6, padding: "4px 10px", fontSize: 11, cursor: "pointer", fontFamily: UP_FONT }}>✕ Clear</button>
+                <div style={{ flex: 1 }} />
+                <select value={dirBulkRole} onChange={function(e) { setDirBulkRole(e.target.value); }}
+                  style={{ padding: "5px 8px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.3)", fontSize: 12, fontFamily: UP_FONT, background: "rgba(255,255,255,0.12)", color: "#fff", cursor: "pointer" }}>
+                  <option value="">— Change role to… —</option>
+                  <option value="borrower">Borrower</option>
+                  <option value="realtor">Realtor</option>
+                  <option value="builder">Builder</option>
+                  <option value="internal">Internal</option>
+                  <option value="branch_admin">Branch Admin</option>
+                  <option value="admin">Admin</option>
+                </select>
+                <button onClick={handleDirBulkRole} disabled={!dirBulkRole || dirBulkSaving}
+                  style={{ padding: "5px 12px", background: dirBulkResult === "role_saved" ? "#1B8A5A" : "#fff", color: dirBulkResult === "role_saved" ? "#fff" : "#0C4160", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: UP_FONT, opacity: (!dirBulkRole || dirBulkSaving) ? 0.5 : 1 }}>
+                  {dirBulkResult === "role_saved" ? "✓ Saved" : dirBulkSaving ? "Saving…" : "Apply Role"}
+                </button>
+                <button onClick={function() { setDirConfirmDel(true); }}
+                  style={{ padding: "5px 14px", background: "#B91C1C", color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: UP_FONT }}>
+                  Delete {selectedDirIds.length}
+                </button>
+              </div>
+            )}
+
+            {dirBulkResult === "deleted" && (
+              <div style={{ background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#166534", fontFamily: UP_FONT }}>
+                ✅ Profiles deleted.
+              </div>
+            )}
 
             {/* Table */}
-            <div style={{ background: "#fff", borderRadius: 12, overflow: "hidden", border: "1px solid #E0E8E8", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 920 }}>
-                  <thead>
-                    <tr style={{ background: "#F0F4F8", borderBottom: "2px solid #E0E8E8" }}>
-                      <th style={{ width: 12, padding: "10px 0 10px 14px" }} />
-                      {[
-                        { col: "name",     label: "Name" },
-                        { col: null,       label: "Email" },
-                        { col: "role",     label: "Role" },
-                        { col: "branch",   label: "Branch" },
-                        { col: "company",  label: "Company" },
-                        { col: null,       label: "NMLS" },
-                        { col: "lastSeen", label: "Last Login" },
-                      ].map(function(h, i) {
-                        var isActive = h.col && dirSort.col === h.col;
-                        return (
-                          <th key={i}
-                            onClick={h.col ? function() { toggleDirSort(h.col); } : undefined}
-                            style={{
-                              padding: "10px 12px", textAlign: "left", fontSize: 11, fontWeight: 700,
-                              fontFamily: UP_FONT, color: isActive ? "#0C4160" : "#6B7D8A",
-                              textTransform: "uppercase", letterSpacing: "0.06em",
-                              cursor: h.col ? "pointer" : "default", userSelect: "none", whiteSpace: "nowrap",
-                            }}>
-                            {h.label}
-                            {h.col && (
-                              <span style={{ marginLeft: 4, opacity: isActive ? 1 : 0.3 }}>
-                                {isActive ? (dirSort.dir === "asc" ? "↑" : "↓") : "↕"}
-                              </span>
-                            )}
-                          </th>
-                        );
-                      })}
-                      <th style={{ padding: "10px 14px 10px 12px", textAlign: "left", fontSize: 11, fontWeight: 700, fontFamily: UP_FONT, color: "#6B7D8A", textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap" }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dirFiltered.length === 0 && (
-                      <tr>
-                        <td colSpan={9} style={{ padding: "40px 24px", textAlign: "center", color: "#6B7D8A", fontSize: 14, fontFamily: UP_FONT }}>
-                          No people match this filter.
-                        </td>
-                      </tr>
-                    )}
-                    {dirFiltered.map(function(p, idx) {
-                      var isSelf = p.id === user.id;
-                      var selRole = editRoles[p.id] || p.role || "borrower";
-                      var hasChanged = selRole !== (p.role || "borrower");
-                      var resetResult = pwResult[p.id];
-                      var resetSending = pwSending[p.id];
-                      var avatarColors = { admin: "#0C4160", super_admin: "#0C4160", branch_admin: "#3730A3", internal: "#1A5E8A", realtor: "#7C3AED", builder: "#D97706", borrower: "#6B7D8A" };
-                      var avatarBg = avatarColors[p.role] || "#6B7D8A";
+            <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #E8EEF4", overflowX: "auto", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 860 }}>
+                <thead>
+                  <tr style={{ background: "#F7FAFB", borderBottom: "2px solid #E8EEF4" }}>
+                    {/* Select-all */}
+                    <th style={{ width: 36, padding: "10px 0 10px 14px" }} onClick={function(e) { e.stopPropagation(); }}>
+                      {(function() {
+                        var allIds = dirFiltered.filter(function(p) { return p.id !== user.id; }).map(function(p) { return p.id; });
+                        var allSel = allIds.length > 0 && allIds.every(function(id) { return selectedDirIds.includes(id); });
+                        return <input type="checkbox" checked={allSel} style={{ cursor: "pointer" }} onChange={function(e) {
+                          if (e.target.checked) setSelectedDirIds(function(prev) { var next = prev.slice(); allIds.forEach(function(id) { if (!next.includes(id)) next.push(id); }); return next; });
+                          else setSelectedDirIds(function(prev) { return prev.filter(function(id) { return !allIds.includes(id); }); });
+                        }} />;
+                      })()}
+                    </th>
+                    {[
+                      { col: "name",     label: "Name"       },
+                      { col: null,       label: "Email"      },
+                      { col: "role",     label: "Role"       },
+                      { col: "branch",   label: "Branch"     },
+                      { col: "company",  label: "Company"    },
+                      { col: null,       label: "NMLS"       },
+                      { col: "lastSeen", label: "Last Login" },
+                    ].map(function(h, i) {
+                      var isActive = h.col && dirSort.col === h.col;
                       return (
-                        <tr key={p.id} style={{ borderBottom: idx < dirFiltered.length - 1 ? "1px solid #F0F4F8" : "none", background: isSelf ? "rgba(12,65,96,0.03)" : "#fff" }}>
-                          {/* Login dot */}
-                          <td style={{ padding: "12px 0 12px 14px", verticalAlign: "middle" }}>
-                            <div style={{ width: 8, height: 8, borderRadius: "50%", background: actLoaded ? actDotColor(p.daysSince) : "#E0E8E8" }} />
-                          </td>
-                          {/* Name + title */}
-                          <td style={{ padding: "10px 12px", verticalAlign: "middle" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                              <div style={{ width: 32, height: 32, borderRadius: "50%", background: avatarBg, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
-                                {(p.display_name || p.email || "?").charAt(0).toUpperCase()}
-                              </div>
-                              <div>
-                                <div style={{ fontSize: 13, fontWeight: 600, color: "#0C4160", fontFamily: UP_FONT, whiteSpace: "nowrap" }}>
-                                  {p.display_name || "(no name)"}
-                                  {isSelf && <span style={{ marginLeft: 6, fontSize: 9, color: "#1B8A5A", fontWeight: 700, background: "#E8F5E9", borderRadius: 99, padding: "1px 6px" }}>YOU</span>}
-                                </div>
-                                {p.title && <div style={{ fontSize: 11, color: "#8A99A8", fontFamily: UP_FONT }}>{p.title}</div>}
-                              </div>
-                            </div>
-                          </td>
-                          {/* Email */}
-                          <td style={{ padding: "10px 12px", fontSize: 12, color: "#6B7D8A", fontFamily: UP_FONT, whiteSpace: "nowrap" }}>{p.email || "—"}</td>
-                          {/* Role */}
-                          <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
-                            <RoleBadge role={p.role} />
-                            {isAdmin && !isSelf && (
-                              <div style={{ display: "flex", gap: 5, alignItems: "center", marginTop: 5 }}>
-                                <select
-                                  value={selRole}
-                                  onChange={function(e) { var v = e.target.value; setEditRoles(function(prev) { return Object.assign({}, prev, { [p.id]: v }); }); }}
-                                  style={{ padding: "3px 6px", borderRadius: 5, border: "1px solid #E0E8E8", fontSize: 11, fontFamily: UP_FONT, background: "#fff", color: "#0C4160", cursor: "pointer" }}
-                                >
-                                  <option value="borrower">Borrower</option>
-                                  <option value="realtor">Realtor</option>
-                                  <option value="builder">Builder</option>
-                                  <option value="internal">Internal</option>
-                                  <option value="branch_admin">Branch Admin</option>
-                                  <option value="admin">Admin</option>
-                                  {isSuperAdmin && <option value="super_admin">Super Admin</option>}
-                                </select>
-                                <button onClick={function() { saveRole(p.id); }} disabled={!hasChanged || roleSaving[p.id]}
-                                  style={Object.assign({}, BTN_SM, { padding: "3px 8px", fontSize: 10 }, !hasChanged ? { opacity: 0.3, cursor: "default" } : {}, roleSaved[p.id] ? { background: "#1B8A5A" } : {})}>
-                                  {roleSaved[p.id] ? "✓" : roleSaving[p.id] ? "…" : "Save"}
-                                </button>
-                              </div>
-                            )}
-                            {roleError[p.id] && <div style={{ fontSize: 10, color: "#B91C1C", marginTop: 2 }}>⚠ {roleError[p.id]}</div>}
-                          </td>
-                          {/* Branch */}
-                          <td style={{ padding: "10px 12px", fontSize: 12, color: "#6B7D8A", fontFamily: UP_FONT, whiteSpace: "nowrap" }}>{p.branchName || <span style={{ color: "#D1D5DB" }}>—</span>}</td>
-                          {/* Company */}
-                          <td style={{ padding: "10px 12px", fontSize: 12, color: "#6B7D8A", fontFamily: UP_FONT, whiteSpace: "nowrap" }}>{p.company || <span style={{ color: "#D1D5DB" }}>—</span>}</td>
-                          {/* NMLS */}
-                          <td style={{ padding: "10px 12px", fontSize: 12, color: "#8A99A8", fontFamily: UP_FONT, whiteSpace: "nowrap" }}>{p.nmls ? "#" + p.nmls : <span style={{ color: "#D1D5DB" }}>—</span>}</td>
-                          {/* Last Login */}
-                          <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
-                            {actLoaded ? (
-                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                <div>
-                                  <div style={{ fontSize: 12, fontWeight: 600, color: p.sessionCount > 0 ? "#0C4160" : "#D1D5DB", fontFamily: UP_FONT }}>{actRelDate(p.daysSince)}</div>
-                                  {p.lastSeen && <div style={{ fontSize: 10, color: "#94A3B0", fontFamily: UP_FONT }}>{actExactDate(p.lastSeen)}</div>}
-                                </div>
-                                {p.sessionCount > 0 && (
-                                  <span style={{ background: "#EFF6FF", color: "#1E40AF", border: "1px solid #BFDBFE", borderRadius: 99, padding: "1px 7px", fontSize: 10, fontWeight: 700, fontFamily: UP_FONT }}>{p.sessionCount}</span>
-                                )}
-                              </div>
-                            ) : (
-                              <span style={{ fontSize: 11, color: "#D1D5DB", fontFamily: UP_FONT }}>—</span>
-                            )}
-                          </td>
-                          {/* Actions */}
-                          <td style={{ padding: "10px 14px 10px 12px", whiteSpace: "nowrap" }}>
-                            <div style={{ display: "flex", gap: 5 }}>
-                              {isAdmin && (
-                                <button onClick={function() { setEditingProfile(p); }} style={Object.assign({}, BTN_GHOST, { padding: "4px 10px", fontSize: 11 })}>✏️ Edit</button>
-                              )}
-                              {p.email && (
-                                <button onClick={function() { sendPwReset(p); }} disabled={resetSending}
-                                  style={Object.assign({}, BTN_GHOST, { padding: "4px 10px", fontSize: 11 },
-                                    resetResult === "sent"  ? { background: "#E8F5E9", color: "#1B8A5A", border: "1px solid #A7F3D0" } : {},
-                                    resetResult === "error" ? { background: "#FEE2E2", color: "#B91C1C", border: "1px solid #FECACA" } : {},
-                                    resetSending ? { opacity: 0.6, cursor: "wait" } : {}
-                                  )}>
-                                  {resetResult === "sent" ? "✓ Sent" : resetResult === "error" ? "✗" : resetSending ? "…" : "🔑"}
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
+                        <th key={i} onClick={h.col ? function() { toggleDirSort(h.col); } : undefined} style={{
+                          padding: "10px 12px", textAlign: "left", fontSize: 11, fontWeight: 700,
+                          fontFamily: UP_FONT, color: isActive ? "#0C4160" : "#6B7D8A",
+                          textTransform: "uppercase", letterSpacing: "0.06em",
+                          cursor: h.col ? "pointer" : "default", userSelect: "none", whiteSpace: "nowrap",
+                        }}>
+                          {h.label}
+                          {h.col && <span style={{ marginLeft: 3, opacity: isActive ? 1 : 0.3 }}>{isActive ? (dirSort.dir === "asc" ? "↑" : "↓") : "⇅"}</span>}
+                        </th>
                       );
                     })}
-                  </tbody>
-                </table>
-              </div>
+                    <th style={{ width: 40 }} />
+                  </tr>
+                </thead>
+                <tbody>
+                  {dirFiltered.length === 0 && (
+                    <tr><td colSpan={9} style={{ padding: "40px 24px", textAlign: "center", color: "#6B7D8A", fontSize: 14, fontFamily: UP_FONT }}>No people match this filter.</td></tr>
+                  )}
+                  {dirFiltered.map(function(p, idx) {
+                    var isSelf    = p.id === user.id;
+                    var isSelected = selectedDirIds.includes(p.id);
+                    var menuOpen  = dirMenuOpenId === p.id;
+                    return (
+                      <tr key={p.id}
+                        style={{ borderBottom: idx < dirFiltered.length - 1 ? "1px solid #F0F4F8" : "none", background: isSelected ? "rgba(12,65,96,0.06)" : isSelf ? "rgba(12,65,96,0.03)" : "#fff", transition: "background 0.1s" }}
+                        onMouseEnter={function(e) { if (!isSelected) e.currentTarget.style.background = "rgba(12,65,96,0.02)"; }}
+                        onMouseLeave={function(e) { e.currentTarget.style.background = isSelected ? "rgba(12,65,96,0.06)" : isSelf ? "rgba(12,65,96,0.03)" : "#fff"; }}
+                      >
+                        {/* Checkbox */}
+                        <td style={{ padding: "10px 0 10px 14px", verticalAlign: "middle" }} onClick={function(e) { e.stopPropagation(); }}>
+                          {!isSelf && <input type="checkbox" checked={isSelected} style={{ cursor: "pointer" }}
+                            onChange={function() { setSelectedDirIds(function(prev) { return prev.includes(p.id) ? prev.filter(function(x) { return x !== p.id; }) : prev.concat([p.id]); }); }} />}
+                        </td>
+                        {/* Name */}
+                        <td style={{ padding: "10px 12px", verticalAlign: "middle" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <button onClick={function() { setEditingProfile(p); }} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontWeight: 600, fontSize: 13, color: "#0C4160", fontFamily: UP_FONT, textDecoration: "underline", textDecorationColor: "#C5D5E4", textUnderlineOffset: 3, textAlign: "left" }}>
+                              {p.display_name || "(no name)"}
+                            </button>
+                            {isSelf && <span style={{ fontSize: 9, color: "#1B8A5A", fontWeight: 700, background: "#E8F5E9", borderRadius: 99, padding: "1px 6px" }}>YOU</span>}
+                          </div>
+                          {p.title && <div style={{ fontSize: 11, color: "#8A99A8", fontFamily: UP_FONT, marginTop: 1 }}>{p.title}</div>}
+                        </td>
+                        {/* Email */}
+                        <td style={{ padding: "10px 12px", fontSize: 12, color: "#6B7D8A", fontFamily: UP_FONT, whiteSpace: "nowrap" }}>{p.email || "—"}</td>
+                        {/* Role badge only */}
+                        <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}><RoleBadge role={p.role} /></td>
+                        {/* Branch */}
+                        <td style={{ padding: "10px 12px", fontSize: 12, color: "#6B7D8A", fontFamily: UP_FONT, whiteSpace: "nowrap" }}>{p.branchName || <span style={{ color: "#D1D5DB" }}>—</span>}</td>
+                        {/* Company */}
+                        <td style={{ padding: "10px 12px", fontSize: 12, color: "#6B7D8A", fontFamily: UP_FONT, whiteSpace: "nowrap" }}>{p.company || <span style={{ color: "#D1D5DB" }}>—</span>}</td>
+                        {/* NMLS */}
+                        <td style={{ padding: "10px 12px", fontSize: 12, color: "#8A99A8", fontFamily: UP_FONT, whiteSpace: "nowrap" }}>{p.nmls ? "#" + p.nmls : <span style={{ color: "#D1D5DB" }}>—</span>}</td>
+                        {/* Last Login */}
+                        <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                          {actLoaded ? (
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: p.sessionCount > 0 ? "#0C4160" : "#D1D5DB", fontFamily: UP_FONT }}>{actRelDate(p.daysSince)}</div>
+                              {p.lastSeen && <div style={{ fontSize: 10, color: "#94A3B0", fontFamily: UP_FONT }}>{actExactDate(p.lastSeen)}</div>}
+                            </div>
+                          ) : <span style={{ fontSize: 11, color: "#D1D5DB", fontFamily: UP_FONT }}>—</span>}
+                        </td>
+                        {/* Three-dot menu */}
+                        <td style={{ padding: "10px 12px", textAlign: "center", verticalAlign: "middle" }} onClick={function(e) { e.stopPropagation(); }}>
+                          {isAdmin && (
+                            <div style={{ position: "relative", display: "inline-block" }}>
+                              <button
+                                onClick={function(e) { e.stopPropagation(); setDirMenuOpenId(menuOpen ? null : p.id); }}
+                                style={{ background: "none", border: "1px solid #E0E8E8", borderRadius: 6, padding: "3px 9px", cursor: "pointer", fontSize: 15, color: "#6B7D8A", lineHeight: 1, fontFamily: UP_FONT }}>
+                                ···
+                              </button>
+                              {menuOpen && (
+                                <div style={{ position: "absolute", right: 0, top: "100%", zIndex: 200, background: "#fff", border: "1px solid #E0E8E8", borderRadius: 8, boxShadow: "0 4px 20px rgba(0,0,0,0.12)", minWidth: 150, overflow: "hidden" }}>
+                                  <button onClick={function() { setEditingProfile(p); setDirMenuOpenId(null); }}
+                                    style={{ display: "block", width: "100%", padding: "10px 14px", border: "none", background: "transparent", textAlign: "left", fontSize: 13, fontFamily: UP_FONT, color: "#0C4160", cursor: "pointer" }}>
+                                    ✏️ Edit Profile
+                                  </button>
+                                  {!isSelf && (
+                                    <button onClick={function() { setDirConfirmSingle(p); setDirMenuOpenId(null); }}
+                                      style={{ display: "block", width: "100%", padding: "10px 14px", border: "none", background: "transparent", textAlign: "left", fontSize: 13, fontFamily: UP_FONT, color: "#B91C1C", cursor: "pointer" }}>
+                                      🗑️ Delete
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
               <div style={{ padding: "10px 16px", borderTop: "1px solid #F0F4F8", fontSize: 11, color: "#94A3B0", fontFamily: UP_FONT, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
                 <span>{dirFiltered.length} of {allProfiles.length} people shown</span>
                 <span>{actLoaded ? "✓ Login data loaded" : "Login data loads when Activity tab is opened"}</span>
               </div>
             </div>
+
+            {/* Single delete confirm */}
+            {dirConfirmSingle && (
+              <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+                <div style={{ background: "#fff", borderRadius: 16, padding: "28px 24px", maxWidth: 420, width: "100%", boxShadow: "0 12px 40px rgba(0,0,0,0.2)", fontFamily: UP_FONT }}>
+                  <h3 style={{ fontSize: 17, fontWeight: 700, color: "#B91C1C", margin: "0 0 10px 0" }}>Delete {dirConfirmSingle.display_name || "this user"}?</h3>
+                  <p style={{ fontSize: 13, color: "#6B7D8A", margin: "0 0 20px 0", lineHeight: 1.6 }}>This removes their profile record. Their Supabase Auth login will still exist. This cannot be undone.</p>
+                  <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                    <button onClick={function() { setDirConfirmSingle(null); }} style={BTN_SECONDARY}>Cancel</button>
+                    <button onClick={function() { handleDirDeleteSingle(dirConfirmSingle.id); }} style={Object.assign({}, BTN_PRIMARY, { background: "#B91C1C" })}>Delete</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Bulk delete confirm */}
+            {dirConfirmDel && (
+              <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+                <div style={{ background: "#fff", borderRadius: 16, padding: "28px 24px", maxWidth: 420, width: "100%", boxShadow: "0 12px 40px rgba(0,0,0,0.2)", fontFamily: UP_FONT }}>
+                  <h3 style={{ fontSize: 17, fontWeight: 700, color: "#B91C1C", margin: "0 0 10px 0" }}>Delete {selectedDirIds.length} user{selectedDirIds.length > 1 ? "s" : ""}?</h3>
+                  <p style={{ fontSize: 13, color: "#6B7D8A", margin: "0 0 8px 0", lineHeight: 1.6 }}>This removes their profile records. This cannot be undone.</p>
+                  <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                    <button onClick={function() { setDirConfirmDel(false); }} style={BTN_SECONDARY}>Cancel</button>
+                    <button onClick={handleDirBulkDelete} disabled={dirBulkDeleting} style={Object.assign({}, BTN_PRIMARY, { background: "#B91C1C" }, dirBulkDeleting ? { opacity: 0.6 } : {})}>
+                      {dirBulkDeleting ? "Deleting…" : "Yes, Delete"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
