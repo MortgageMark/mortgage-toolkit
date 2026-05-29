@@ -682,7 +682,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
         <div style={{ flex: 1, overflowY: "auto", background: "#f1f5f9" }}>
         <div
           style={{ maxWidth: "1000px", margin: "0 auto", padding: "24px 16px", paddingBottom: editMode ? "120px" : "24px" }}
-          onDoubleClick={isInternal && !editMode && activeView === "contact" ? function (e) {
+          onDoubleClick={isInternal && !editMode ? function (e) {
             if (e.target.tagName === "BUTTON" || e.target.tagName === "A" ||
                 e.target.tagName === "INPUT"  || e.target.tagName === "SELECT" ||
                 e.target.tagName === "TEXTAREA") return;
@@ -1842,7 +1842,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
           boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
           paddingTop: "12px", paddingLeft: "24px", paddingRight: "24px",
           paddingBottom: "max(14px, env(safe-area-inset-bottom))",
-          display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "10px",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: "10px",
         }}>
           {saveError && (
             <div style={{ flex: 1, fontSize: "13px", color: "#dc2626", fontFamily: "'Inter', system-ui, sans-serif" }}>
