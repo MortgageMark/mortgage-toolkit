@@ -279,6 +279,18 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
     if (match) setSelectedContact(match);
   }, [initialContactId, contacts]);
 
+  // ── Close contact detail when sidebar filter link is clicked ─────────
+  // typeFilterProp changes when the user clicks All / Business / Client
+  // in the sidebar while a contact is open. We detect the change via a ref
+  // so we only react to *updates*, not the initial mount value.
+  var _prevTypeFilter = React.useRef(typeFilterProp);
+  useEffect(function() {
+    if (typeFilterProp !== _prevTypeFilter.current) {
+      _prevTypeFilter.current = typeFilterProp;
+      setSelectedContact(null);
+    }
+  }, [typeFilterProp]);
+
   // ── Load contacts on mount ────────────────────────────────────────────
   useEffect(function() {
     if (!isCloudUser) return;
