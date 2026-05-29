@@ -726,10 +726,11 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
           ) : (
             <div />
           )}
-          {/* Create Login + Edit buttons — only relevant on the Contact Info tab */}
-          {activeView === "contact" && !editMode && (
+          {/* Buttons — Edit is on both tabs; Create Login is Contact Info tab only */}
+          {!editMode && (
             <div style={{ display: "flex", gap: "8px", alignItems: "center", flexShrink: 0 }}>
-              {canManage && (portalCreated || contact.auth_user_id ||
+              {/* Create Login / Login Active — Contact Info tab only */}
+              {activeView === "contact" && canManage && (portalCreated || contact.auth_user_id ||
                 contact.email_personal || contact.email || contact.email_work) && (
                 (portalCreated || contact.auth_user_id) ? (
                   <button
@@ -762,6 +763,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                   </button>
                 )
               )}
+              {/* Edit — visible on both Contact Info and Internal Notes tabs */}
               {isInternal && (
                 <button
                   onClick={function () { setEditMode(true); setSaveError(null); }}
@@ -1835,7 +1837,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
       {/* ── Sticky Save / Discard bar (edit mode only) ───────────────────── */}
       {editMode && (
         <div style={{
-          position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 300,
+          position: "fixed", bottom: 0, left: "var(--mtk-sidebar-w, 0px)", right: 0, zIndex: 300,
           background: "#fff", borderTop: "1px solid #e2e8f0",
           boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
           paddingTop: "12px", paddingLeft: "24px", paddingRight: "24px",

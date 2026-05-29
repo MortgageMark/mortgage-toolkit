@@ -1441,6 +1441,11 @@ function App() {
     !showChangePassword && !showProfileSetup && !showMyInfo);
   const sidebarWidth = showSidebar && !isMobile ? (sidebarPinned ? 220 : 42) : 0;
 
+  // Expose sidebar width as CSS variable so fixed-positioned children (e.g. save bar) can offset correctly
+  React.useEffect(function() {
+    document.documentElement.style.setProperty('--mtk-sidebar-w', sidebarWidth + 'px');
+  }, [sidebarWidth]);
+
   // Determine which nav item is "active" (mutually exclusive highlights)
   const inContacts   = showContacts && !showTasksContacts;
   const inScenarios  = !showContacts && !showTasksScenarios && !showTasksContacts && !showUsers && activeScenario === null;
