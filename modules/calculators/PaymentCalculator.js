@@ -2141,6 +2141,7 @@ function PaymentCalculator({ isInternal, user }) {
                         prefix="$"
                         type="number"
                         hint={monthlyMiOvr ? `Replaces auto: ${fmt2(calc.autoMonthlyMI)}/mo` : `Auto: ${fmt2(calc.autoMonthlyMI)}/mo`}
+                        infoTip="Enter a dollar amount to replace the system-calculated monthly mortgage insurance. Use this when the MI company gives you a different rate than the auto-lookup — for example, borrower-paid single premium scenarios, or when you have a manual quote from Enact or Essent. Leave blank to use the auto rate."
                       />
                     </div>
                     <div>
@@ -2151,6 +2152,7 @@ function PaymentCalculator({ isInternal, user }) {
                         prefix="$"
                         type="number"
                         hint={upfrontMiOvr ? `Replaces auto: ${fmt(calc.autoUpfrontFee)}` : `Auto: ${fmt(calc.autoUpfrontFee)}`}
+                        infoTip="Enter a dollar amount to replace the system-calculated upfront MI fee. This covers VA funding fees, FHA UFMIP (1.75%), USDA upfront guarantee fee (1%), and conventional single or split premiums. Use when your actual fee differs from the auto calculation — for example, when a borrower's disability rating waives the VA fee partially."
                       />
                     </div>
                   </div>
@@ -2172,7 +2174,7 @@ function PaymentCalculator({ isInternal, user }) {
       </div>
 
       {/* ═══ PROPERTY TAX ═══ */}
-      <SectionCard title="PROPERTY TAX" accent={c.blue} style={{ maxWidth: 640 }}>
+      <SectionCard title="PROPERTY TAX" accent={c.blue} style={{ maxWidth: 640 }} infoTip="Annual property taxes as a percentage of home value, included in your monthly PITI payment when escrowed. Texas rates typically range 1.5–2.5% depending on county and school district. Enter the monthly dollar amount OR the annual rate — both fields stay in sync.">
         {(() => {
           const hp = parseFloat(homePrice) || 0;
           const basis = homesteadExemption ? hp * 0.70 : hp;
@@ -2249,7 +2251,7 @@ function PaymentCalculator({ isInternal, user }) {
       </SectionCard>
 
       {/* ═══ HOME INSURANCE ═══ */}
-      <SectionCard title="HOME INSURANCE" accent={c.blue} style={{ maxWidth: 640 }}>
+      <SectionCard title="HOME INSURANCE" accent={c.blue} style={{ maxWidth: 640 }} infoTip="Annual homeowners insurance as a percentage of home value, included in your PITI payment when escrowed. A common estimate is 0.5–1.0% annually depending on location, coverage level, and provider. Always get an actual quote — rates vary significantly by property and insurer.">
         {(() => {
           const hp = parseFloat(homePrice) || 0;
           const rate = Math.max(0, parseFloat(homeInsuranceRate) || 0);

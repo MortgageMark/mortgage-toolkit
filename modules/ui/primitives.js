@@ -106,7 +106,7 @@ function MetricCard({ label, value, sublabel, positive, large, highlight, accent
   );
 }
 
-function SectionCard({ title, children, accent, collapsed, onToggle, style: cardStyle }) {
+function SectionCard({ title, children, accent, collapsed, onToggle, style: cardStyle, infoTip }) {
   const c = useThemeColors();
   return (
     <div style={{ background: c.white, borderRadius: 12, border: `1px solid ${c.border}`, boxShadow: "0 1px 4px rgba(0,0,0,0.04)", marginBottom: 16, overflow: "hidden", width: "100%", maxWidth: "100%", boxSizing: "border-box", ...cardStyle }}>
@@ -114,6 +114,7 @@ function SectionCard({ title, children, accent, collapsed, onToggle, style: card
         <div onClick={onToggle} style={{ padding: "14px 18px", borderBottom: collapsed ? "none" : `1px solid ${c.border}`, display: "flex", alignItems: "center", gap: 8, cursor: onToggle ? "pointer" : "default" }}>
           <div style={{ width: 4, height: 18, borderRadius: 2, background: accent || c.navy }} />
           <div style={{ fontSize: 13, fontWeight: 700, color: c.text || c.navy, fontFamily: font, flex: 1 }}>{title}</div>
+          {infoTip && <InfoTip text={infoTip} />}
           {onToggle && <span style={{ color: c.gray, fontSize: 14 }}>{collapsed ? "▸" : "▾"}</span>}
         </div>
       )}
