@@ -335,7 +335,7 @@ function SellerNetSheet({ isInternal = false, user = null }) {
           </SectionCard>
 
           {/* MORTGAGE PAYOFFS */}
-          <SectionCard title="MORTGAGE PAYOFFS" accent={COLORS.red}>
+          <SectionCard title="MORTGAGE PAYOFFS" accent={COLORS.red} infoTip="Enter the current outstanding balance(s) on the seller's mortgages. Call the servicer for an exact payoff quote good through the expected closing date — the payoff changes daily as interest accrues. If there's a second mortgage or HELOC, enter it separately in the 2nd Mortgage field.">
             <LabeledInput label="1st Mortgage Payoff" prefix="$" value={mort1} onChange={setMort1} useCommas />
             <LabeledInput label="2nd Mortgage Payoff" prefix="$" value={mort2} onChange={setMort2} useCommas />
             <div style={{ margin: "2px 0 10px", padding: "9px 12px", borderRadius: 7, background: "#FFF8E7", border: "1px solid #F0D080", borderLeft: "3px solid #E6A817", fontSize: 12, color: "#7A5800", fontFamily: font, lineHeight: 1.6 }}>
@@ -401,7 +401,7 @@ function SellerNetSheet({ isInternal = false, user = null }) {
           </SectionCard>
 
           {/* OPTIONAL: SELLER PAID ITEMS */}
-          <SectionCard title="OPTIONAL: SELLER PAID ITEMS" accent={COLORS.blue}>
+          <SectionCard title="OPTIONAL: SELLER PAID ITEMS" accent={COLORS.blue} infoTip="These are items the seller commonly pays as part of the deal. Toggle each on or off based on what the contract specifies. Title Policy is traditionally seller-paid in Texas. Home Warranty and Survey are negotiable — review the contract or ask your agent.">
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
               <div style={{ flex: 1 }}><Toggle label={"Title Policy (" + fmt(calc.titleAmtFull) + ")"} checked={sellerPaysTitle} onChange={setSellerPaysTitle} /></div>
               <InfoTip text="The Owner's Title Insurance Policy protects the buyer against defects in the title — such as liens, forgeries, or ownership disputes — that occurred before closing. In most Texas transactions, the seller pays for the Owner's Policy as part of the deal." />
@@ -417,7 +417,7 @@ function SellerNetSheet({ isInternal = false, user = null }) {
           </SectionCard>
 
           {/* OTHER EXPENSES */}
-          <SectionCard title="OTHER EXPENSES" accent={COLORS.blue}>
+          <SectionCard title="OTHER EXPENSES" accent={COLORS.blue} infoTip="Any additional deductions from the seller's proceeds not covered above. Common examples: existing liens or judgments, HOA violations or back dues owed, court costs, state transfer/deed taxes (varies by state), or other contract-specific items. Add up to three custom line items.">
             <div style={{ fontSize: 12, color: COLORS.grayLight, marginBottom: 8, fontFamily: font }}>
               Add up to three additional seller expenses.
             </div>

@@ -1081,7 +1081,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
         <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
 
           {/* CLOSING & FUNDING DATES */}
-          <SectionCard title="CLOSING & FUNDING DATES" accent={COLORS.blue}>
+          <SectionCard title="CLOSING & FUNDING DATES" accent={COLORS.blue} infoTip="The closing date is when the title transfers and documents are signed. The funding date (typically 1-3 days later for purchases) is when the lender wires the money and the deal is complete. For refinances in Texas, there's a mandatory 3-day rescission period after signing before funding can occur.">
             <div style={{ marginBottom:12 }}>
               <label style={{ display:"block", fontSize:11, fontWeight:600, color:COLORS.grayLight, marginBottom:4, fontFamily:font, letterSpacing:"0.04em" }}>Closing Date</label>
               <input type="date" value={closingDate} onChange={e => {
@@ -1163,7 +1163,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
 
           {/* REFI LOAN PAYOFF — auto-populated from PC Loan Sizing Worksheet */}
           {!fees.isPurchase && (
-          <SectionCard title="LOAN PAYOFF" accent={COLORS.navy}>
+          <SectionCard title="LOAN PAYOFF" accent={COLORS.navy} infoTip="For purchases, enter the buyer's existing mortgages being paid off at closing (e.g., a bridge loan or HELOC). For refinances, this is the payoff amount on the current mortgage — call your servicer for an exact payoff good through your closing date, as it changes daily with accruing interest.">
             {(() => {
               const la = parseFloat(loanAmount) || 0;
               const payoff = fees.refiPayoffAmt;
@@ -1435,7 +1435,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
 
           {/* CONTRACT DETAILS */}
           {fees.isPurchase && (
-          <SectionCard title="CONTRACT DETAILS" accent={COLORS.green}>
+          <SectionCard title="CONTRACT DETAILS" accent={COLORS.green} infoTip="Key financial terms from the purchase contract. Earnest money and option money are credits applied toward the buyer's cash to close. The Realtor commission paid by the buyer (if any) is a deduction from the seller side — it reduces the seller's net but increases the buyer's costs.">
             {selectedState === "TX" && <LabeledInput label="Option Money"  prefix="$" value={optionMoney}  onChange={setOptionMoney}  useCommas />}
             <LabeledInput label="Earnest Money" prefix="$" value={earnestMoney} onChange={setEarnestMoney} useCommas infoTip="A good-faith deposit made by the buyer, typically held in escrow by the title company. Applied toward the buyer's closing costs or down payment at closing." />
             <LabeledInput
@@ -1486,7 +1486,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
           )}
 
           {/* CREDITS */}
-          <SectionCard title="CREDITS" accent={COLORS.green}>
+          <SectionCard title="CREDITS" accent={COLORS.green} infoTip="Credits reduce the buyer's cash to close. Seller credits come from the contract. Realtor credits come from the buyer's agent contributing part of their commission. Lender credits come from accepting a slightly higher interest rate in exchange for the lender offsetting your closing costs. All three types are subject to program limits.">
             {fees.isPurchase && <LabeledInput label="Seller Credits"  prefix="$" value={sellerCredits}  onChange={setSellerCredits}  useCommas infoTip="A dollar amount the seller agrees to contribute toward the buyer's closing costs. This reduces what the buyer needs to bring to closing. Subject to program-specific limits." />}
             {fees.isPurchase && <LabeledInput label="Realtor Credits" prefix="$" value={realtorContrib} onChange={setRealtorContrib} useCommas />}
             <LabeledInput label="Lender Credits" prefix="$" value={lenderCredits} onChange={setLenderCredits} useCommas infoTip="Credits from the lender that offset closing costs — typically in exchange for accepting a slightly higher interest rate. Lender credits cannot exceed total closing costs." />
@@ -1594,7 +1594,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
 
           {/* HOA */}
           {fees.isPurchase && (
-            <SectionCard title="HOMEOWNERS ASSOCIATION (HOA)" accent={COLORS.blue}>
+            <SectionCard title="HOMEOWNERS ASSOCIATION (HOA)" accent={COLORS.blue} infoTip="HOA fees at closing include a one-time transfer fee (for transferring membership from seller to buyer) and a prorated dues amount (covering the period from closing through the next scheduled payment date). Both are typically paid by the buyer. The contract may specify who pays the transfer fee.">
               <LabeledInput label="HOA Dues (monthly)" prefix="$" value={hoaDues} onChange={setHoaDues} useCommas />
               <LabeledInput label="HOA Transfer Fee"   prefix="$" value={hoaTransferFee} onChange={setHoaTransferFee} useCommas />
               <div style={{ fontSize:12, color:COLORS.grayLight, marginTop:2, marginBottom:8, fontFamily:font, lineHeight:1.6 }}>
