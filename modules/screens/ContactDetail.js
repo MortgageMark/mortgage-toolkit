@@ -425,6 +425,37 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
     } else {
       setEditMode(false);
       if (onSave) onSave(data);
+
+      // Instant PQ letter update — if this is the logged-in LO's own contact record,
+      // propagate the new profile fields immediately without requiring a re-login.
+      var isOwnLoContact = (
+        editForm.contact_type === "business" &&
+        editForm.contact_category === "Loan Officer" &&
+        user &&
+        (editForm.email_personal === user.email || editForm.email_work === user.email)
+      );
+      if (isOwnLoContact && window.propagateLOToPreQual) {
+        var fullName = [editForm.first_name, editForm.last_name].filter(Boolean).join(" ");
+        if (fullName) {
+          window.propagateLOToPreQual({
+            name:          fullName,
+            nmls:          editForm.lo_nmls          || "",
+            phone:         editForm.phone_work        || "",
+            cell:          editForm.phone_cell        || "",
+            email_display: editForm.lo_email_display  || "",
+            email:         user.email,
+            title:         editForm.lo_title          || "",
+            website:       editForm.lo_website        || "",
+            branchNmls:    editForm.lo_branch_nmls    || "",
+            company:       editForm.company           || "",
+            companyNMLS:   editForm.lo_company_nmls   || "",
+            address:       editForm.address1_street   || "",
+            city:          editForm.address1_city     || "",
+            state:         editForm.address1_state    || "",
+            zip:           editForm.address1_zip      || "",
+          });
+        }
+      }
     }
   }
 
