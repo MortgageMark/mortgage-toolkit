@@ -1256,7 +1256,6 @@ function App() {
     setActiveScenario(null);
 
     // Auto-populate PQ letter fields from the LO's own contact record on fresh login.
-    const INTERNAL_ROLES_LOGIN = ["super_admin", "admin", "branch_admin", "internal"];
     if (userData && userData.isInternal && userData.email && supabase) {
       supabase
         .from("contacts")

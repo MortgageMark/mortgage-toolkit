@@ -1,6 +1,6 @@
-// modules/screens/UsersPanel.js
+﻿// modules/screens/UsersPanel.js
 // Full-page admin screen for managing team members, roles, and borrower permissions.
-// Replaces/supplements the AdminPanel popup — accessible from the Scenario Dashboard.
+// Replaces/supplements the AdminPanel popup â€” accessible from the Scenario Dashboard.
 const { useState, useEffect } = React;
 const supabase        = window._supabaseClient;
 const useThemeColors  = window.useThemeColors;
@@ -41,7 +41,7 @@ function upFmtPhone(val) {
   return val;
 }
 
-// ── Shared button styles (light theme) ──────────────────────────────────────
+// â”€â”€ Shared button styles (light theme) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const BTN_PRIMARY   = { padding: "8px 18px", background: "#0C4160", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: UP_FONT, cursor: "pointer" };
 const BTN_SECONDARY = { padding: "8px 18px", background: "#E8EEF4", color: "#0C4160", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: UP_FONT, cursor: "pointer" };
 const BTN_SM        = { padding: "5px 12px", background: "#0C4160", color: "#fff", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 600, fontFamily: UP_FONT, cursor: "pointer" };
@@ -54,7 +54,7 @@ const HDR_STYLE = {
   padding: "16px 24px", display: "flex", alignItems: "center", gap: 12, color: "#fff",
 };
 
-// ── Edit Profile full-screen form ───────────────────────────────────────────
+// â”€â”€ Edit Profile full-screen form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }) {
   const [form, setForm] = useState({
     display_name:  profile.display_name  || "",
@@ -126,7 +126,7 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }
 
   const FIELDS = [
     { key: "display_name",  label: "Display Name",         placeholder: "Full name",      span: 2 },
-    { key: "email_display", label: "Email — PQ Letter",    placeholder: "name@email.com", span: 2 },
+    { key: "email_display", label: "Email â€” PQ Letter",    placeholder: "name@email.com", span: 2 },
     { key: "title",         label: "Title",                placeholder: "Loan Officer"          },
     { key: "company",       label: "Company",              placeholder: "CMG Home Loans"        },
     { key: "nmls",          label: "NMLS #",               placeholder: "",               loOnly: true },
@@ -152,7 +152,7 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }
   return (
     <div style={{ minHeight: "100vh", background: "#F0F4F8", fontFamily: UP_FONT }}>
       <div style={HDR_STYLE}>
-        <button onClick={onCancel} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.35)", color: "#fff", borderRadius: 8, padding: "7px 16px", fontSize: 13, cursor: "pointer", fontFamily: UP_FONT, fontWeight: 600 }}>← Back</button>
+        <button onClick={onCancel} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.35)", color: "#fff", borderRadius: 8, padding: "7px 16px", fontSize: 13, cursor: "pointer", fontFamily: UP_FONT, fontWeight: 600 }}>â† Back</button>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 17, fontWeight: 700 }}>Edit Profile</div>
           <div style={{ fontSize: 12, opacity: 0.75 }}>{profile.display_name || profile.email}</div>
@@ -161,19 +161,19 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }
       <div style={{ maxWidth: 640, margin: "32px auto", padding: "0 20px" }}>
         <div style={{ background: "#fff", borderRadius: 14, padding: "28px 28px", boxShadow: "0 2px 14px rgba(0,0,0,0.07)" }}>
 
-          {/* Login ID — read only */}
+          {/* Login ID â€” read only */}
           <div style={{ marginBottom: 18 }}>
-            <label style={LABEL_ST}>Email — Login ID <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, fontSize: 10 }}>(read-only — managed by Supabase Auth)</span></label>
+            <label style={LABEL_ST}>Email â€” Login ID <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, fontSize: 10 }}>(read-only â€” managed by Supabase Auth)</span></label>
             <div style={Object.assign({}, INPUT_ST, { background: "#EEF2F6", color: "#6B7D8A", cursor: "default", display: "flex", alignItems: "center", gap: 8 })}>
-              <span style={{ fontSize: 13 }}>🔒</span>
+              <span style={{ fontSize: 13 }}>ðŸ”’</span>
               {profile.email || <em style={{ opacity: 0.5 }}>no login email on record</em>}
             </div>
-            <div style={{ fontSize: 11, color: "#94A3B0", marginTop: 4, lineHeight: 1.4 }}>
+            <div style={{ fontSize: 12, color: "#94A3B0", marginTop: 4, lineHeight: 1.4 }}>
               To change the login email, the user must update it from their own account or contact Supabase Auth directly.
             </div>
           </div>
 
-          {/* Team Lead + Branch — LO roles only */}
+          {/* Team Lead + Branch â€” LO roles only */}
           {isLORole && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 20px", marginBottom: 18 }}>
             <div>
               <label style={LABEL_ST}>Team Lead</label>
@@ -182,7 +182,7 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }
                 onChange={function(e) { setField("team_lead_id", e.target.value); }}
                 style={Object.assign({}, INPUT_ST, { cursor: "pointer" })}
               >
-                <option value="">— No team (standalone) —</option>
+                <option value="">â€” No team (standalone) â€”</option>
                 {potentialLeads.map(function(p) {
                   return (
                     <option key={p.id} value={p.id}>
@@ -199,7 +199,7 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }
                 onChange={function(e) { setField("branch_id", e.target.value); }}
                 style={Object.assign({}, INPUT_ST, { cursor: "pointer" })}
               >
-                <option value="">— No branch assigned —</option>
+                <option value="">â€” No branch assigned â€”</option>
                 {(branches || []).map(function(b) {
                   return <option key={b.id} value={b.id}>{b.name}{b.nmls ? " (NMLS " + b.nmls + ")" : ""}</option>;
                 })}
@@ -224,7 +224,7 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }
             })}
           </div>
 
-          {error && <div style={{ color: "#B91C1C", fontSize: 13, marginBottom: 14 }}>⚠ {error}</div>}
+          {error && <div style={{ color: "#B91C1C", fontSize: 13, marginBottom: 14 }}>âš  {error}</div>}
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
             <button onClick={onCancel} style={BTN_SECONDARY}>Cancel</button>
             <button
@@ -235,7 +235,7 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }
                 saved  ? { background: "#1B8A5A" } : {}
               )}
             >
-              {saved ? "✓ Saved" : saving ? "Saving…" : "Save Changes"}
+              {saved ? "âœ“ Saved" : saving ? "Savingâ€¦" : "Save Changes"}
             </button>
           </div>
         </div>
@@ -244,27 +244,27 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }
   );
 }
 
-// ── Main UsersPanel ──────────────────────────────────────────────────────────
+// â”€â”€ Main UsersPanel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function UsersPanel({ user, onBack, onLogout }) {
   const [activeTab, setActiveTab] = useState("directory");
 
-  // ── Supabase profile data ────
+  // â”€â”€ Supabase profile data â”€â”€â”€â”€
   const [allProfiles,     setAllProfiles]     = useState([]);
   const [profilesLoading, setProfilesLoading] = useState(true);
   const [profilesError,   setProfilesError]   = useState(null);
 
-  // ── Role management ────
+  // â”€â”€ Role management â”€â”€â”€â”€
   const [editRoles, setEditRoles] = useState({});
   const [roleSaving, setRoleSaving] = useState({});
   const [roleSaved,  setRoleSaved]  = useState({});
   const [roleError,  setRoleError]  = useState({});
 
-  // ── Team share toggle ────
-  const [teamShareEdit,   setTeamShareEdit]   = useState({});  // leadId → bool
+  // â”€â”€ Team share toggle â”€â”€â”€â”€
+  const [teamShareEdit,   setTeamShareEdit]   = useState({});  // leadId â†’ bool
   const [teamShareSaving, setTeamShareSaving] = useState({});
   const [teamShareSaved,  setTeamShareSaved]  = useState({});
 
-  // ── Team bulk selection ────
+  // â”€â”€ Team bulk selection â”€â”€â”€â”€
   const [selectedTeamIds, setSelectedTeamIds] = useState([]);
   const [bulkRole,        setBulkRole]        = useState("");
   const [bulkRoleSaving,  setBulkRoleSaving]  = useState(false);
@@ -272,7 +272,7 @@ function UsersPanel({ user, onBack, onLogout }) {
   const [bulkResult,      setBulkResult]      = useState(null);  // "deleted" | "role_saved"
   const [confirmBulkDel,  setConfirmBulkDel]  = useState(false);
 
-  // ── Directory bulk selection + three-dot menu ────
+  // â”€â”€ Directory bulk selection + three-dot menu â”€â”€â”€â”€
   const [selectedDirIds,   setSelectedDirIds]   = useState([]);
   const [dirBulkRole,      setDirBulkRole]      = useState("");
   const [dirBulkSaving,    setDirBulkSaving]    = useState(false);
@@ -324,7 +324,7 @@ function UsersPanel({ user, onBack, onLogout }) {
     }
   }
 
-  // ── Directory bulk handlers ────
+  // â”€â”€ Directory bulk handlers â”€â”€â”€â”€
   async function handleDirBulkDelete() {
     if (!supabase || selectedDirIds.length === 0) return;
     setDirBulkDeleting(true);
@@ -359,10 +359,10 @@ function UsersPanel({ user, onBack, onLogout }) {
     setDirMenuOpenId(null);
   }
 
-  // ── Edit profile screen ────
+  // â”€â”€ Edit profile screen â”€â”€â”€â”€
   const [editingProfile, setEditingProfile] = useState(null);
 
-  // ── Branches ────
+  // â”€â”€ Branches â”€â”€â”€â”€
   const [branches,        setBranches]        = useState([]);
   const [branchesLoaded,  setBranchesLoaded]  = useState(false);
   const [branchesLoading, setBranchesLoading] = useState(false);
@@ -371,7 +371,7 @@ function UsersPanel({ user, onBack, onLogout }) {
   const [branchError,     setBranchError]     = useState("");
   const [confirmDelBranch, setConfirmDelBranch] = useState(null);
 
-  // ── Activity tab ────
+  // â”€â”€ Activity tab â”€â”€â”€â”€
   const [actSessions,   setActSessions]   = useState(null);
   const [actLoading,    setActLoading]    = useState(false);
   const [actLoaded,     setActLoaded]     = useState(false);
@@ -379,10 +379,10 @@ function UsersPanel({ user, onBack, onLogout }) {
   const [actRoleFilter, setActRoleFilter] = useState("all");
   const [actSort,       setActSort]       = useState({ col: "lastSeen", dir: "desc" });
   const [dirSearch, setDirSearch] = useState("");
-  const [dirRoleFilter, setDirRoleFilter] = useState("all");
+  const [dirRoleFilter, setDirRoleFilter] = useState("lo");
   const [dirSort, setDirSort] = useState({ col: "name", dir: "asc" });
 
-  // ── Team tab search / sort ────
+  // â”€â”€ Team tab search / sort â”€â”€â”€â”€
   const [teamSearch,     setTeamSearch]     = useState("");
   const [teamRoleFilter, setTeamRoleFilter] = useState("all");
   const [teamSort,       setTeamSort]       = useState({ col: "name", dir: "asc" });
@@ -390,7 +390,7 @@ function UsersPanel({ user, onBack, onLogout }) {
   const isAdmin      = user && ["super_admin", "admin"].includes(user.role);
   const isSuperAdmin = user && user.role === "super_admin";
 
-  // ── Load all Supabase profiles ────
+  // â”€â”€ Load all Supabase profiles â”€â”€â”€â”€
   useEffect(function() {
     if (!supabase) { setProfilesLoading(false); return; }
     supabase
@@ -423,7 +423,7 @@ function UsersPanel({ user, onBack, onLogout }) {
       });
   }, []);
 
-  // ── Load branches lazily when Branches tab is opened ────
+  // â”€â”€ Load branches lazily when Branches tab is opened â”€â”€â”€â”€
   useEffect(function() {
     if ((activeTab !== "branches" && activeTab !== "directory") || branchesLoaded || !supabase) return;
     setBranchesLoading(true);
@@ -434,7 +434,7 @@ function UsersPanel({ user, onBack, onLogout }) {
     });
   }, [activeTab, branchesLoaded]);
 
-  // ── Lazy-load activity sessions when Activity tab opens ────
+  // â”€â”€ Lazy-load activity sessions when Activity tab opens â”€â”€â”€â”€
   useEffect(function() {
     if ((activeTab !== "activity" && activeTab !== "directory") || actLoaded || !supabase || !isAdmin) return;
     var fetchFn = window.fetchUserSessions;
@@ -453,7 +453,7 @@ function UsersPanel({ user, onBack, onLogout }) {
   // Build team groups: keyed by team lead ID, value = { lead, members[] }
   // A profile is a "member" if team_lead_id points to another profile's id
   const teamGroups = React.useMemo(function() {
-    const leadMap = {};  // leadId → { lead: profile, members: [] }
+    const leadMap = {};  // leadId â†’ { lead: profile, members: [] }
     const standalone = [];
     const profileById = {};
     teamProfiles.forEach(function(p) { profileById[p.id] = p; });
@@ -478,7 +478,7 @@ function UsersPanel({ user, onBack, onLogout }) {
           // This person is a team lead
           leadMap[p.id].lead = p;
         } else {
-          // No one is under them — standalone
+          // No one is under them â€” standalone
           standalone.push(p);
         }
       }
@@ -494,7 +494,7 @@ function UsersPanel({ user, onBack, onLogout }) {
     return { teams, standalone };
   }, [teamProfiles]);
 
-  // ── Role save ────
+  // â”€â”€ Role save â”€â”€â”€â”€
   async function saveRole(profileId) {
     if (!supabase || profileId === user.id) return;
     const newRole = editRoles[profileId];
@@ -515,7 +515,7 @@ function UsersPanel({ user, onBack, onLogout }) {
     }
   }
 
-  // ── Team share scenarios toggle ────
+  // â”€â”€ Team share scenarios toggle â”€â”€â”€â”€
   async function saveTeamShare(leadId) {
     if (!supabase) return;
     const newVal = !!teamShareEdit[leadId];
@@ -533,7 +533,7 @@ function UsersPanel({ user, onBack, onLogout }) {
     }
   }
 
-  // ── Branch save / delete ────
+  // â”€â”€ Branch save / delete â”€â”€â”€â”€
   const EMPTY_BRANCH = { name: "", nmls: "", address: "", city: "", state: "", zip: "" };
 
   async function saveBranch() {
@@ -569,7 +569,7 @@ function UsersPanel({ user, onBack, onLogout }) {
     setConfirmDelBranch(null);
   }
 
-  // ── Edit profile callbacks ────
+  // â”€â”€ Edit profile callbacks â”€â”€â”€â”€
   function handleEditSave(updatedFields) {
     setAllProfiles(function(prev) {
       return prev.map(function(p) {
@@ -579,7 +579,7 @@ function UsersPanel({ user, onBack, onLogout }) {
     setEditingProfile(null);
   }
 
-  // ── Activity tab helpers ────
+  // â”€â”€ Activity tab helpers â”€â”€â”€â”€
   function actDotColor(daysSince) {
     if (daysSince === null) return "#D1D5DB";
     if (daysSince <= 3)  return "#22C55E";
@@ -593,7 +593,7 @@ function UsersPanel({ user, onBack, onLogout }) {
     return daysSince + "d ago";
   }
   function actExactDate(isoStr) {
-    if (!isoStr) return "—";
+    if (!isoStr) return "â€”";
     var d = new Date(isoStr);
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   }
@@ -613,7 +613,7 @@ function UsersPanel({ user, onBack, onLogout }) {
     }).catch(function() { setActLoading(false); });
   }
 
-  // ── Activity merged data ────
+  // â”€â”€ Activity merged data â”€â”€â”€â”€
   var actMerged = React.useMemo(function() {
     var byUser = {};
     (actSessions || []).forEach(function(s) {
@@ -670,7 +670,7 @@ function UsersPanel({ user, onBack, onLogout }) {
   ];
   var actActiveCount = actLoaded ? actMerged.filter(function(u) { return u.sessionCount > 0; }).length : null;
 
-  // ── Directory tab helpers ────
+  // â”€â”€ Directory tab helpers â”€â”€â”€â”€
   var branchById = React.useMemo(function() {
     var map = {};
     branches.forEach(function(b) { map[b.id] = b; });
@@ -748,7 +748,7 @@ function UsersPanel({ user, onBack, onLogout }) {
     });
   }
 
-  // ── Tab bar item ────
+  // â”€â”€ Tab bar item â”€â”€â”€â”€
   function tabBtn(key, label, count) {
     const active = activeTab === key;
     return (
@@ -768,7 +768,7 @@ function UsersPanel({ user, onBack, onLogout }) {
     );
   }
 
-  // ── Render edit profile screen ────
+  // â”€â”€ Render edit profile screen â”€â”€â”€â”€
   if (editingProfile) {
     return (
       <EditProfileScreen
@@ -781,7 +781,7 @@ function UsersPanel({ user, onBack, onLogout }) {
     );
   }
 
-  // ── Main page ────
+  // â”€â”€ Main page â”€â”€â”€â”€
   return (
     <div style={{ minHeight: "100vh", background: "#F0F4F8", fontFamily: UP_FONT }}>
 
@@ -798,7 +798,7 @@ function UsersPanel({ user, onBack, onLogout }) {
         {isAdmin && tabBtn("directory", "Directory", allProfiles.length)}
         {tabBtn("team",      "Internal Team", teamProfiles.length)}
         {isAdmin && tabBtn("branches", "Branches", branches.length)}
-        {isAdmin && tabBtn("activity",  "Activity",  actActiveCount !== null ? actActiveCount + " active" : "…")}
+        {isAdmin && tabBtn("activity",  "Activity",  actActiveCount !== null ? actActiveCount + " active" : "â€¦")}
       </div>
 
       {/* Body */}
@@ -806,13 +806,13 @@ function UsersPanel({ user, onBack, onLogout }) {
 
         {/* Loading / error */}
         {profilesLoading && activeTab !== "roster" && (
-          <div style={{ textAlign: "center", padding: 60, color: "#6B7D8A", fontSize: 14 }}>Loading…</div>
+          <div style={{ textAlign: "center", padding: 60, color: "#6B7D8A", fontSize: 14 }}>Loadingâ€¦</div>
         )}
         {!profilesLoading && profilesError && activeTab !== "roster" && (
-          <div style={{ background: "#FEE2E2", color: "#B91C1C", padding: "14px 18px", borderRadius: 10, fontSize: 13 }}>⚠ {profilesError}</div>
+          <div style={{ background: "#FEE2E2", color: "#B91C1C", padding: "14px 18px", borderRadius: 10, fontSize: 13 }}>âš  {profilesError}</div>
         )}
 
-        {/* ── INTERNAL TEAM TAB ── */}
+        {/* â”€â”€ INTERNAL TEAM TAB â”€â”€ */}
         {activeTab === "team" && !profilesLoading && !profilesError && (
           <div>
             {(function() {
@@ -820,8 +820,8 @@ function UsersPanel({ user, onBack, onLogout }) {
               const TD = { padding: "10px 12px", fontSize: 13, color: "#0C4160", borderBottom: "1px solid #F0F4F8", verticalAlign: "middle" };
 
               function thArrow(col) {
-                if (teamSort.col !== col) return <span style={{ opacity: 0.3, marginLeft: 3 }}>⇅</span>;
-                return <span style={{ marginLeft: 3, color: "#2563eb" }}>{teamSort.dir === "asc" ? "↑" : "↓"}</span>;
+                if (teamSort.col !== col) return <span style={{ opacity: 0.3, marginLeft: 3 }}>â‡…</span>;
+                return <span style={{ marginLeft: 3, color: "#2563eb" }}>{teamSort.dir === "asc" ? "â†‘" : "â†“"}</span>;
               }
               function toggleTeamSort(col) {
                 setTeamSort(function(prev) {
@@ -860,10 +860,10 @@ function UsersPanel({ user, onBack, onLogout }) {
 
               return (
                 <div>
-                  {/* ── Toolbar ── */}
+                  {/* â”€â”€ Toolbar â”€â”€ */}
                   <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
                     <input
-                      type="text" placeholder="Search by name, email, or NMLS…"
+                      type="text" placeholder="Search by name, email, or NMLSâ€¦"
                       value={teamSearch} onChange={function(e) { setTeamSearch(e.target.value); }}
                       style={{ flex: "1 1 220px", padding: "9px 13px", borderRadius: 8, border: "1px solid #E0E8E8", background: "#fff", color: "#0C4160", fontSize: 13, fontFamily: UP_FONT, outline: "none" }}
                     />
@@ -877,15 +877,15 @@ function UsersPanel({ user, onBack, onLogout }) {
                     <span style={{ fontSize: 13, color: "#8A99A8", whiteSpace: "nowrap" }}>{teamFiltered.length} member{teamFiltered.length !== 1 ? "s" : ""}</span>
                   </div>
 
-                  {/* ── Bulk action bar ── */}
+                  {/* â”€â”€ Bulk action bar â”€â”€ */}
                   {isAdmin && selectedTeamIds.length > 0 && (
                     <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "10px 16px", marginBottom: 14, background: "#0C4160", borderRadius: 10, fontSize: 13, fontFamily: UP_FONT }}>
                       <span style={{ color: "#fff", fontWeight: 600 }}>{selectedTeamIds.length} selected</span>
-                      <button onClick={clearTeamSelection} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 6, padding: "4px 10px", fontSize: 11, cursor: "pointer", fontFamily: UP_FONT }}>✕ Clear</button>
+                      <button onClick={clearTeamSelection} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer", fontFamily: UP_FONT }}>âœ• Clear</button>
                       <div style={{ flex: 1 }} />
                       <select value={bulkRole} onChange={function(e) { setBulkRole(e.target.value); }}
                         style={{ padding: "5px 8px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.3)", fontSize: 12, fontFamily: UP_FONT, background: "rgba(255,255,255,0.12)", color: "#fff", cursor: "pointer" }}>
-                        <option value="">— Change role to… —</option>
+                        <option value="">â€” Change role toâ€¦ â€”</option>
                         <option value="borrower">Borrower</option>
                         <option value="realtor">Realtor</option>
                         <option value="builder">Builder</option>
@@ -895,7 +895,7 @@ function UsersPanel({ user, onBack, onLogout }) {
                       </select>
                       <button onClick={handleBulkRoleChange} disabled={!bulkRole || bulkRoleSaving}
                         style={{ padding: "5px 12px", background: bulkResult === "role_saved" ? "#1B8A5A" : "#fff", color: bulkResult === "role_saved" ? "#fff" : "#0C4160", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: UP_FONT, opacity: (!bulkRole || bulkRoleSaving) ? 0.5 : 1 }}>
-                        {bulkResult === "role_saved" ? "✓ Saved" : bulkRoleSaving ? "Saving…" : "Apply Role"}
+                        {bulkResult === "role_saved" ? "âœ“ Saved" : bulkRoleSaving ? "Savingâ€¦" : "Apply Role"}
                       </button>
                       <button onClick={function() { setConfirmBulkDel(true); }}
                         style={{ padding: "5px 14px", background: "#B91C1C", color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: UP_FONT }}>
@@ -906,11 +906,11 @@ function UsersPanel({ user, onBack, onLogout }) {
 
                   {bulkResult === "deleted" && (
                     <div style={{ background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#166534", fontFamily: UP_FONT }}>
-                      ✅ Profiles deleted. Their Supabase Auth login still exists — contact your Supabase admin to fully remove it if needed.
+                      âœ… Profiles deleted. Their Supabase Auth login still exists â€” contact your Supabase admin to fully remove it if needed.
                     </div>
                   )}
 
-                  {/* ── Table ── */}
+                  {/* â”€â”€ Table â”€â”€ */}
                   <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #E8EEF4", overflowX: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead>
@@ -969,20 +969,20 @@ function UsersPanel({ user, onBack, onLogout }) {
               );
             })()}
 
-            {/* ── Bulk delete confirm modal ── */}
+            {/* â”€â”€ Bulk delete confirm modal â”€â”€ */}
             {confirmBulkDel && (
               <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
                 <div style={{ background: "#fff", borderRadius: 16, padding: "28px 24px", maxWidth: 420, width: "100%", boxShadow: "0 12px 40px rgba(0,0,0,0.2)", fontFamily: UP_FONT }}>
                   <h3 style={{ fontSize: 17, fontWeight: 700, color: "#B91C1C", margin: "0 0 10px 0" }}>Delete {selectedTeamIds.length} user{selectedTeamIds.length > 1 ? "s" : ""}?</h3>
                   <p style={{ fontSize: 13, color: "#6B7D8A", margin: "0 0 8px 0", lineHeight: 1.6 }}>
-                    This removes their <strong>profile record</strong> from the app. Their Supabase Auth login will still exist — contact your Supabase admin to fully remove the auth account if needed.
+                    This removes their <strong>profile record</strong> from the app. Their Supabase Auth login will still exist â€” contact your Supabase admin to fully remove the auth account if needed.
                   </p>
                   <p style={{ fontSize: 13, color: "#B91C1C", margin: "0 0 20px 0", lineHeight: 1.6, fontWeight: 600 }}>This cannot be undone.</p>
                   <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
                     <button onClick={function() { setConfirmBulkDel(false); }} style={BTN_SECONDARY}>Cancel</button>
                     <button onClick={handleBulkDelete} disabled={bulkDeleting}
                       style={Object.assign({}, BTN_PRIMARY, { background: "#B91C1C" }, bulkDeleting ? { opacity: 0.6, cursor: "wait" } : {})}>
-                      {bulkDeleting ? "Deleting…" : "Yes, Delete"}
+                      {bulkDeleting ? "Deletingâ€¦" : "Yes, Delete"}
                     </button>
                   </div>
                 </div>
@@ -991,7 +991,7 @@ function UsersPanel({ user, onBack, onLogout }) {
           </div>
         )}
 
-        {/* ── BRANCHES TAB ── */}
+        {/* â”€â”€ BRANCHES TAB â”€â”€ */}
         {activeTab === "branches" && isAdmin && (
           <div>
             <p style={{ fontSize: 13, color: "#6B7D8A", margin: "0 0 20px 0", lineHeight: 1.5 }}>
@@ -1039,18 +1039,18 @@ function UsersPanel({ user, onBack, onLogout }) {
                     );
                   })}
                 </div>
-                {branchError && <div style={{ color: "#B91C1C", fontSize: 13, marginBottom: 12 }}>⚠ {branchError}</div>}
+                {branchError && <div style={{ color: "#B91C1C", fontSize: 13, marginBottom: 12 }}>âš  {branchError}</div>}
                 <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
                   <button onClick={function() { setBranchForm(null); setBranchError(""); }} style={BTN_SECONDARY}>Cancel</button>
                   <button onClick={saveBranch} disabled={branchSaving} style={Object.assign({}, BTN_PRIMARY, branchSaving ? { opacity: 0.6, cursor: "wait" } : {})}>
-                    {branchSaving ? "Saving…" : "Save Branch"}
+                    {branchSaving ? "Savingâ€¦" : "Save Branch"}
                   </button>
                 </div>
               </div>
             )}
 
             {/* Loading */}
-            {branchesLoading && <div style={{ textAlign: "center", padding: 40, color: "#6B7D8A" }}>Loading…</div>}
+            {branchesLoading && <div style={{ textAlign: "center", padding: 40, color: "#6B7D8A" }}>Loadingâ€¦</div>}
 
             {/* Branch table */}
             {!branchesLoading && branches.length === 0 && (
@@ -1075,11 +1075,11 @@ function UsersPanel({ user, onBack, onLogout }) {
                       return (
                         <tr key={b.id}>
                           <td style={{ ...TD, fontWeight: 600 }}>{b.name}</td>
-                          <td style={{ ...TD, color: "#6B7D8A" }}>{b.nmls || "—"}</td>
-                          <td style={{ ...TD, color: "#6B7D8A" }}>{b.address || "—"}</td>
-                          <td style={{ ...TD, color: "#6B7D8A" }}>{b.city || "—"}</td>
-                          <td style={{ ...TD, color: "#6B7D8A" }}>{b.state || "—"}</td>
-                          <td style={{ ...TD, color: "#6B7D8A" }}>{b.zip || "—"}</td>
+                          <td style={{ ...TD, color: "#6B7D8A" }}>{b.nmls || "â€”"}</td>
+                          <td style={{ ...TD, color: "#6B7D8A" }}>{b.address || "â€”"}</td>
+                          <td style={{ ...TD, color: "#6B7D8A" }}>{b.city || "â€”"}</td>
+                          <td style={{ ...TD, color: "#6B7D8A" }}>{b.state || "â€”"}</td>
+                          <td style={{ ...TD, color: "#6B7D8A" }}>{b.zip || "â€”"}</td>
                           <td style={{ ...TD, whiteSpace: "nowrap" }}>
                             <div style={{ display: "flex", gap: 6 }}>
                               <button onClick={function() { setBranchForm(Object.assign({}, b)); setBranchError(""); }}
@@ -1114,7 +1114,7 @@ function UsersPanel({ user, onBack, onLogout }) {
           </div>
         )}
 
-        {/* ── ACTIVITY TAB ── */}
+        {/* â”€â”€ ACTIVITY TAB â”€â”€ */}
         {activeTab === "activity" && isAdmin && (
           <div>
 
@@ -1124,7 +1124,7 @@ function UsersPanel({ user, onBack, onLogout }) {
                 type="text"
                 value={actSearch}
                 onChange={function(e) { setActSearch(e.target.value); }}
-                placeholder="Search name or email…"
+                placeholder="Search name or emailâ€¦"
                 style={Object.assign({}, INPUT_ST, { maxWidth: 240, flex: "1 1 180px" })}
               />
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", flex: "1 1 auto" }}>
@@ -1146,22 +1146,22 @@ function UsersPanel({ user, onBack, onLogout }) {
                 disabled={actLoading}
                 style={Object.assign({}, BTN_GHOST, actLoading ? { opacity: 0.6, cursor: "wait" } : {})}
               >
-                {actLoading ? "Loading…" : "↺ Refresh"}
+                {actLoading ? "Loadingâ€¦" : "â†º Refresh"}
               </button>
             </div>
 
             {/* Legend */}
             <div style={{ display: "flex", gap: 16, marginBottom: 14, flexWrap: "wrap" }}>
               {[
-                { color: "#22C55E", label: "Active ≤ 3 days" },
-                { color: "#F59E0B", label: "Active ≤ 7 days" },
-                { color: "#F97316", label: "Active ≤ 15 days" },
+                { color: "#22C55E", label: "Active â‰¤ 3 days" },
+                { color: "#F59E0B", label: "Active â‰¤ 7 days" },
+                { color: "#F97316", label: "Active â‰¤ 15 days" },
                 { color: "#D1D5DB", label: "Never / no data" },
               ].map(function(item) {
                 return (
                   <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <div style={{ width: 9, height: 9, borderRadius: "50%", background: item.color, flexShrink: 0 }} />
-                    <span style={{ fontSize: 11, color: "#6B7D8A", fontFamily: UP_FONT }}>{item.label}</span>
+                    <span style={{ fontSize: 12, color: "#6B7D8A", fontFamily: UP_FONT }}>{item.label}</span>
                   </div>
                 );
               })}
@@ -1183,7 +1183,7 @@ function UsersPanel({ user, onBack, onLogout }) {
                       borderRadius: 10, padding: "10px 18px", textAlign: "center", minWidth: 100,
                     }}>
                       <div style={{ fontSize: 22, fontWeight: 800, color: chip.hi ? "#1E40AF" : "#0C4160", fontFamily: UP_FONT }}>{chip.value}</div>
-                      <div style={{ fontSize: 11, color: "#6B7D8A", fontFamily: UP_FONT, marginTop: 2 }}>{chip.label}</div>
+                      <div style={{ fontSize: 12, color: "#6B7D8A", fontFamily: UP_FONT, marginTop: 2 }}>{chip.label}</div>
                     </div>
                   );
                 })}
@@ -1192,7 +1192,7 @@ function UsersPanel({ user, onBack, onLogout }) {
 
             {/* Loading spinner */}
             {actLoading && !actLoaded && (
-              <div style={{ textAlign: "center", padding: 60, color: "#6B7D8A", fontSize: 14 }}>Loading activity data…</div>
+              <div style={{ textAlign: "center", padding: 60, color: "#6B7D8A", fontSize: 14 }}>Loading activity dataâ€¦</div>
             )}
 
             {/* Table */}
@@ -1212,14 +1212,14 @@ function UsersPanel({ user, onBack, onLogout }) {
                         return (
                           <th key={h.col}
                             onClick={function() { toggleActSort(h.col); }}
-                            style={{ padding: "10px 12px", textAlign: "left", fontSize: 11, fontWeight: 700,
+                            style={{ padding: "10px 12px", textAlign: "left", fontSize: 12, fontWeight: 700,
                               fontFamily: UP_FONT, color: isActive ? "#0C4160" : "#6B7D8A",
                               textTransform: "uppercase", letterSpacing: "0.06em", cursor: "pointer",
                               userSelect: "none", whiteSpace: "nowrap",
                             }}>
                             {h.label}
                             <span style={{ marginLeft: 4, opacity: isActive ? 1 : 0.3 }}>
-                              {isActive ? (actSort.dir === "asc" ? " ↑" : " ↓") : " ↕"}
+                              {isActive ? (actSort.dir === "asc" ? " â†‘" : " â†“") : " â†•"}
                             </span>
                           </th>
                         );
@@ -1255,7 +1255,7 @@ function UsersPanel({ user, onBack, onLogout }) {
                             <div style={{ fontSize: 13, fontWeight: 600, color: "#0C4160", fontFamily: UP_FONT }}>
                               {u.display_name || <em style={{ opacity: 0.5 }}>No name</em>}
                             </div>
-                            <div style={{ fontSize: 11, color: "#6B7D8A", fontFamily: UP_FONT, marginTop: 1 }}>{u.email}</div>
+                            <div style={{ fontSize: 12, color: "#6B7D8A", fontFamily: UP_FONT, marginTop: 1 }}>{u.email}</div>
                           </td>
                           {/* Role */}
                           <td style={{ padding: "12px 12px" }}>
@@ -1273,7 +1273,7 @@ function UsersPanel({ user, onBack, onLogout }) {
                           <td style={{ padding: "12px 12px" }}>
                             {u.sessionCount > 0
                               ? <span style={{ display: "inline-block", background: "#EFF6FF", color: "#1E40AF", border: "1px solid #BFDBFE", borderRadius: 99, padding: "2px 10px", fontSize: 12, fontWeight: 700, fontFamily: UP_FONT }}>{u.sessionCount}</span>
-                              : <span style={{ fontSize: 12, color: "#D1D5DB", fontFamily: UP_FONT }}>—</span>
+                              : <span style={{ fontSize: 12, color: "#D1D5DB", fontFamily: UP_FONT }}>â€”</span>
                             }
                           </td>
                           {/* Exact date */}
@@ -1285,21 +1285,21 @@ function UsersPanel({ user, onBack, onLogout }) {
                     })}
                   </tbody>
                 </table>
-                <div style={{ padding: "10px 16px", borderTop: "1px solid #F0F4F8", fontSize: 11, color: "#94A3B0", fontFamily: UP_FONT }}>
-                  Showing {actFiltered.length} of {actMerged.length} users · Last 15 days · Data collected since session tracking was enabled
+                <div style={{ padding: "10px 16px", borderTop: "1px solid #F0F4F8", fontSize: 12, color: "#94A3B0", fontFamily: UP_FONT }}>
+                  Showing {actFiltered.length} of {actMerged.length} users Â· Last 15 days Â· Data collected since session tracking was enabled
                 </div>
               </div>
             )}
           </div>
         )}
 
-        {/* ── DIRECTORY TAB ── */}
+        {/* â”€â”€ DIRECTORY TAB â”€â”€ */}
         {activeTab === "directory" && isAdmin && !profilesLoading && !profilesError && (
           <div>
             {/* Toolbar */}
             <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
               <input type="text" value={dirSearch} onChange={function(e) { setDirSearch(e.target.value); }}
-                placeholder="Search name, email, company, NMLS…"
+                placeholder="Search name, email, company, NMLSâ€¦"
                 style={Object.assign({}, INPUT_ST, { maxWidth: 320, flex: "1 1 200px" })} />
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {DIR_ROLE_FILTERS.map(function(f) {
@@ -1327,11 +1327,11 @@ function UsersPanel({ user, onBack, onLogout }) {
               <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "10px 16px", marginBottom: 14, background: "#0C4160", borderRadius: 10, fontSize: 13, fontFamily: UP_FONT }}>
                 <span style={{ color: "#fff", fontWeight: 600 }}>{selectedDirIds.length} selected</span>
                 <button onClick={function() { setSelectedDirIds([]); setDirBulkRole(""); setDirBulkResult(null); }}
-                  style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 6, padding: "4px 10px", fontSize: 11, cursor: "pointer", fontFamily: UP_FONT }}>✕ Clear</button>
+                  style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer", fontFamily: UP_FONT }}>âœ• Clear</button>
                 <div style={{ flex: 1 }} />
                 <select value={dirBulkRole} onChange={function(e) { setDirBulkRole(e.target.value); }}
                   style={{ padding: "5px 8px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.3)", fontSize: 12, fontFamily: UP_FONT, background: "rgba(255,255,255,0.12)", color: "#fff", cursor: "pointer" }}>
-                  <option value="">— Change role to… —</option>
+                  <option value="">â€” Change role toâ€¦ â€”</option>
                   <option value="borrower">Borrower</option>
                   <option value="realtor">Realtor</option>
                   <option value="builder">Builder</option>
@@ -1341,7 +1341,7 @@ function UsersPanel({ user, onBack, onLogout }) {
                 </select>
                 <button onClick={handleDirBulkRole} disabled={!dirBulkRole || dirBulkSaving}
                   style={{ padding: "5px 12px", background: dirBulkResult === "role_saved" ? "#1B8A5A" : "#fff", color: dirBulkResult === "role_saved" ? "#fff" : "#0C4160", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: UP_FONT, opacity: (!dirBulkRole || dirBulkSaving) ? 0.5 : 1 }}>
-                  {dirBulkResult === "role_saved" ? "✓ Saved" : dirBulkSaving ? "Saving…" : "Apply Role"}
+                  {dirBulkResult === "role_saved" ? "âœ“ Saved" : dirBulkSaving ? "Savingâ€¦" : "Apply Role"}
                 </button>
                 <button onClick={function() { setDirConfirmDel(true); }}
                   style={{ padding: "5px 14px", background: "#B91C1C", color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: UP_FONT }}>
@@ -1352,7 +1352,7 @@ function UsersPanel({ user, onBack, onLogout }) {
 
             {dirBulkResult === "deleted" && (
               <div style={{ background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#166534", fontFamily: UP_FONT }}>
-                ✅ Profiles deleted.
+                âœ… Profiles deleted.
               </div>
             )}
 
@@ -1384,13 +1384,13 @@ function UsersPanel({ user, onBack, onLogout }) {
                       var isActive = h.col && dirSort.col === h.col;
                       return (
                         <th key={i} onClick={h.col ? function() { toggleDirSort(h.col); } : undefined} style={{
-                          padding: "10px 12px", textAlign: "left", fontSize: 11, fontWeight: 700,
+                          padding: "10px 12px", textAlign: "left", fontSize: 12, fontWeight: 700,
                           fontFamily: UP_FONT, color: isActive ? "#0C4160" : "#6B7D8A",
                           textTransform: "uppercase", letterSpacing: "0.06em",
                           cursor: h.col ? "pointer" : "default", userSelect: "none", whiteSpace: "nowrap",
                         }}>
                           {h.label}
-                          {h.col && <span style={{ marginLeft: 3, opacity: isActive ? 1 : 0.3 }}>{isActive ? (dirSort.dir === "asc" ? "↑" : "↓") : "⇅"}</span>}
+                          {h.col && <span style={{ marginLeft: 3, opacity: isActive ? 1 : 0.3 }}>{isActive ? (dirSort.dir === "asc" ? "â†‘" : "â†“") : "â‡…"}</span>}
                         </th>
                       );
                     })}
@@ -1424,18 +1424,18 @@ function UsersPanel({ user, onBack, onLogout }) {
                             </button>
                             {isSelf && <span style={{ fontSize: 9, color: "#1B8A5A", fontWeight: 700, background: "#E8F5E9", borderRadius: 99, padding: "1px 6px" }}>YOU</span>}
                           </div>
-                          {p.title && <div style={{ fontSize: 11, color: "#8A99A8", fontFamily: UP_FONT, marginTop: 1 }}>{p.title}</div>}
+                          {p.title && <div style={{ fontSize: 12, color: "#8A99A8", fontFamily: UP_FONT, marginTop: 1 }}>{p.title}</div>}
                         </td>
                         {/* Email */}
-                        <td style={{ padding: "10px 12px", fontSize: 12, color: "#6B7D8A", fontFamily: UP_FONT, whiteSpace: "nowrap" }}>{p.email || "—"}</td>
+                        <td style={{ padding: "10px 12px", fontSize: 12, color: "#6B7D8A", fontFamily: UP_FONT, whiteSpace: "nowrap" }}>{p.email || "â€”"}</td>
                         {/* Role badge only */}
                         <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}><RoleBadge role={p.role} /></td>
                         {/* Branch */}
-                        <td style={{ padding: "10px 12px", fontSize: 12, color: "#6B7D8A", fontFamily: UP_FONT, whiteSpace: "nowrap" }}>{p.branchName || <span style={{ color: "#D1D5DB" }}>—</span>}</td>
+                        <td style={{ padding: "10px 12px", fontSize: 12, color: "#6B7D8A", fontFamily: UP_FONT, whiteSpace: "nowrap" }}>{p.branchName || <span style={{ color: "#D1D5DB" }}>â€”</span>}</td>
                         {/* Company */}
-                        <td style={{ padding: "10px 12px", fontSize: 12, color: "#6B7D8A", fontFamily: UP_FONT, whiteSpace: "nowrap" }}>{p.company || <span style={{ color: "#D1D5DB" }}>—</span>}</td>
+                        <td style={{ padding: "10px 12px", fontSize: 12, color: "#6B7D8A", fontFamily: UP_FONT, whiteSpace: "nowrap" }}>{p.company || <span style={{ color: "#D1D5DB" }}>â€”</span>}</td>
                         {/* NMLS */}
-                        <td style={{ padding: "10px 12px", fontSize: 12, color: "#8A99A8", fontFamily: UP_FONT, whiteSpace: "nowrap" }}>{p.nmls ? "#" + p.nmls : <span style={{ color: "#D1D5DB" }}>—</span>}</td>
+                        <td style={{ padding: "10px 12px", fontSize: 12, color: "#8A99A8", fontFamily: UP_FONT, whiteSpace: "nowrap" }}>{p.nmls ? "#" + p.nmls : <span style={{ color: "#D1D5DB" }}>â€”</span>}</td>
                         {/* Last Login */}
                         <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
                           {actLoaded ? (
@@ -1443,7 +1443,7 @@ function UsersPanel({ user, onBack, onLogout }) {
                               <div style={{ fontSize: 12, fontWeight: 600, color: p.sessionCount > 0 ? "#0C4160" : "#D1D5DB", fontFamily: UP_FONT }}>{actRelDate(p.daysSince)}</div>
                               {p.lastSeen && <div style={{ fontSize: 10, color: "#94A3B0", fontFamily: UP_FONT }}>{actExactDate(p.lastSeen)}</div>}
                             </div>
-                          ) : <span style={{ fontSize: 11, color: "#D1D5DB", fontFamily: UP_FONT }}>—</span>}
+                          ) : <span style={{ fontSize: 12, color: "#D1D5DB", fontFamily: UP_FONT }}>â€”</span>}
                         </td>
                         {/* Three-dot menu */}
                         <td style={{ padding: "10px 12px", textAlign: "center", verticalAlign: "middle" }} onClick={function(e) { e.stopPropagation(); }}>
@@ -1452,18 +1452,18 @@ function UsersPanel({ user, onBack, onLogout }) {
                               <button
                                 onClick={function(e) { e.stopPropagation(); setDirMenuOpenId(menuOpen ? null : p.id); }}
                                 style={{ background: "none", border: "1px solid #E0E8E8", borderRadius: 6, padding: "3px 9px", cursor: "pointer", fontSize: 15, color: "#6B7D8A", lineHeight: 1, fontFamily: UP_FONT }}>
-                                ···
+                                Â·Â·Â·
                               </button>
                               {menuOpen && (
                                 <div style={{ position: "absolute", right: 0, top: "100%", zIndex: 200, background: "#fff", border: "1px solid #E0E8E8", borderRadius: 8, boxShadow: "0 4px 20px rgba(0,0,0,0.12)", minWidth: 150, overflow: "hidden" }}>
                                   <button onClick={function() { setEditingProfile(p); setDirMenuOpenId(null); }}
                                     style={{ display: "block", width: "100%", padding: "10px 14px", border: "none", background: "transparent", textAlign: "left", fontSize: 13, fontFamily: UP_FONT, color: "#0C4160", cursor: "pointer" }}>
-                                    ✏️ Edit Profile
+                                    âœï¸ Edit Profile
                                   </button>
                                   {!isSelf && (
                                     <button onClick={function() { setDirConfirmSingle(p); setDirMenuOpenId(null); }}
                                       style={{ display: "block", width: "100%", padding: "10px 14px", border: "none", background: "transparent", textAlign: "left", fontSize: 13, fontFamily: UP_FONT, color: "#B91C1C", cursor: "pointer" }}>
-                                      🗑️ Delete
+                                      ðŸ—‘ï¸ Delete
                                     </button>
                                   )}
                                 </div>
@@ -1476,9 +1476,9 @@ function UsersPanel({ user, onBack, onLogout }) {
                   })}
                 </tbody>
               </table>
-              <div style={{ padding: "10px 16px", borderTop: "1px solid #F0F4F8", fontSize: 11, color: "#94A3B0", fontFamily: UP_FONT, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
+              <div style={{ padding: "10px 16px", borderTop: "1px solid #F0F4F8", fontSize: 12, color: "#94A3B0", fontFamily: UP_FONT, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
                 <span>{dirFiltered.length} of {allProfiles.length} people shown</span>
-                <span>{actLoaded ? "✓ Login data loaded" : "Login data loads when Activity tab is opened"}</span>
+                <span>{actLoaded ? "âœ“ Login data loaded" : "Login data loads when Activity tab is opened"}</span>
               </div>
             </div>
 
@@ -1505,7 +1505,7 @@ function UsersPanel({ user, onBack, onLogout }) {
                   <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
                     <button onClick={function() { setDirConfirmDel(false); }} style={BTN_SECONDARY}>Cancel</button>
                     <button onClick={handleDirBulkDelete} disabled={dirBulkDeleting} style={Object.assign({}, BTN_PRIMARY, { background: "#B91C1C" }, dirBulkDeleting ? { opacity: 0.6 } : {})}>
-                      {dirBulkDeleting ? "Deleting…" : "Yes, Delete"}
+                      {dirBulkDeleting ? "Deletingâ€¦" : "Yes, Delete"}
                     </button>
                   </div>
                 </div>

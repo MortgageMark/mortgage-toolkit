@@ -1955,7 +1955,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
           <div style={{ ...sectionStyle, borderLeft: "4px solid #0C4160" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
               <div style={{ ...sectionTitleStyle, margin: 0, flex: 1 }}>LO / Partner Profile</div>
-              <span style={{ fontSize: 11, color: "#94a3b8", fontStyle: "italic" }}>Admin only · used on PQ letters &amp; team assignments</span>
+              <span style={{ fontSize: 12, color: "#94a3b8", fontStyle: "italic" }}>Admin only · used on PQ letters &amp; team assignments</span>
             </div>
 
             {editMode ? (
@@ -1979,7 +1979,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                   <div>
                     <label style={labelStyle}>Display Email (for letters)</label>
                     <input style={fieldStyle} value={editForm.lo_email_display} onChange={function(e) { handleFieldChange("lo_email_display", e.target.value); }} placeholder="team@company.com" type="email" />
-                    <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 3 }}>Use if different from login email</div>
+                    <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 3 }}>Use if different from login email</div>
                   </div>
                   <div>
                     <label style={labelStyle}>Website</label>
