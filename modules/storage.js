@@ -464,6 +464,10 @@ async function saveContactToSupabase({
   email2, email2_work, email2_other, email2_best,
   // assigned LO
   assigned_lo_id,
+  // LO / partner profile fields
+  lo_title, lo_nmls, lo_license, lo_email_display,
+  lo_company_nmls, lo_branch_nmls, lo_website,
+  team_lead_contact_id, branch_id,
   // legacy (kept for RLS / other reads)
   status, tags, source,
 } = {}) {
@@ -524,6 +528,16 @@ async function saveContactToSupabase({
     email2_best:  email2_best  || null,
     // assigned LO
     assigned_lo_id: assigned_lo_id || null,
+    // LO / partner profile fields
+    lo_title:             lo_title             || null,
+    lo_nmls:              lo_nmls              || null,
+    lo_license:           lo_license           || null,
+    lo_email_display:     lo_email_display     || null,
+    lo_company_nmls:      lo_company_nmls      || null,
+    lo_branch_nmls:       lo_branch_nmls       || null,
+    lo_website:           lo_website           || null,
+    team_lead_contact_id: team_lead_contact_id || null,
+    branch_id:            branch_id            || null,
     // legacy
     status: status || "active",
     tags:   tags   || [],

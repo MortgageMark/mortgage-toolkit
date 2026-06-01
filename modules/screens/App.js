@@ -1108,6 +1108,47 @@ function App() {
               setShowChangePassword(true);
             }
 
+            // Auto-populate PQ letter fields from the LO's own contact record.
+            // Looks up a Business/Loan Officer contact whose email matches the
+            // logged-in user, then calls propagateLOToPreQual with the contact's
+            // lo_* profile fields so they flow into the PQ letter automatically.
+            if (isInternal && supabase && !cancelled) {
+              supabase
+                .from("contacts")
+                .select("first_name, last_name, lo_title, lo_nmls, lo_email_display, lo_company_nmls, lo_branch_nmls, lo_website, phone_cell, phone_work, company, address1_street, address1_city, address1_state, address1_zip")
+                .eq("contact_type", "business")
+                .eq("contact_category", "Loan Officer")
+                .or("email_personal.eq." + user.email + ",email_work.eq." + user.email)
+                .limit(1)
+                .maybeSingle()
+                .then(function(res) {
+                  if (res.error || !res.data) return; // no match — leave existing pq_ keys alone
+                  var ct = res.data;
+                  var fullName = [ct.first_name, ct.last_name].filter(Boolean).join(" ");
+                  if (!fullName) return; // safety guard — don't overwrite with blank name
+                  if (window.propagateLOToPreQual) {
+                    window.propagateLOToPreQual({
+                      name:        fullName,
+                      nmls:        ct.lo_nmls        || "",
+                      phone:       ct.phone_work     || "",
+                      cell:        ct.phone_cell     || "",
+                      email_display: ct.lo_email_display || "",
+                      email:       user.email,
+                      title:       ct.lo_title       || "",
+                      website:     ct.lo_website     || "",
+                      branchNmls:  ct.lo_branch_nmls || "",
+                      company:     ct.company        || "",
+                      companyNMLS: ct.lo_company_nmls || "",
+                      address:     ct.address1_street || "",
+                      city:        ct.address1_city   || "",
+                      state:       ct.address1_state  || "",
+                      zip:         ct.address1_zip    || "",
+                    });
+                  }
+                })
+                .catch(function() {}); // non-fatal
+            }
+
             // Sync team roster on every session restore so email_display and other
             // profile fields are always current without requiring a fresh sign-in.
             if (isInternal && supabase && !cancelled) {
@@ -1213,6 +1254,45 @@ function App() {
     // Always land on the Scenario Dashboard after a fresh login.
     // Magic-link and live-session paths below immediately overwrite this.
     setActiveScenario(null);
+
+    // Auto-populate PQ letter fields from the LO's own contact record on fresh login.
+    const INTERNAL_ROLES_LOGIN = ["super_admin", "admin", "branch_admin", "internal"];
+    if (userData && userData.isInternal && userData.email && supabase) {
+      supabase
+        .from("contacts")
+        .select("first_name, last_name, lo_title, lo_nmls, lo_email_display, lo_company_nmls, lo_branch_nmls, lo_website, phone_cell, phone_work, company, address1_street, address1_city, address1_state, address1_zip")
+        .eq("contact_type", "business")
+        .eq("contact_category", "Loan Officer")
+        .or("email_personal.eq." + userData.email + ",email_work.eq." + userData.email)
+        .limit(1)
+        .maybeSingle()
+        .then(function(res) {
+          if (res.error || !res.data) return;
+          var ct = res.data;
+          var fullName = [ct.first_name, ct.last_name].filter(Boolean).join(" ");
+          if (!fullName) return;
+          if (window.propagateLOToPreQual) {
+            window.propagateLOToPreQual({
+              name:        fullName,
+              nmls:        ct.lo_nmls         || "",
+              phone:       ct.phone_work      || "",
+              cell:        ct.phone_cell      || "",
+              email_display: ct.lo_email_display || "",
+              email:       userData.email,
+              title:       ct.lo_title        || "",
+              website:     ct.lo_website      || "",
+              branchNmls:  ct.lo_branch_nmls  || "",
+              company:     ct.company         || "",
+              companyNMLS: ct.lo_company_nmls || "",
+              address:     ct.address1_street || "",
+              city:        ct.address1_city   || "",
+              state:       ct.address1_state  || "",
+              zip:         ct.address1_zip    || "",
+            });
+          }
+        })
+        .catch(function() {});
+    }
 
     // ── Force password change for LO-created accounts ──────────────────────
     if (userData && userData.mustChangePassword) {

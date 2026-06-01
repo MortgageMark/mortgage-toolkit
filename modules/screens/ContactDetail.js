@@ -201,6 +201,32 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
       });
   }, []);
 
+  // ── Business contacts for Team Lead picker ────────────────────────────────
+  const [loContacts,  setLoContacts]  = useState([]);
+  const [cdBranches,  setCdBranches]  = useState([]);
+  const isBusiness = contact.contact_type === "business";
+  useEffectCD(function() {
+    if (!supabaseCD || !isAdmin || !isBusiness) return;
+    // Fetch LO-category contacts for team lead picker
+    supabaseCD
+      .from("contacts")
+      .select("id, first_name, last_name, company, lo_title")
+      .eq("contact_type", "business")
+      .eq("contact_category", "Loan Officer")
+      .order("first_name", { ascending: true })
+      .then(function(res) {
+        if (!res.error && res.data) setLoContacts(res.data);
+      });
+    // Fetch branches for branch picker
+    supabaseCD
+      .from("branches")
+      .select("id, name")
+      .order("name", { ascending: true })
+      .then(function(res) {
+        if (!res.error && res.data) setCdBranches(res.data);
+      });
+  }, [isAdmin, isBusiness]);
+
   // Derive the login role from the contact's type/category
   const inferredRole = (function() {
     if (contact.contact_type === "client") return "borrower";
@@ -265,6 +291,16 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
     email2_work:    contact.email2_work    || "",
     email2_other:   contact.email2_other   || "",
     email2_best:    contact.email2_best    || "",
+    // LO / partner profile
+    lo_title:             contact.lo_title             || "",
+    lo_nmls:              contact.lo_nmls              || "",
+    lo_license:           contact.lo_license           || "",
+    lo_email_display:     contact.lo_email_display     || "",
+    lo_company_nmls:      contact.lo_company_nmls      || "",
+    lo_branch_nmls:       contact.lo_branch_nmls       || "",
+    lo_website:           contact.lo_website           || "",
+    team_lead_contact_id: contact.team_lead_contact_id || null,
+    branch_id:            contact.branch_id            || null,
   });
   const [saving, setSaving]       = useState(false);
   const [saveError, setSaveError] = useState(null);
@@ -1878,6 +1914,109 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
             >
               🗑 Delete Contact
             </button>
+          </div>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* LO / PARTNER PROFILE (business contacts, admin only)              */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {isBusiness && isAdmin && (
+          <div style={{ ...sectionStyle, borderLeft: "4px solid #0C4160" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+              <div style={{ ...sectionTitleStyle, margin: 0, flex: 1 }}>LO / Partner Profile</div>
+              <span style={{ fontSize: 11, color: "#94a3b8", fontStyle: "italic" }}>Admin only · used on PQ letters &amp; team assignments</span>
+            </div>
+
+            {editMode ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+                {/* ── Professional Info ── */}
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0C4160", marginBottom: 4 }}>Professional Info</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <div>
+                    <label style={labelStyle}>Title</label>
+                    <input style={fieldStyle} value={editForm.lo_title} onChange={function(e) { handleFieldChange("lo_title", e.target.value); }} placeholder="e.g. Senior Loan Officer" />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Personal NMLS #</label>
+                    <input style={fieldStyle} value={editForm.lo_nmls} onChange={function(e) { handleFieldChange("lo_nmls", e.target.value); }} placeholder="729612" />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>License # (Realtors)</label>
+                    <input style={fieldStyle} value={editForm.lo_license} onChange={function(e) { handleFieldChange("lo_license", e.target.value); }} placeholder="TX-123456" />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Display Email (for letters)</label>
+                    <input style={fieldStyle} value={editForm.lo_email_display} onChange={function(e) { handleFieldChange("lo_email_display", e.target.value); }} placeholder="team@company.com" type="email" />
+                    <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 3 }}>Use if different from login email</div>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Website</label>
+                    <input style={fieldStyle} value={editForm.lo_website} onChange={function(e) { handleFieldChange("lo_website", e.target.value); }} placeholder="https://mortgagemark.com" />
+                  </div>
+                </div>
+
+                {/* ── Company ── */}
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0C4160", marginTop: 8, marginBottom: 4 }}>Company</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <div>
+                    <label style={labelStyle}>Company NMLS #</label>
+                    <input style={fieldStyle} value={editForm.lo_company_nmls} onChange={function(e) { handleFieldChange("lo_company_nmls", e.target.value); }} placeholder="1820" />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Branch NMLS #</label>
+                    <input style={fieldStyle} value={editForm.lo_branch_nmls} onChange={function(e) { handleFieldChange("lo_branch_nmls", e.target.value); }} placeholder="Branch NMLS" />
+                  </div>
+                </div>
+
+                {/* ── Team ── */}
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0C4160", marginTop: 8, marginBottom: 4 }}>Team</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <div>
+                    <label style={labelStyle}>Team Lead</label>
+                    <select style={fieldStyle} value={editForm.team_lead_contact_id || ""} onChange={function(e) { handleFieldChange("team_lead_contact_id", e.target.value || null); }}>
+                      <option value="">— No Team Lead —</option>
+                      {loContacts.filter(function(c) { return c.id !== contact.id; }).map(function(c) {
+                        var name = ((c.first_name || "") + " " + (c.last_name || "")).trim() || "(unnamed)";
+                        return <option key={c.id} value={c.id}>{name}{c.lo_title ? " · " + c.lo_title : ""}{c.company ? " · " + c.company : ""}</option>;
+                      })}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Branch</label>
+                    <select style={fieldStyle} value={editForm.branch_id || ""} onChange={function(e) { handleFieldChange("branch_id", e.target.value || null); }}>
+                      <option value="">— No Branch —</option>
+                      {cdBranches.map(function(b) { return <option key={b.id} value={b.id}>{b.name}</option>; })}
+                    </select>
+                  </div>
+                </div>
+
+              </div>
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 24px" }}>
+                {contact.lo_title         && <InfoRow label="Title"              value={contact.lo_title} />}
+                {contact.lo_nmls          && <InfoRow label="NMLS #"             value={"#" + contact.lo_nmls} />}
+                {contact.lo_license       && <InfoRow label="License #"          value={contact.lo_license} />}
+                {contact.lo_email_display && <InfoRow label="Display Email"      value={contact.lo_email_display} />}
+                {contact.lo_website       && <InfoRow label="Website"            value={contact.lo_website} />}
+                {contact.lo_company_nmls  && <InfoRow label="Company NMLS"       value={"#" + contact.lo_company_nmls} />}
+                {contact.lo_branch_nmls   && <InfoRow label="Branch NMLS"        value={"#" + contact.lo_branch_nmls} />}
+                {contact.team_lead_contact_id && (function() {
+                  var lead = loContacts.find(function(c) { return c.id === contact.team_lead_contact_id; });
+                  var name = lead ? ((lead.first_name || "") + " " + (lead.last_name || "")).trim() : contact.team_lead_contact_id;
+                  return <InfoRow label="Team Lead" value={name} />;
+                })()}
+                {contact.branch_id && (function() {
+                  var branch = cdBranches.find(function(b) { return b.id === contact.branch_id; });
+                  return <InfoRow label="Branch" value={branch ? branch.name : contact.branch_id} />;
+                })()}
+                {!contact.lo_title && !contact.lo_nmls && !contact.lo_email_display && !contact.team_lead_contact_id && (
+                  <div style={{ color: "#94a3b8", fontSize: 13, gridColumn: "1 / -1" }}>
+                    No LO profile data yet. Click ✏️ Edit to fill in PQ letter info and team assignment.
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
