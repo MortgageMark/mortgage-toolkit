@@ -231,7 +231,7 @@ function BuyerQualifierTab() {
           </label>
           <div style={{ display: "flex", alignItems: "center" }}>
             <input
-              type="number"
+              type="number" inputMode="decimal" onFocus={(e) => e.target.select()}
               min="0" max="100" step="0.5"
               placeholder={pcDP || "10"}
               value={dpInput}

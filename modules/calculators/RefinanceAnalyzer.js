@@ -918,7 +918,7 @@ function RefinanceAnalyzer({ isInternal, user }) {
           })()}
         </SectionCard>
 
-        <SectionCard title="EXISTING LOAN STRUCTURE" accent={COLORS.navy}>
+        <SectionCard title="EXISTING LOAN STRUCTURE" accent={COLORS.navy} infoTip={"💡 To find these numbers, pull up your most recent mortgage statement or call your servicer.\n\n• Original loan amount: what you borrowed at closing (not the current balance).\n• Current balance: the exact payoff amount today — this changes daily as interest accrues.\n• Rate: found on your note or monthly statement.\n• Note date: the date you signed your loan documents at closing."}>
           <LabeledInput label="Original Loan Amount (of existing loan)" prefix="$" value={origLoanAmount} onChange={setOrigLoanAmount} useCommas noNegative />
           {(() => {
             const cb  = parseFloat(curBalance)      || 0;

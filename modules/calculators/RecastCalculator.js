@@ -97,12 +97,16 @@ function RecastCalculator() {
   const hasResult  = calc !== null && (parseFloat(stripCommas(lumpSum)) || 0) > 0;
   const hasDetails = (parseFloat(pcRate) > 0) && (parseFloat(stripCommas(pcLa)) > 0);
 
-  // Standard label style used throughout the toolkit
+  // Brand-compliant label style: 11px / 600 / ALL CAPS / c.gray
   const sectionLabel = {
     fontSize: 11, fontWeight: 700, color: c.gray,
     textTransform: "uppercase", letterSpacing: "0.06em",
     fontFamily: font, marginBottom: 4,
   };
+
+  // Brand-compliant metric display: 20px / 700 / c.navy
+  const metricVal = { fontSize: 20, fontWeight: 700, color: c.navy, fontFamily: font };
+  const metricSub = { fontSize: 11, color: c.gray, marginTop: 2, fontFamily: font };
 
   return (
     <div style={{ maxWidth: 640, margin: 0, padding: "16px 12px", fontFamily: font }}>
@@ -123,7 +127,7 @@ function RecastCalculator() {
             fontFamily: font,
           }}
         >
-          <span style={{ fontSize: 12, fontWeight: 700, color: c.navy, letterSpacing: "0.04em" }}>ℹ️  What is a Loan Recast?</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: c.navy, letterSpacing: "0.04em" }}>ℹ️  What is a Loan Recast?</span>
           <span style={{ fontSize: 11, color: c.gray }}>{infoOpen ? "▲ Hide" : "▼ Show"}</span>
         </button>
 
@@ -159,8 +163,8 @@ function RecastCalculator() {
       {!hasDetails && (
         <div style={{
           marginBottom: 14, padding: "10px 12px",
-          background: "#FEF2F2", borderRadius: 8, border: "1px solid #FCA5A5",
-          fontSize: 13, color: "#DC2626", fontFamily: font, lineHeight: 1.6,
+          background: c.redLight, borderRadius: 8, border: `1px solid ${c.red}44`,
+          fontSize: 13, color: c.red, fontFamily: font, lineHeight: 1.6,
         }}>
           Enter your loan details in the <strong>Payment Calculator</strong> tab first — rate, loan amount, and term are needed.
         </div>
@@ -196,21 +200,21 @@ function RecastCalculator() {
           onChange={function(v) { setLumpSum(stripCommas(v)); }}
           useCommas
           hint="Most servicers require a minimum of $10,000"
-          infoTip="The extra principal payment you're making to trigger the recast. Most lenders require a minimum of $5,000-$10,000. This payment is applied directly to your principal balance, reducing what you owe."
+          infoTip="The extra principal payment you're making to trigger the recast. Most lenders require a minimum of $5,000–$10,000. This payment is applied directly to your principal balance, reducing what you owe."
         />
 
         {calc && calc.currentBal > 0 && (
           <div style={{ display: "grid", gridTemplateColumns: hasResult ? "1fr 1fr" : "1fr", gap: 10, marginTop: 4 }}>
             <div style={{ padding: "10px 12px", background: c.bgAlt, border: `1px solid ${c.border}`, borderRadius: 8 }}>
               <div style={sectionLabel}>Balance at Recast</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: c.navy, fontFamily: font }}>{fmt(Math.round(calc.currentBal))}</div>
-              <div style={{ fontSize: 11, color: c.gray, marginTop: 2, fontFamily: font }}>From amortization · read-only</div>
+              <div style={metricVal}>{fmt(Math.round(calc.currentBal))}</div>
+              <div style={metricSub}>From amortization · read-only</div>
             </div>
             {hasResult && (
-              <div style={{ padding: "10px 12px", background: c.bgAlt, border: `1px solid ${c.border}`, borderRadius: 8 }}>
-                <div style={sectionLabel}>New Balance</div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: c.green || "#166534", fontFamily: font }}>{fmt(Math.round(calc.newBal))}</div>
-                <div style={{ fontSize: 11, color: c.gray, marginTop: 2, fontFamily: font }}>After {fmt(Math.round(calc.lump))} lump sum</div>
+              <div style={{ padding: "10px 12px", background: c.greenLight, border: `1px solid ${c.green}44`, borderRadius: 8 }}>
+                <div style={{ ...sectionLabel, color: c.green }}>New Balance</div>
+                <div style={{ ...metricVal, color: c.green }}>{fmt(Math.round(calc.newBal))}</div>
+                <div style={metricSub}>After {fmt(Math.round(calc.lump))} lump sum</div>
               </div>
             )}
           </div>
@@ -225,15 +229,15 @@ function RecastCalculator() {
 
             <div style={{ padding: "10px 12px", background: c.bgAlt, border: `1px solid ${c.border}`, borderRadius: 8 }}>
               <div style={sectionLabel}>Current P&I</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: c.navy, fontFamily: font }}>{fmt2(calc.currentPI)}</div>
-              <div style={{ fontSize: 11, color: c.gray, marginTop: 2, fontFamily: font }}>At recast date</div>
+              <div style={metricVal}>{fmt2(calc.currentPI)}</div>
+              <div style={metricSub}>At recast date</div>
             </div>
 
             {hasResult && (
               <div style={{ padding: "10px 12px", background: c.bgAlt, border: `1px solid ${c.border}`, borderRadius: 8 }}>
                 <div style={sectionLabel}>New P&I</div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: c.navy, fontFamily: font }}>{fmt2(calc.newPI)}</div>
-                <div style={{ fontSize: 11, color: c.gray, marginTop: 2, fontFamily: font }}>After recast</div>
+                <div style={metricVal}>{fmt2(calc.newPI)}</div>
+                <div style={metricSub}>After recast</div>
               </div>
             )}
 
@@ -242,17 +246,17 @@ function RecastCalculator() {
           {hasResult && (
             <div style={{
               marginTop: 10, padding: "10px 14px",
-              background: c.bgAlt, border: `1px solid ${c.border}`, borderRadius: 8,
+              background: c.greenLight, border: `1px solid ${c.green}44`, borderRadius: 8,
               display: "flex", alignItems: "center", justifyContent: "space-between",
             }}>
               <div>
-                <div style={sectionLabel}>Monthly Savings</div>
+                <div style={{ ...sectionLabel, color: c.green }}>Monthly Savings</div>
                 <div style={{ fontSize: 11, color: c.gray, fontFamily: font }}>
                   Term unchanged · {Math.floor(calc.remainingMonths / 12)}yr {calc.remainingMonths % 12}mo remaining
                 </div>
               </div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: c.green || "#166534", fontFamily: font }}>
-                {fmt2(calc.monthlySavings)}<span style={{ fontSize: 13, fontWeight: 500 }}>/mo</span>
+              <div style={{ fontSize: 20, fontWeight: 700, color: c.green, fontFamily: font }}>
+                {fmt2(calc.monthlySavings)}<span style={{ fontSize: 13, fontWeight: 500, color: c.gray }}>/mo</span>
               </div>
             </div>
           )}
@@ -265,32 +269,38 @@ function RecastCalculator() {
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
 
-            <div style={{ padding: "12px", background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 8 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#DC2626", marginBottom: 10, fontFamily: font, textTransform: "uppercase", letterSpacing: "0.06em" }}>↓ Recast It</div>
+            {/* Option A — Recast */}
+            <div style={{ padding: "12px", background: c.redLight, border: `1px solid ${c.red}44`, borderRadius: 8 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: c.red, marginBottom: 10, fontFamily: font, textTransform: "uppercase", letterSpacing: "0.06em" }}>↓ Recast It</div>
               <div style={{ marginBottom: 8 }}>
-                <div style={{ fontSize: 11, color: "#6B7280", fontFamily: font, marginBottom: 2 }}>New payment</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: "#133155", fontFamily: font }}>{fmt2(calc.newPI)}<span style={{ fontSize: 11, fontWeight: 400, color: "#6B7280" }}>/mo</span></div>
+                <div style={{ ...sectionLabel, marginBottom: 2 }}>New payment</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: c.navy, fontFamily: font }}>
+                  {fmt2(calc.newPI)}<span style={{ fontSize: 11, fontWeight: 400, color: c.gray }}>/mo</span>
+                </div>
               </div>
               <div>
-                <div style={{ fontSize: 11, color: "#6B7280", fontFamily: font, marginBottom: 2 }}>Total interest</div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: "#DC2626", fontFamily: font }}>{fmt(Math.round(calc.interestRecast))}</div>
+                <div style={{ ...sectionLabel, marginBottom: 2 }}>Total interest</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: c.red, fontFamily: font }}>{fmt(Math.round(calc.interestRecast))}</div>
               </div>
-              <div style={{ fontSize: 11, color: "#6B7280", lineHeight: 1.5, borderTop: "1px solid #FCA5A5", paddingTop: 8, marginTop: 10, fontFamily: font }}>
+              <div style={{ fontSize: 11, color: c.gray, lineHeight: 1.5, borderTop: `1px solid ${c.red}33`, paddingTop: 8, marginTop: 10, fontFamily: font }}>
                 Best if: you need lower monthly cash flow
               </div>
             </div>
 
-            <div style={{ padding: "12px", background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: 8 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#166534", marginBottom: 10, fontFamily: font, textTransform: "uppercase", letterSpacing: "0.06em" }}>→ Keep Paying</div>
+            {/* Option B — Keep Paying */}
+            <div style={{ padding: "12px", background: c.greenLight, border: `1px solid ${c.green}44`, borderRadius: 8 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: c.green, marginBottom: 10, fontFamily: font, textTransform: "uppercase", letterSpacing: "0.06em" }}>→ Keep Paying</div>
               <div style={{ marginBottom: 8 }}>
-                <div style={{ fontSize: 11, color: "#6B7280", fontFamily: font, marginBottom: 2 }}>Payment stays</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: "#133155", fontFamily: font }}>{fmt2(calc.origPayment)}<span style={{ fontSize: 11, fontWeight: 400, color: "#6B7280" }}>/mo</span></div>
+                <div style={{ ...sectionLabel, marginBottom: 2 }}>Payment stays</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: c.navy, fontFamily: font }}>
+                  {fmt2(calc.origPayment)}<span style={{ fontSize: 11, fontWeight: 400, color: c.gray }}>/mo</span>
+                </div>
               </div>
               <div>
-                <div style={{ fontSize: 11, color: "#6B7280", fontFamily: font, marginBottom: 2 }}>Total interest</div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: "#166534", fontFamily: font }}>{fmt(Math.round(calc.interestExtraPrincipal))}</div>
+                <div style={{ ...sectionLabel, marginBottom: 2 }}>Total interest</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: c.green, fontFamily: font }}>{fmt(Math.round(calc.interestExtraPrincipal))}</div>
               </div>
-              <div style={{ fontSize: 11, color: "#6B7280", lineHeight: 1.5, borderTop: "1px solid #86EFAC", paddingTop: 8, marginTop: 10, fontFamily: font }}>
+              <div style={{ fontSize: 11, color: c.gray, lineHeight: 1.5, borderTop: `1px solid ${c.green}33`, paddingTop: 8, marginTop: 10, fontFamily: font }}>
                 {calc.monthsSaved && calc.monthsSaved > 0
                   ? "Pays off " + (Math.floor(calc.monthsSaved / 12) > 0 ? Math.floor(calc.monthsSaved / 12) + "yr " : "") + (calc.monthsSaved % 12 > 0 ? calc.monthsSaved % 12 + "mo " : "") + "sooner · best if: you want to build equity faster"
                   : "Best if: you want to pay less interest overall"
@@ -300,10 +310,11 @@ function RecastCalculator() {
 
           </div>
 
+          {/* Bottom line summary */}
           <div style={{
             padding: "10px 12px",
-            background: "#FFFBEB", border: "1px solid #FDE68A",
-            borderRadius: 8, fontSize: 13, color: "#78350F", lineHeight: 1.7, fontFamily: font,
+            background: c.goldLight, border: `1px solid ${c.gold}66`,
+            borderRadius: 8, fontSize: 13, color: c.navy, lineHeight: 1.7, fontFamily: font,
           }}>
             <strong>Bottom line:</strong> Recasting costs {fmt(Math.round(calc.extraInterestFromRecast))} more in total interest but saves {fmt2(calc.monthlySavings)}/mo. If your rate is low, keeping the higher payment usually wins.
           </div>

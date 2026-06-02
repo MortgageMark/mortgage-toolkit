@@ -30,7 +30,11 @@
 
 function LabeledInput({ label, value, onChange, onBlur, prefix, suffix, type = "number", step, hint, useCommas, disabled, small, noNegative, rightAddon, infoTip }) {
   const c = useThemeColors();
-  const displayVal = useCommas ? addCommas(value) : value;
+  // For useCommas inputs: show raw digits while focused, formatted on blur
+  const [isFocused, setIsFocused] = React.useState(false);
+  const displayVal = useCommas
+    ? (isFocused ? (value || "") : addCommas(value))
+    : value;
   const handleChange = (raw) => {
     if (noNegative) {
       const n = parseFloat(String(raw).replace(/,/g, ''));
@@ -42,8 +46,13 @@ function LabeledInput({ label, value, onChange, onBlur, prefix, suffix, type = "
     <div style={{ flex: rightAddon ? 1 : undefined, display: "flex", alignItems: "center", background: disabled ? (c === COLORS_DARK ? "#1A2530" : "#f0f0f0") : c.bg, border: `1.5px solid ${c.border}`, borderRadius: 8, overflow: "hidden" }}>
       {prefix && <span style={{ padding: "8px 0 8px 10px", color: c.navy, fontWeight: 600, fontSize: small ? 13 : 15, fontFamily: font }}>{prefix}</span>}
       <input type={useCommas ? "text" : type} value={displayVal}
+        inputMode={type === "number" || useCommas ? "decimal" : undefined}
+        onFocus={(e) => { setIsFocused(true); e.target.select(); }}
         onChange={(e) => handleChange(useCommas ? stripCommas(e.target.value) : e.target.value)}
-        onBlur={onBlur ? (e) => onBlur(useCommas ? stripCommas(e.target.value) : e.target.value) : undefined}
+        onBlur={(e) => {
+          setIsFocused(false);
+          if (onBlur) onBlur(useCommas ? stripCommas(e.target.value) : e.target.value);
+        }}
         step={step} disabled={disabled}
         style={{ flex: 1, border: "none", outline: "none", background: "transparent", padding: small ? "8px 10px" : "10px 12px", fontSize: small ? 13 : 15, fontWeight: 500, color: c.text || c.navy, fontFamily: font, width: "100%" }} />
       {suffix && <span style={{ padding: "8px 10px 8px 0", color: c.gray, fontSize: small ? 11 : 13, fontWeight: 500, fontFamily: font }}>{suffix}</span>}
@@ -77,11 +86,16 @@ function Toggle({ label, checked, onChange }) {
   );
 }
 
-function Select({ label, value, onChange, options, small }) {
+function Select({ label, value, onChange, options, small, infoTip }) {
   const c = useThemeColors();
   return (
     <div style={{ marginBottom: small ? 10 : 14 }}>
-      <label style={{ display: "block", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: c.gray, marginBottom: 5, fontFamily: font }}>{label}</label>
+      {label && (
+        <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5 }}>
+          <label style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: c.gray, fontFamily: font }}>{label}</label>
+          {infoTip && <InfoTip text={infoTip} />}
+        </div>
+      )}
       <select value={value} onChange={(e) => onChange(e.target.value)} style={{ width: "100%", padding: small ? "8px 10px" : "10px 12px", background: c.bg, border: `1.5px solid ${c.border}`, borderRadius: 8, fontSize: small ? 13 : 15, fontWeight: 500, color: c.text || c.navy, fontFamily: font, cursor: "pointer" }}>
         {options.map((o) => <option key={o.value} value={o.value} style={{ background: c.white, color: c.text || c.navy }}>{o.label}</option>)}
       </select>
@@ -237,7 +251,13 @@ function InfoTip({ text }) {
       }
     }, "i"),
     open && pos && ReactDOM.createPortal(
-      React.createElement("div", { ref: popRef, style: popStyle }, text),
+      React.createElement("div", { ref: popRef, style: popStyle },
+        text.split("\n").map(function(line, i) {
+          return line === ""
+            ? React.createElement("div", { key: i, style: { height: 6 } })
+            : React.createElement("div", { key: i }, line);
+        })
+      ),
       document.body
     )
   );

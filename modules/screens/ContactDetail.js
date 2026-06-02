@@ -207,12 +207,12 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
   const isBusiness = contact.contact_type === "business";
   useEffectCD(function() {
     if (!supabaseCD || !isAdmin || !isBusiness) return;
-    // Fetch LO-category contacts for team lead picker
+    // Fetch all business contacts for team lead picker
     supabaseCD
       .from("contacts")
-      .select("id, first_name, last_name, company, lo_title")
+      .select("id, first_name, last_name, company, lo_title, contact_category")
       .eq("contact_type", "business")
-      .eq("contact_category", "Loan Officer")
+      .in("contact_category", ["Loan Officer", "Realtor", "Builder"])
       .order("first_name", { ascending: true })
       .then(function(res) {
         if (!res.error && res.data) setLoContacts(res.data);
@@ -244,6 +244,9 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
     nickname:   contact.nickname   || "",
     last_name:  contact.last_name  || "",
     company:    contact.company    || "",
+    team_name:  contact.team_name  || "",
+    photo_url:  contact.photo_url  || "",
+    logo_url:   contact.logo_url   || "",
     // Classification
     contact_type:           contact.contact_type            || "client",
     contact_category:       contact.contact_category        || "",
@@ -323,6 +326,22 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
   }
 
   // Portal account creation
+  const [showPerson2,    setShowPerson2]    = useState(!!(contact.first_name2 || contact.last_name2 || contact.nickname2));
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [copiedRefLink,  setCopiedRefLink]  = useState(false);
+
+  async function handlePhotoUpload(file, field) {
+    if (!file || !supabaseCD) return;
+    setPhotoUploading(true);
+    const ext  = file.name.split(".").pop().toLowerCase();
+    const path = contact.id + "/" + field + "-" + Date.now() + "." + ext;
+    const { error: upErr } = await supabaseCD.storage.from("contact-photos").upload(path, file, { upsert: true });
+    if (upErr) { setPhotoUploading(false); alert("Upload failed: " + upErr.message); return; }
+    const { data: urlData } = supabaseCD.storage.from("contact-photos").getPublicUrl(path);
+    handleFieldChange(field, urlData.publicUrl);
+    setPhotoUploading(false);
+  }
+  const [showContact2, setShowContact2] = useState(!!(contact.first_name2 || contact.last_name2 || contact.phone2 || contact.email2));
   const [portalCreated, setPortalCreated] = useState(!!contact.auth_user_id);
   const [portalLoading, setPortalLoading] = useState(false);
   const [portalModal,   setPortalModal]   = useState(null); // { snippet }
@@ -1049,6 +1068,15 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                     placeholder="Employer / company name"
                   />
                 </div>
+                <div>
+                  <label style={labelStyle}>Team Name</label>
+                  <input
+                    style={fieldStyle}
+                    value={editForm.team_name}
+                    onChange={function (e) { handleFieldChange("team_name", e.target.value); }}
+                    placeholder="e.g. The Pfeiffer Team"
+                  />
+                </div>
               </div>
               {/* Right: Classification */}
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -1091,29 +1119,38 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                     excludeId={contact.id}
                   />
                 </div>
-                <div>
-                  <label style={labelStyle}>Assigned LO</label>
-                  <select
-                    style={fieldStyle}
-                    value={editForm.assigned_lo_id || ""}
-                    onChange={function(e) { handleFieldChange("assigned_lo_id", e.target.value || null); }}
-                  >
-                    <option value="">— Unassigned —</option>
-                    {loProfiles.map(function(lo) {
-                      return (
-                        <option key={lo.id} value={lo.id}>
-                          {lo.display_name || lo.email || lo.id}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
+                {editForm.contact_type !== "business" && (
+                  <div>
+                    <label style={labelStyle}>Assigned LO</label>
+                    <select
+                      style={fieldStyle}
+                      value={editForm.assigned_lo_id || ""}
+                      onChange={function(e) { handleFieldChange("assigned_lo_id", e.target.value || null); }}
+                    >
+                      <option value="">— Unassigned —</option>
+                      {loProfiles.map(function(lo) {
+                        return (
+                          <option key={lo.id} value={lo.id}>
+                            {lo.display_name || lo.email || lo.id}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                )}
               </div>
             </div>
           ) : (
             /* Read View */
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                {/* Photo + logo display for business contacts */}
+                {isBusiness && (contact.photo_url || contact.logo_url) && (
+                  <div style={{ display: "flex", gap: 10, marginBottom: 4 }}>
+                    {contact.photo_url && <img src={contact.photo_url} alt="Headshot" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: "50%", border: "2px solid #E8EEF4" }} />}
+                    {contact.logo_url  && <img src={contact.logo_url}  alt="Logo"     style={{ height: 56, maxWidth: 100, objectFit: "contain", borderRadius: 6, border: "1px solid #E8EEF4", padding: 4, background: "#fff" }} />}
+                  </div>
+                )}
                 <InfoRow label="Prefix"     value={contact.prefix} />
                 <InfoRow label="First Name" value={contact.first_name} />
                 <InfoRow label="Nickname"   value={contact.nickname} />
@@ -1159,7 +1196,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                     );
                   })()}
                 </div>
-                {(() => {
+                {contact.contact_type !== "business" && (() => {
                   const assignedLo = contact.assigned_lo_id
                     ? loProfiles.find(function(lo) { return lo.id === contact.assigned_lo_id; })
                     : null;
@@ -1170,6 +1207,37 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                     />
                   );
                 })()}
+                {isAdmin && (() => {
+                  var creatorName = null;
+                  if (contact.creator_id) {
+                    var cp = loProfiles.find(function(p) { return p.id === contact.creator_id; });
+                    creatorName = cp ? (cp.display_name || cp.email) : null;
+                  }
+                  // Fallback: if no creator_id but has a referral contact, show that name
+                  if (!creatorName && contact.referred_by_contact_id && contacts) {
+                    var rb = contacts.find(function(c) { return c.id === contact.referred_by_contact_id; });
+                    if (rb) creatorName = ((rb.first_name || "") + " " + (rb.last_name || "")).trim() || null;
+                  }
+                  return <InfoRow label="Creator" value={creatorName} />;
+                })()}
+                {/* Referral link for Realtor / Builder business contacts */}
+                {isBusiness && (contact.contact_category === "Realtor" || contact.contact_category === "Builder") && (
+                  <div>
+                    <div style={{ fontSize: "11px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "6px" }}>Referral Link</div>
+                    <button
+                      onClick={function() {
+                        var link = window.location.origin + window.location.pathname + "?from=" + encodeURIComponent(contact.id);
+                        navigator.clipboard.writeText(link).then(function() {
+                          setCopiedRefLink(true);
+                          setTimeout(function() { setCopiedRefLink(false); }, 2000);
+                        });
+                      }}
+                      style={{ background: copiedRefLink ? "#E6F9F0" : "#F0F4F8", color: copiedRefLink ? "#1B8A5A" : "#0C4160", border: "1px solid " + (copiedRefLink ? "#1B8A5A" : "#D1D9E6"), borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                    >
+                      {copiedRefLink ? "✓ Copied!" : "📋 Copy Referral Link"}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1580,8 +1648,16 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
         {/* Personal 2 Info                                                    */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
         <div style={sectionStyle}>{cardNum(6)}
-          <div style={sectionTitleStyle}>Personal 2 Info</div>
-          {editMode ? (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: showPerson2 ? 16 : 0 }}>
+            <div style={sectionTitleStyle}>Person 2 Info</div>
+            <button
+              onClick={function() { setShowPerson2(function(v) { return !v; }); }}
+              style={{ fontSize: 12, fontWeight: 600, color: "#0C4160", background: showPerson2 ? "#E8EEF4" : "#F0F4F8", border: "1px solid #D1D9E6", borderRadius: 6, padding: "4px 12px", cursor: "pointer", fontFamily: "inherit" }}
+            >
+              {showPerson2 ? "Hide" : "Show"}
+            </button>
+          </div>
+          {showPerson2 && editMode ? (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
               {/* Left: Name (Client 2) */}
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -1648,7 +1724,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                 </div>
               </div>
             </div>
-          ) : (
+          ) : showPerson2 ? (
             (contact.first_name2 || contact.last_name2) ? (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -1662,19 +1738,27 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                 </div>
               </div>
             ) : (
-              <div style={{ fontSize: "13px", color: "#cbd5e1" }}>No co-borrower on record.</div>
+              <div style={{ fontSize: "13px", color: "#94a3b8" }}>No person 2 on record.</div>
             )
-          )}
+          ) : null}
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
         {/* Contact 2 Info                                                     */}
         {/* Left: Cell/Work/Home/Best   Right: Personal/Work/Other/Best       */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        {(editMode || contact.first_name2 || contact.last_name2) && (
+        {(editMode || contact.first_name2 || contact.last_name2 || contact.phone2 || contact.email2) && (
           <div style={sectionStyle}>{cardNum(7)}
-            <div style={sectionTitleStyle}>Contact 2 Info</div>
-            {editMode ? (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: showContact2 ? 16 : 0 }}>
+              <div style={sectionTitleStyle}>Contact 2 Info</div>
+              <button
+                onClick={function() { setShowContact2(function(v) { return !v; }); }}
+                style={{ fontSize: 12, fontWeight: 600, color: "#0C4160", background: showContact2 ? "#E8EEF4" : "#F0F4F8", border: "1px solid #D1D9E6", borderRadius: 6, padding: "4px 12px", cursor: "pointer", fontFamily: "inherit" }}
+              >
+                {showContact2 ? "Hide" : "Show"}
+              </button>
+            </div>
+            {showContact2 && editMode ? (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
                 {/* Left: Phone */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -1766,7 +1850,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                   </div>
                 </div>
               </div>
-            ) : (
+            ) : showContact2 ? (
               /* Read View */
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -1782,7 +1866,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                   <InfoRow label="Email: Best"     value={contact.email2_best} />
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
         )}
 
@@ -1964,39 +2048,46 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                 {/* ── Professional Info ── */}
                 <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0C4160", marginBottom: 4 }}>Professional Info</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div>
-                    <label style={labelStyle}>Title</label>
-                    <input style={fieldStyle} value={editForm.lo_title} onChange={function(e) { handleFieldChange("lo_title", e.target.value); }} placeholder="e.g. Senior Loan Officer" />
+                  {/* Left column */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <div>
+                      <label style={labelStyle}>Title</label>
+                      <input style={fieldStyle} value={editForm.lo_title} onChange={function(e) { handleFieldChange("lo_title", e.target.value); }} placeholder="e.g. Senior Loan Officer" />
+                    </div>
+                    {editForm.contact_category !== "Realtor" && editForm.contact_category !== "Builder" && (
+                      <>
+                        <div>
+                          <label style={labelStyle}>Personal NMLS #</label>
+                          <input style={fieldStyle} value={editForm.lo_nmls} onChange={function(e) { handleFieldChange("lo_nmls", e.target.value); }} placeholder="729612" />
+                        </div>
+                        <div>
+                          <label style={labelStyle}>Branch NMLS #</label>
+                          <input style={fieldStyle} value={editForm.lo_branch_nmls} onChange={function(e) { handleFieldChange("lo_branch_nmls", e.target.value); }} placeholder="Branch NMLS" />
+                        </div>
+                        <div>
+                          <label style={labelStyle}>Company NMLS #</label>
+                          <input style={fieldStyle} value={editForm.lo_company_nmls} onChange={function(e) { handleFieldChange("lo_company_nmls", e.target.value); }} placeholder="1820" />
+                        </div>
+                      </>
+                    )}
+                    {(editForm.contact_category === "Realtor" || editForm.contact_category === "Builder") && (
+                      <div>
+                        <label style={labelStyle}>License #</label>
+                        <input style={fieldStyle} value={editForm.lo_license} onChange={function(e) { handleFieldChange("lo_license", e.target.value); }} placeholder="TX-123456" />
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <label style={labelStyle}>Personal NMLS #</label>
-                    <input style={fieldStyle} value={editForm.lo_nmls} onChange={function(e) { handleFieldChange("lo_nmls", e.target.value); }} placeholder="729612" />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>License # (Realtors)</label>
-                    <input style={fieldStyle} value={editForm.lo_license} onChange={function(e) { handleFieldChange("lo_license", e.target.value); }} placeholder="TX-123456" />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Display Email (for letters)</label>
-                    <input style={fieldStyle} value={editForm.lo_email_display} onChange={function(e) { handleFieldChange("lo_email_display", e.target.value); }} placeholder="team@company.com" type="email" />
-                    <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 3 }}>Use if different from login email</div>
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Website</label>
-                    <input style={fieldStyle} value={editForm.lo_website} onChange={function(e) { handleFieldChange("lo_website", e.target.value); }} placeholder="https://mortgagemark.com" />
-                  </div>
-                </div>
-
-                {/* ── Company ── */}
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0C4160", marginTop: 8, marginBottom: 4 }}>Company</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div>
-                    <label style={labelStyle}>Company NMLS #</label>
-                    <input style={fieldStyle} value={editForm.lo_company_nmls} onChange={function(e) { handleFieldChange("lo_company_nmls", e.target.value); }} placeholder="1820" />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Branch NMLS #</label>
-                    <input style={fieldStyle} value={editForm.lo_branch_nmls} onChange={function(e) { handleFieldChange("lo_branch_nmls", e.target.value); }} placeholder="Branch NMLS" />
+                  {/* Right column */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <div>
+                      <label style={labelStyle}>Display Email (for letters)</label>
+                      <input style={fieldStyle} value={editForm.lo_email_display} onChange={function(e) { handleFieldChange("lo_email_display", e.target.value); }} placeholder="team@company.com" type="email" />
+                      <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 3 }}>Use if different from login email</div>
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Website</label>
+                      <input style={fieldStyle} value={editForm.lo_website} onChange={function(e) { handleFieldChange("lo_website", e.target.value); }} placeholder="https://mortgagemark.com" />
+                    </div>
                   </div>
                 </div>
 
@@ -2007,7 +2098,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                     <label style={labelStyle}>Team Lead</label>
                     <select style={fieldStyle} value={editForm.team_lead_contact_id || ""} onChange={function(e) { handleFieldChange("team_lead_contact_id", e.target.value || null); }}>
                       <option value="">— No Team Lead —</option>
-                      {loContacts.filter(function(c) { return c.id !== contact.id; }).map(function(c) {
+                      {loContacts.filter(function(c) { return c.id !== contact.id && c.contact_category === editForm.contact_category; }).map(function(c) {
                         var name = ((c.first_name || "") + " " + (c.last_name || "")).trim() || "(unnamed)";
                         return <option key={c.id} value={c.id}>{name}{c.lo_title ? " · " + c.lo_title : ""}{c.company ? " · " + c.company : ""}</option>;
                       })}
@@ -2045,6 +2136,68 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                   <div style={{ color: "#94a3b8", fontSize: 13, gridColumn: "1 / -1" }}>
                     No LO profile data yet. Click ✏️ Edit to fill in PQ letter info and team assignment.
                   </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Photo & Logo ── */}
+        {isBusiness && (
+          <div style={sectionStyle}>
+            <div style={sectionTitleStyle}>Photo &amp; Logo</div>
+            {editMode ? (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                {[["photo_url","Headshot","👤"],["logo_url","Company Logo","🏢"]].map(function(f) {
+                  var field = f[0], label = f[1], icon = f[2];
+                  var url = editForm[field];
+                  return (
+                    <div key={field}>
+                      <label style={labelStyle}>{label}</label>
+                      <div
+                        onClick={function() {
+                          var inp = document.createElement("input");
+                          inp.type = "file"; inp.accept = "image/*";
+                          inp.onchange = function(e) { if (e.target.files[0]) handlePhotoUpload(e.target.files[0], field); };
+                          inp.click();
+                        }}
+                        style={{ border: "1.5px dashed #D1D9E6", borderRadius: 10, padding: 16, cursor: "pointer", textAlign: "center", background: "#F7FAFB", minHeight: 100, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8 }}
+                      >
+                        {url
+                          ? <img src={url} alt={label} style={{ maxHeight: 80, maxWidth: "100%", objectFit: "contain", borderRadius: field === "photo_url" ? "50%" : 8 }} />
+                          : <>
+                              <span style={{ fontSize: 28 }}>{icon}</span>
+                              <span style={{ fontSize: 12, color: "#94a3b8" }}>{photoUploading ? "Uploading..." : "Click to upload"}</span>
+                            </>
+                        }
+                      </div>
+                      {url && (
+                        <button onClick={function() { handleFieldChange(field, ""); }} style={{ fontSize: 11, color: "#ef4444", background: "none", border: "none", cursor: "pointer", padding: "4px 0", fontFamily: "inherit" }}>
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
+                {contact.photo_url
+                  ? <div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Headshot</div>
+                      <img src={contact.photo_url} alt="Headshot" style={{ width: 72, height: 72, objectFit: "cover", borderRadius: "50%", border: "2px solid #E8EEF4" }} />
+                    </div>
+                  : null
+                }
+                {contact.logo_url
+                  ? <div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Company Logo</div>
+                      <img src={contact.logo_url} alt="Logo" style={{ height: 72, maxWidth: 160, objectFit: "contain", borderRadius: 8, border: "1px solid #E8EEF4", padding: 6, background: "#fff" }} />
+                    </div>
+                  : null
+                }
+                {!contact.photo_url && !contact.logo_url && (
+                  <div style={{ fontSize: 13, color: "#94a3b8" }}>No photos uploaded yet. Click ✏️ Edit to add a headshot or logo.</div>
                 )}
               </div>
             )}

@@ -336,7 +336,7 @@ function InterestRates() {
           <label style={labelStyle}>{activeMeta.label} Market Rate</label>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <input
-              type="number" step="0.125" min="1" max="20"
+              type="number" inputMode="decimal" onFocus={(e) => e.target.select()} step="0.125" min="1" max="20"
               value={activeMarket}
               onChange={e => setActiveMarket(e.target.value)}
               style={bigInp}
@@ -359,7 +359,7 @@ function InterestRates() {
           <label style={labelStyle}>{activeMeta.label} Floor Rate</label>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <input
-              type="number" step="0.125" min="1" max="20"
+              type="number" inputMode="decimal" onFocus={(e) => e.target.select()} step="0.125" min="1" max="20"
               value={activeFloor}
               onChange={e => setActiveFloor(e.target.value)}
               style={bigInp}
@@ -535,7 +535,7 @@ function InterestRates() {
                         ? <span style={{ color: c.textSecondary || "#94A3B0", fontSize: 12 }}>—</span>
                         : <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4 }}>
                             <input
-                              type="number" step="0.125" min="0"
+                              type="number" inputMode="decimal" onFocus={(e) => e.target.select()} step="0.125" min="0"
                               value={activeSteps[k] !== undefined ? activeSteps[k] : ""}
                               onChange={e => handleStep(k, e.target.value)}
                               placeholder="0.000"

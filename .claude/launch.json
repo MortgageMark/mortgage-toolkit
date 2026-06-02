@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mortgage-toolkit",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8000", "--directory", "C:\\Users\\markn\\OneDrive\\Desktop\\Claude Folder\\Mortgage Calculators"],
+      "port": 8000
+    }
+  ]
+}

@@ -519,7 +519,7 @@ function SettingsPanel({ open, onClose, darkMode, allModules, openTab }) {
                   {(window.STATE_LIST || []).map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </select>
               );
-              return <input type="number" value={cond.value} onChange={e => updateCond(idx, { value: e.target.value })}
+              return <input type="number" inputMode="decimal" onFocus={(e) => e.target.select()} value={cond.value} onChange={e => updateCond(idx, { value: e.target.value })}
                 style={{ ...selStyle, width: 80 }} placeholder="value" />;
             };
 

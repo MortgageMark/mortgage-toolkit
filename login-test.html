@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html><head><title>Login Screen Diagnostic</title></head>
+<body style="font-family:sans-serif; padding:20px; background:#f0f0f0;">
+<h2>Home Loan Toolkit — Login Screen Diagnostic</h2>
+<div id="log" style="background:white; border:2px solid #ccc; padding:15px; border-radius:8px; margin:20px 0; max-height:400px; overflow:auto;"></div>
+<script>
+const logDiv = document.getElementById('log');
+function log(msg, color) {
+  const p = document.createElement('p');
+  p.style.cssText = 'margin:4px 0; padding:4px 8px; border-radius:4px; font-size:14px; background:' + (color === 'red' ? '#fee' : color === 'green' ? '#efe' : '#eef');
+  p.style.color = color || '#333';
+  p.textContent = msg;
+  logDiv.appendChild(p);
+}
+
+// Check if file exists by trying to fetch it
+log('Checking mortgage-toolkit.html...', 'blue');
+
+fetch('mortgage-toolkit.html').then(r => r.text()).then(html => {
+  log('✅ File loaded: ' + html.length + ' characters', 'green');
+
+  // Check for LoginScreen
+  if (html.includes('function LoginScreen')) {
+    log('✅ LoginScreen component found in file', 'green');
+  } else {
+    log('❌ LoginScreen component NOT found — file may be an older version!', 'red');
+  }
+
+  // Check for CoverPage
+  if (html.includes('CoverPage')) {
+    log('⚠️ CoverPage still exists in file — old version detected!', 'red');
+  } else {
+    log('✅ CoverPage removed (correct)', 'green');
+  }
+
+  // Check for App function with login logic
+  if (html.includes('loggedInUser')) {
+    log('✅ Login logic found in App()', 'green');
+  } else {
+    log('❌ Login logic NOT found in App()', 'red');
+  }
+
+  // Check for hashPassword
+  if (html.includes('async function hashPassword')) {
+    log('✅ hashPassword utility found', 'green');
+  } else {
+    log('❌ hashPassword utility NOT found', 'red');
+  }
+
+  // Check file size
+  const lines = html.split('\n').length;
+  log('📏 File has ' + lines + ' lines (expected ~6955)', lines > 6900 ? 'green' : 'red');
+
+  // Check localStorage
+  const appUser = localStorage.getItem('mtk_app_user');
+  log('🔑 mtk_app_user in localStorage: ' + (appUser || '(empty/null)'), appUser && appUser !== 'null' ? 'blue' : 'green');
+
+  const roster = localStorage.getItem('mtk_roster');
+  log('🔑 mtk_roster in localStorage: ' + (roster ? roster.substring(0, 80) + '...' : '(empty/null)'), 'blue');
+
+  log('', 'blue');
+  log('Now loading the toolkit below to check for runtime errors...', 'blue');
+
+}).catch(err => {
+  log('❌ Could not load file: ' + err.message, 'red');
+});
+
+// Catch any errors from the page
+window.addEventListener('error', function(e) {
+  log('❌ JS ERROR: ' + e.message + ' (line ' + e.lineno + ')', 'red');
+});
+</script>
+
+<hr style="margin:20px 0;">
+<p><strong>The toolkit should appear below. If you see the login screen, it's working! If you see the calculator, scroll up to read the diagnostic messages.</strong></p>
+<iframe src="mortgage-toolkit.html?v=3" style="width:100%; height:700px; border:2px solid #0C4160; border-radius:8px;"></iframe>
+</body></html>

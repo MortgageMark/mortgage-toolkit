@@ -502,7 +502,7 @@ function AmortizationSchedule() {
                 <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
                   <div style={{ flex: "0 0 90px" }}>
                     <input
-                      type="number"
+                      type="number" inputMode="decimal" onFocus={(e) => e.target.select()}
                       min="1"
                       max="360"
                       placeholder="Month #"
@@ -518,7 +518,7 @@ function AmortizationSchedule() {
                   <div style={{ flex: 1 }}>
                     <input
                       type="text"
-                      inputMode="numeric"
+                      onFocus={(e) => e.target.select()} inputMode="numeric"
                       placeholder="Amount $"
                       value={l.amount ? addCommasLocal(l.amount) : ""}
                       onChange={e => updateLump(i, "amount", stripCommasLocal(e.target.value))}

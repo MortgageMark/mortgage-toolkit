@@ -445,7 +445,7 @@ async function fetchContactsFromSupabase() {
 // --- saveContactToSupabase ---
 async function saveContactToSupabase({
   contactId, prefix, first_name, last_name, nickname,
-  company,
+  company, team_name, photo_url, logo_url,
   contact_type, contact_category, referred_by_contact_id,
   // phone
   phone_cell, phone_work, phone_home, phone_best,
@@ -479,6 +479,9 @@ async function saveContactToSupabase({
     last_name:  last_name  || "",
     nickname:   nickname   || null,
     company:    company    || null,
+    team_name:  team_name  || null,
+    photo_url:  photo_url  || null,
+    logo_url:   logo_url   || null,
     contact_type:           contact_type           || "client",
     contact_category:       contact_category       || null,
     referred_by_contact_id: referred_by_contact_id || null,
@@ -549,6 +552,7 @@ async function saveContactToSupabase({
     return { data, error };
   } else {
     payload.created_by_user_id = user.id;
+    payload.creator_id         = user.id; // default: logged-in admin is the creator
     const { data, error } = await supabase
       .from("contacts").insert(payload).select().single();
     return { data, error };

@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
-  <title>Home Loan Toolkit — Mortgage Mark · CMG Home Loans</title>
-  <meta name="description" content="Comprehensive home loan toolkit by Mortgage Mark, CMG Home Loans. Payment calculator, refinance analyzer, fee sheets, and more.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+  <title>Home Loan Toolkit</title>
+  <meta name="description" content="Home Loan Toolkit — Payment calculator, refinance analyzer, pre-qual letters, fee sheets, and more. Powered by CMG Home Loans.">
   <meta name="theme-color" content="#0C4160">
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
@@ -30,6 +30,14 @@
       -webkit-font-smoothing: antialiased;
       touch-action: pan-y;
       -webkit-overflow-scrolling: auto;
+      /* Respect user's system font size preference (supports iOS Dynamic Type) */
+      font-size: 16px;
+    }
+    /* Prevent iOS Safari from zooming in when tapping inputs (requires font-size ≥ 16px) */
+    @media (max-width: 768px) {
+      input, select, textarea {
+        font-size: 16px !important;
+      }
     }
     #root {
       overflow-x: hidden;

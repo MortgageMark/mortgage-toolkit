@@ -618,6 +618,7 @@ function BuilderTab() {
             )}
             <input
               ref={concInputRef}
+              inputMode="decimal"
               type={concMode === "dollar" ? "text" : "number"}
               min={concMode === "pct" ? "0" : undefined}
               step={concMode === "pct" ? "0.25" : undefined}
@@ -634,7 +635,7 @@ function BuilderTab() {
                   setConcVal(e.target.value);
                 }
               }}
-              onFocus={() => setConcFocused(true)}
+              onFocus={(e) => { setConcFocused(true); e.target.select(); }}
               onBlur={() => setConcFocused(false)}
               onKeyDown={e => {
                 if (e.key === "Tab") {
@@ -707,11 +708,11 @@ function BuilderTab() {
                 <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                   <span style={{ fontWeight: 700, color: c.text || "#1B2A3B" }}>$</span>
                   <input
-                    type="text"
+                    type="text" inputMode="decimal"
                     value={permFocused ? permBudget : (parseFloat(permBudget) > 0 ? Math.round(parseFloat(permBudget)).toLocaleString("en-US") : permBudget)}
                     data-role="perm-budget"
                     tabIndex={-1}
-                    onFocus={function() { setPermFocused(true); }}
+                    onFocus={function(e) { setPermFocused(true); e.target.select(); }}
                     onBlur={function()  { setPermFocused(false); }}
                     onChange={function(e) {
                       var raw = parseFloat(e.target.value.replace(/[^0-9.]/g, "")) || 0;
@@ -828,10 +829,10 @@ function BuilderTab() {
                 <span style={{ fontSize: 13, fontWeight: 600, color: c.textSecondary || "#64748b" }}>Target:</span>
                 <span style={{ fontSize: 16, fontWeight: 700, color: c.text || "#1B2A3B" }}>$</span>
                 <input
-                  type="text"
+                  type="text" inputMode="decimal"
                   value={targetPayFocused ? targetPayment : (targetPayNum > 0 ? Math.round(targetPayNum).toLocaleString("en-US") : targetPayment)}
                   onChange={function(e) { setTargetPayment(e.target.value.replace(/[^0-9.]/g, "")); }}
-                  onFocus={function() { setTargetPayFocused(true); }}
+                  onFocus={function(e) { setTargetPayFocused(true); e.target.select(); }}
                   onBlur={function() { setTargetPayFocused(false); }}
                   placeholder="0"
                   style={{ width: 110, padding: "7px 10px", borderRadius: 6, border: "1px solid " + border, background: c.bg || "#fff", color: c.text || "#1B2A3B", fontSize: 15, fontWeight: 700, fontFamily: font, textAlign: "right" }}

@@ -280,7 +280,7 @@ function PermBuydownTab({ isInternal }) {
           <span style={{ color: isDark ? "#F0C040" : "#A07800" }}>Internal:</span> Discount points per 0.125% rate reduction:
         </span>
         <input
-          type="number" min="0.1" max="4" step="0.1" value={ptsPerQtr}
+          type="number" inputMode="decimal" onFocus={(e) => e.target.select()} min="0.1" max="4" step="0.1" value={ptsPerQtr}
           onChange={function(e) { setPtsPerQtr(e.target.value); }}
           style={{
             width: 70, padding: "8px 10px", borderRadius: 7, border: "1px solid " + border,

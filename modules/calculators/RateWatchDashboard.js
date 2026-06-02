@@ -72,7 +72,7 @@ function RateWatchDashboard() {
               <div key={i} style={{ background: c.surface || "#F8FAFC", borderRadius: 10, padding: 14, border: `1px solid ${c.border || "#EEF2F6"}` }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: c.textSecondary || COLORS.gray, fontFamily: font, marginBottom: 4 }}>{r.label}</div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <input type="number" step="0.125" value={r.value} onChange={e => r.set(Number(e.target.value))}
+                  <input type="number" inputMode="decimal" onFocus={(e) => e.target.select()} step="0.125" value={r.value} onChange={e => r.set(Number(e.target.value))}
                     style={{ width: 80, padding: "6px 8px", borderRadius: 6, border: `1px solid ${c.border || "#D8E2EA"}`, background: c.bg || "#fff", color: r.color, fontFamily: font, fontSize: 16, fontWeight: 800, outline: "none", textAlign: "center" }}
                   />
                   <span style={{ fontSize: 14, color: r.color, fontWeight: 700 }}>%</span>

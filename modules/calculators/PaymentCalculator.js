@@ -34,6 +34,80 @@ const InfoTip = window.InfoTip;
 
 const PRESET_TERMS_PC = ["30", "25", "20", "15", "10"];
 
+// ── ExpandableChart ─────────────────────────────────────────────────────────
+// Wraps any chart with a fullscreen expand button. On tap/click opens a portal
+// modal. Pass `expandedContent` for a larger version inside the modal;
+// otherwise the same children are rendered at full width.
+function ExpandableChart({ title, children, expandedContent }) {
+  const [open, setOpen] = useState(false);
+  const c = useThemeColors();
+  return (
+    <>
+      <div style={{ position: "relative" }}>
+        {children}
+        <button
+          onClick={function() { setOpen(true); }}
+          title="Expand"
+          style={{
+            position: "absolute", top: 4, right: 4,
+            background: "rgba(0,0,0,0.18)", border: "none", borderRadius: 6,
+            color: "#fff", width: 28, height: 28, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 14, lineHeight: 1, opacity: 0.75, transition: "opacity 0.15s",
+            zIndex: 10,
+          }}
+          onMouseEnter={function(e) { e.currentTarget.style.opacity = 1; }}
+          onMouseLeave={function(e) { e.currentTarget.style.opacity = 0.75; }}
+        >
+          ⤢
+        </button>
+      </div>
+      {open && ReactDOM.createPortal(
+        <div
+          onClick={function() { setOpen(false); }}
+          style={{
+            position: "fixed", inset: 0, zIndex: 99999,
+            background: "rgba(0,0,0,0.82)",
+            display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center",
+            padding: "20px 16px",
+          }}
+        >
+          {/* Modal card — stop propagation so clicking inside doesn't close */}
+          <div
+            onClick={function(e) { e.stopPropagation(); }}
+            style={{
+              background: c.white || "#fff",
+              borderRadius: 14,
+              padding: "20px 16px",
+              width: "100%",
+              maxWidth: 760,
+              maxHeight: "90vh",
+              overflowY: "auto",
+              boxShadow: "0 24px 80px rgba(0,0,0,0.5)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: c.navy, fontFamily: font, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                {title}
+              </div>
+              <button
+                onClick={function() { setOpen(false); }}
+                style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: c.gray, lineHeight: 1, padding: "2px 6px" }}
+              >
+                ✕
+              </button>
+            </div>
+            {expandedContent || children}
+          </div>
+          <div style={{ marginTop: 12, fontSize: 12, color: "rgba(255,255,255,0.5)" }}>Tap outside to close</div>
+        </div>,
+        document.body
+      )}
+    </>
+  );
+}
+
 // Average homeowners insurance rates by state (% of home value, 2024 estimates)
 const STATE_INS_RATES = {
   AL:0.80, AK:0.65, AZ:0.55, AR:0.95, CA:0.60, CO:0.75, CT:0.65, DE:0.42,
@@ -194,10 +268,14 @@ function PaymentCalculator({ isInternal, user }) {
   const [taxMode, setTaxMode] = useLocalStorage("pc_taxm", "rate");
   const [propertyTax, setPropertyTax] = useLocalStorage("pc_tax", "");
   const [propertyTaxRate, setPropertyTaxRate] = useLocalStorage("pc_taxr", "2.3");
+  const [taxOverridden, setTaxOverridden] = useLocalStorage("pc_tax_override", false);
+  const [taxDollarStored, setTaxDollarStored] = useLocalStorage("pc_tax_dollar", ""); // exact user-entered $
   // Homestead auto-derived: TX primary owner gets 80% tax basis automatically
   const [insMode, setInsMode] = useLocalStorage("pc_insm", "rate");
   const [homeInsurance, setHomeInsurance] = useLocalStorage("pc_ins", "");
   const [homeInsuranceRate, setHomeInsuranceRate] = useLocalStorage("pc_insr", "0.7");
+  const [insOverridden, setInsOverridden] = useLocalStorage("pc_ins_override", false);
+  const [insDollarStored, setInsDollarStored] = useLocalStorage("pc_ins_dollar", ""); // exact user-entered $
   const [pmiRate, setPmiRate] = useLocalStorage("pc_pmi", "0.55");
   const [pmiAuto, setPmiAuto] = useLocalStorage("pc_pmiauto", true);
   const [ficoScore, setFicoScore] = useLocalStorage("pc_fico", "740");
@@ -265,8 +343,10 @@ function PaymentCalculator({ isInternal, user }) {
   const [fhaMipAuto, setFhaMipAuto] = useLocalStorage("pc_fha_mipauto", "true");
   const [fhaMipOverride, setFhaMipOverride] = useLocalStorage("pc_fha_mip", "0.55");
   const [upfrontMode] = useLocalStorage("pc_upfront_mode", "rolled_in");
-  const [monthlyMiOvr, setMonthlyMiOvr] = useLocalStorage("pc_monthly_mi_ovr", "");
-  const [upfrontMiOvr, setUpfrontMiOvr] = useLocalStorage("pc_upfront_mi_ovr", "");
+  const [monthlyMiOvr,    setMonthlyMiOvr]    = useLocalStorage("pc_monthly_mi_ovr",  "");
+  const [upfrontMiOvr,    setUpfrontMiOvr]    = useLocalStorage("pc_upfront_mi_ovr",  "");
+  const [monthlyMiFactor, setMonthlyMiFactor] = useLocalStorage("pc_monthly_mi_factor", "");
+  const [upfrontMiFactor, setUpfrontMiFactor] = useLocalStorage("pc_upfront_mi_factor", "");
 
   // DPA program
   const [dpaProgram, setDpaProgram] = useLocalStorage("pc_dpa_prog",  "none");
@@ -414,7 +494,7 @@ function PaymentCalculator({ isInternal, user }) {
 
   useEffect(() => {
     window.dispatchEvent(new Event("mtk_values_changed"));
-  }, [homePrice, loanAmount, rate, propertyTaxRate, homeInsuranceRate, taxMode, insMode, propertyTax, homeInsurance, downPaymentPct, pmiRate, ficoScore, homesteadExemption, pcState]);
+  }, [homePrice, loanAmount, rate, propertyTaxRate, homeInsuranceRate, taxMode, insMode, propertyTax, homeInsurance, downPaymentPct, pmiRate, ficoScore, homesteadExemption, pcState, taxDollarStored, taxOverridden, insDollarStored, insOverridden]);
 
   // Notify RA when refi structure fields change so its analysis stays in sync
   useEffect(() => {
@@ -625,11 +705,16 @@ function PaymentCalculator({ isInternal, user }) {
     const monthlyTaxInput = parseFloat(propertyTax) || 0;
     const annualTax = taxMode === "rate" ? taxBasis * ((parseFloat(propertyTaxRate) || 0) / 100) : monthlyTaxInput * 12;
     const monthlyTaxRaw = taxMode === "rate" ? annualTax / 12 : monthlyTaxInput;
-    const monthlyTax = taxMode === "rate" ? Math.round(monthlyTaxRaw / 50) * 50 : monthlyTaxRaw;
+    // Use exact user-entered dollar if stored; otherwise round ($50 for default, $1 if overridden)
+    const monthlyTax = taxDollarStored ? parseFloat(taxDollarStored)
+      : taxMode === "rate" ? (taxOverridden ? Math.round(monthlyTaxRaw) : Math.round(monthlyTaxRaw / 50) * 50)
+      : monthlyTaxRaw;
     const monthlyInsInput = parseFloat(homeInsurance) || 0;
     const annualIns = insMode === "rate" ? hp * ((parseFloat(homeInsuranceRate) || 0) / 100) : monthlyInsInput * 12;
     const monthlyInsRaw = insMode === "rate" ? annualIns / 12 : monthlyInsInput;
-    const monthlyIns = insMode === "rate" ? Math.round(monthlyInsRaw / 50) * 50 : monthlyInsRaw;
+    const monthlyIns = insDollarStored ? parseFloat(insDollarStored)
+      : insMode === "rate" ? (insOverridden ? Math.round(monthlyInsRaw) : Math.round(monthlyInsRaw / 50) * 50)
+      : monthlyInsRaw;
     // ── Piggyback early — needed for 1st-lien LTV/PMI calc ───────────────────
     const s2On  = s2Enabled === "true";
     const s2LA  = s2On ? Math.round(hp * (parseFloat(s2Amt) || 0) / 100) : 0;
@@ -791,7 +876,8 @@ function PaymentCalculator({ isInternal, user }) {
   }, [loanAmount, homePrice, rate, term, propertyTax, homeInsurance, propertyTaxRate, homeInsuranceRate, taxMode, insMode, downPaymentPct, pmiRate, pmiAuto, pmiInfo, loanType, armFixedYears, armCap, armLifeCap, armMargin, ioPeriod, helocDrawYears, helocRepayYears, pcState, occupancy, loanProgram, purpose, vaFirstUse, vaExempt, vaServiceType, vaDisabilityPct, fhaMipAuto, fhaMipOverride,
     borrowerCount, coBorroFico, b3Fico, b4Fico, miPremiumType, dtiBackRatio, ficoScore, dpaProgram,
     fsOrigPct, fsDpPts, fsOvUw, fsDefUw, fsOvProc, fsDefProc, fsOvFlood, fsDefFlood, fsOvTaxsvc, fsDefTaxsvc, fsOvDocprep, fsDefDocprep, fsState,
-    s2Enabled, s2Rate, s2Term, s2Amt, s2Mode, upfrontMode, monthlyMiOvr, upfrontMiOvr]);
+    s2Enabled, s2Rate, s2Term, s2Amt, s2Mode, upfrontMode, monthlyMiOvr, upfrontMiOvr,
+    taxDollarStored, taxOverridden, insDollarStored, insOverridden]);
 
   // ── Write authoritative monthly MI to a dedicated key ────────────────────
   // Must live AFTER the calc useMemo so calc is defined when the dep array runs.
@@ -1071,15 +1157,33 @@ function PaymentCalculator({ isInternal, user }) {
               )}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap", justifyContent: "center" }}>
-              <DonutChart
-                data={pieData.map(d => ({ value: d.value, color: d.color }))}
-                size={150}
-                thickness={22}
-                centerLabel="MONTHLY"
-                centerValue={fmt2(total)}
-                centerSub={calc.is100PctDisabledTX ? "TAX WAIVED" : undefined}
-                centerSubColor="#16a34a"
-              />
+              <ExpandableChart title="Payment Breakdown"
+                expandedContent={
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+                    <DonutChart data={pieData.map(d => ({ value: d.value, color: d.color }))} size={240} thickness={32} centerLabel="MONTHLY" centerValue={fmt2(total)} centerSub={calc.is100PctDisabledTX ? "TAX WAIVED" : undefined} centerSubColor="#16a34a" />
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
+                      {pieData.map(d => (
+                        <div key={d.label} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "#F7FAFB", borderRadius: 8, border: "1px solid #E0E8E8" }}>
+                          <div style={{ width: 12, height: 12, borderRadius: 6, background: d.color, flexShrink: 0 }} />
+                          <div style={{ flex: 1, fontSize: 14, fontWeight: 600, fontFamily: font }}>{d.label}</div>
+                          <div style={{ fontSize: 16, fontWeight: 700, fontFamily: font }}>{fmt2(d.value)}</div>
+                          <div style={{ fontSize: 13, color: "#6B7D8A", fontFamily: font }}>{total > 0 ? Math.round(d.value / total * 100) : 0}%</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                }
+              >
+                <DonutChart
+                  data={pieData.map(d => ({ value: d.value, color: d.color }))}
+                  size={150}
+                  thickness={22}
+                  centerLabel="MONTHLY"
+                  centerValue={fmt2(total)}
+                  centerSub={calc.is100PctDisabledTX ? "TAX WAIVED" : undefined}
+                  centerSubColor="#16a34a"
+                />
+              </ExpandableChart>
               <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1, minWidth: 160 }}>
                 {pieData.map((d) => (
                   <div key={d.label} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: c.bg, borderRadius: 8, border: `1px solid ${c.border}` }}>
@@ -1098,7 +1202,7 @@ function PaymentCalculator({ isInternal, user }) {
           {/* ── PROPERTY INFO ── */}
           <SectionCard title="PROPERTY INFO" accent={c.blue}>
             <Select label="State (where the property is located)" value={pcState} onChange={setPcState} options={STATE_LIST.map(s => ({ value: s.value, label: s.label }))} />
-            <Select label="Occupancy" value={occupancy} onChange={setOccupancy} options={[
+            <Select label="Occupancy" value={occupancy} onChange={setOccupancy} infoTip={"💡 Occupancy affects your rate and down payment requirements:\n\n• Primary: Best rates, lowest down payment minimums. You must live here as your main home.\n• Vacation/2nd Home: Slightly higher rate. Must be 50+ miles from primary, can't be a rental.\n• Investment: Highest rate (+0.5–1%), typically requires 15–25% down. Rental income can help qualify."} options={[
               { value: "", label: "— Select —" },
               { value: "primary", label: "Owner Occupied" },
               { value: "vacation", label: "Vacation Home" },
@@ -1115,7 +1219,7 @@ function PaymentCalculator({ isInternal, user }) {
               { value: "other", label: "Other" },
             ]} />
             <div style={{ borderTop: `1px solid ${c.border}`, marginTop: 6, marginBottom: 14, paddingTop: 14 }} />
-            <Select label=""
+            <Select label="Loan Program" infoTip={"💡 Choosing the right program:\n\n• Conventional: Best for 680+ FICO and 5%+ down. No upfront MIP. PMI drops off at 20% equity.\n• FHA: Great for 580–679 FICO or 3.5% down. Has upfront MIP (1.75%) + monthly MIP for life of loan if < 10% down.\n• VA: Best option for eligible veterans — no PMI, no down payment required, competitive rates.\n• USDA: 0% down for eligible rural areas. Income limits apply.\n• Non-QM: For self-employed, investors, or borrowers who can't document income traditionally."}
               value={["homeready","homeposs","hfa_fannie","hfa_freddie"].includes(loanProgram) ? "conventional" : loanProgram}
               onChange={v => {
                 setLoanProgram(v);
@@ -1132,36 +1236,6 @@ function PaymentCalculator({ isInternal, user }) {
                 { value: "va",           label: "VA" },
               ]}
             />
-            {/* ── Construction & Renovation overlay — admin only ── */}
-            {isAdmin && ["conventional","homeready","homeposs","hfa_fannie","hfa_freddie","fha"].includes(loanProgram) && loanType !== "heloc" && (
-              <Select label="Construction & Renovation"
-                value={renovationProg === "fha_203k" ? "fha_203k" : ["homeready","homeposs"].includes(loanProgram) ? loanProgram : "none"}
-                onChange={v => {
-                  if (v === "none") {
-                    if (["homeready","homeposs"].includes(loanProgram)) setLoanProgram("conventional");
-                    setRenovationProg("none");
-                  } else if (v === "homeready") {
-                    setLoanProgram("homeready"); setRenovationProg("homeready");
-                  } else if (v === "homeposs") {
-                    setLoanProgram("homeposs"); setRenovationProg("homeposs");
-                  } else if (v === "fha_203k") {
-                    if (!["fha"].includes(loanProgram)) setLoanProgram("fha");
-                    setRenovationProg("fha_203k");
-                  }
-                }}
-                options={[
-                  { value: "none",      label: "— None —" },
-                  { value: "fha_203k",  label: "FHA 203k" },
-                  { value: "homeready", label: "HomeReady (Fannie Mae)" },
-                  { value: "homeposs",  label: "Home Possible (Freddie Mac)" },
-                ]}
-              />
-            )}
-            {renovationProg === "fha_203k" && (
-              <div style={{ fontSize: 12, color: c.blue, fontFamily: font, marginTop: -4, marginBottom: 4, fontStyle: "italic" }}>
-                ℹ️ FHA 203k uses standard FHA rates and MIP. Renovation costs are included in the loan amount.
-              </div>
-            )}
             {useReducedMI && (
               <div style={{ fontSize: 12, color: c.green, fontFamily: font, marginTop: -4, marginBottom: 4, fontStyle: "italic" }}>
                 ✓ Reduced MI coverage (25%) — {loanProgram === "homeready" ? "HomeReady" : loanProgram === "homeposs" ? "Home Possible" : "HFA"} program
@@ -1296,106 +1370,6 @@ function PaymentCalculator({ isInternal, user }) {
                 </div>
               </div>
             )}
-            {/* ── Down Payment Assistance (DPA) — admin only ── */}
-            {(isConvType || loanProgram === "fha") && loanProgram !== "jumbo" && loanType !== "heloc" && occupancy === "primary" && isAdmin && (() => {
-              const dpaOptions = (window.DPA_PROGRAMS || []).filter(p => p.dpa || p.id === "none");
-              const activeDpa = (window.DPA_PROGRAMS || []).find(p => p.id === dpaProgram) || { dpa: false };
-              const dpaAmt = parseFloat(dpaAmount) || 0;
-              return (
-                <div style={{ background: c.bgAlt, border: `1px solid ${c.border}`, borderRadius: 10, padding: 12, marginTop: 4 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: c.blue, fontFamily: font, marginBottom: 8 }}>DOWN PAYMENT ASSISTANCE (INTERNAL)</div>
-                  <Select label="DPA Program"
-                    value={["hfa_fannie","hfa_freddie"].includes(loanProgram) ? loanProgram : dpaProgram}
-                    onChange={v => {
-                      if (v === "hfa_fannie" || v === "hfa_freddie") {
-                        setLoanProgram(v); setDpaProgram("none");
-                      } else {
-                        if (["hfa_fannie","hfa_freddie"].includes(loanProgram)) setLoanProgram("conventional");
-                        setDpaProgram(v);
-                      }
-                    }}
-                    options={[
-                      ...dpaOptions.filter(p => p.id === "none").map(p => ({ value: p.id, label: p.label })),
-                      ...[
-                        { value: "hfa_fannie",  label: "HFA Preferred (Fannie Mae)" },
-                        { value: "hfa_freddie", label: "HFA Advantage (Freddie Mac)" },
-                        ...dpaOptions.filter(p => p.id !== "none").map(p => ({ value: p.id, label: p.label })),
-                      ].sort((a, b) => a.label.localeCompare(b.label)),
-                    ]}
-                  />
-                  {activeDpa.dpa && (() => {
-                    const la = parseFloat(loanAmount) || 0;
-                    const effectiveDollar = dpaMode === "pct"
-                      ? Math.round((parseFloat(dpaPct) || 0) / 100 * la)
-                      : dpaAmt;
-                    const effectivePct = la > 0 ? (effectiveDollar / la * 100) : 0;
-                    return (
-                      <>
-                        {/* DPA Amount label + % / $ toggle */}
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                          <span style={{ fontSize: 11, fontWeight: 600, color: c.gray, fontFamily: font, letterSpacing: "0.05em", textTransform: "uppercase" }}>DPA Amount</span>
-                          <div style={{ display: "flex", gap: 0, borderRadius: 6, overflow: "hidden", border: `1px solid ${c.border}` }}>
-                            {[{ v: "pct", l: "%" }, { v: "dollar", l: "$" }].map(o => (
-                              <button key={o.v} onClick={() => {
-                                if (o.v === "dollar" && dpaMode === "pct") {
-                                  setDpaAmount(effectiveDollar > 0 ? String(effectiveDollar) : "");
-                                }
-                                if (o.v === "pct" && dpaMode === "dollar") {
-                                  setDpaPct(la > 0 && dpaAmt > 0 ? (dpaAmt / la * 100).toFixed(3) : "");
-                                }
-                                setDpaMode(o.v);
-                              }} style={{
-                                padding: "3px 10px", fontSize: 12, fontWeight: 700, fontFamily: font,
-                                border: "none", cursor: "pointer",
-                                background: dpaMode === o.v ? c.blue : "transparent",
-                                color: dpaMode === o.v ? "#fff" : c.gray,
-                                transition: "all 0.15s",
-                              }}>{o.l}</button>
-                            ))}
-                          </div>
-                        </div>
-                        {dpaMode === "pct" ? (
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-                            <input
-                              type="number" min="0" max="100" step="0.125"
-                              value={dpaPct}
-                              onChange={e => setDpaPct(e.target.value)}
-                              placeholder="0.000"
-                              style={{ flex: 1, padding: "10px 12px", border: `1.5px solid ${c.border}`, borderRadius: 8, fontSize: 15, fontWeight: 500, fontFamily: font, color: c.navy, background: c.bg, textAlign: "right", outline: "none" }}
-                            />
-                            <span style={{ fontSize: 13, fontWeight: 500, color: c.gray, fontFamily: font }}>%</span>
-                          </div>
-                        ) : (
-                          <LabeledInput prefix="$" value={dpaAmount} onChange={setDpaAmount} useCommas />
-                        )}
-                        {effectiveDollar > 0 && (
-                          <div style={{ fontSize: 12, color: c.textSecondary || c.gray, fontFamily: font, marginBottom: 6, paddingLeft: 2 }}>
-                            {dpaMode === "pct"
-                              ? `= ${fmt(effectiveDollar)} of ${fmt(la)} loan`
-                              : `${effectivePct.toFixed(3)}% of loan`}
-                          </div>
-                        )}
-                        <Select label="DPA Type" value={dpaType} onChange={setDpaType} options={[
-                          { value: "grant",      label: "Grant (no repayment)" },
-                          { value: "forgivable", label: "Forgivable 2nd Lien" },
-                          { value: "deferred",   label: "Deferred 2nd Lien (0% / due on sale)" },
-                        ]} />
-                        {effectiveDollar > 0 && (
-                          <div style={{ fontSize: 12, color: c.green, fontFamily: font, marginTop: 4, padding: "6px 8px", background: c.greenLight || "#e8f5ee", borderRadius: 6 }}>
-                            {dpaType === "grant" ? `Grant: ${fmt(effectiveDollar)} covers down payment — no repayment required.` : dpaType === "forgivable" ? `Forgivable 2nd lien of ${fmt(effectiveDollar)} — forgiven over time.` : `Deferred 2nd lien of ${fmt(effectiveDollar)} — 0% interest, due on sale/refi.`}
-                          </div>
-                        )}
-                      </>
-                    );
-                  })()}
-                  {activeDpa.reducedMI && !useReducedMI && (
-                    <div style={{ fontSize: 12, color: c.green, fontFamily: font, marginTop: 6, fontStyle: "italic" }}>
-                      ✓ {activeDpa.label} uses reduced MI coverage (25%) when paired with a conventional first mortgage.
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
           </SectionCard>
 
           {/* ── PROPERTY INFO ── */}
@@ -1419,10 +1393,13 @@ function PaymentCalculator({ isInternal, user }) {
               const wrapStyle = { display: "flex", alignItems: "center", background: c.bg, border: `1.5px solid ${c.border}`, borderRadius: 8, overflow: "hidden", flex: 1 };
               return (
                 <div style={{ marginBottom: 14 }}>
-                  <label style={{ display: "block", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: c.gray, marginBottom: 5, fontFamily: font }}>Down Payment</label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5 }}>
+                    <label style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: c.gray, fontFamily: font }}>Down Payment</label>
+                    <InfoTip text={"💡 For conventional loans, down payments in 5% increments hit better pricing tiers: 5%, 10%, 15%, 20%. Below 20% triggers PMI.\n\n3% is the conventional minimum (HomeReady/HomePossible). FHA requires 3.5% (or 10% if FICO is under 580). VA and USDA allow 0% down.\n\nReaching 20% eliminates PMI entirely and often gets you the best rate."} />
+                  </div>
                   <div style={{ display: "flex", gap: 8 }}>
                     <div style={wrapStyle}>
-                      <input type="text" inputMode="decimal" value={downPaymentPct}
+                      <input type="text" onFocus={(e) => e.target.select()} inputMode="decimal" value={downPaymentPct}
                         onChange={(e) => {
                           const v = e.target.value;
                           if (String(v).trimStart().startsWith('-') || parseFloat(v) > 100) return;
@@ -1434,7 +1411,7 @@ function PaymentCalculator({ isInternal, user }) {
                     </div>
                     <div style={wrapStyle}>
                       <span style={{ padding: "10px 0 10px 12px", color: c.navy, fontWeight: 600, fontSize: 15, fontFamily: font }}>$</span>
-                      <input type="text" inputMode="numeric"
+                      <input type="text" onFocus={(e) => e.target.select()} inputMode="numeric"
                         key={dpDollar}
                         defaultValue={dpDollar ? addCommasLocal(String(Math.round(dpDollar))) : ""}
                         onBlur={(e) => {
@@ -1518,7 +1495,7 @@ function PaymentCalculator({ isInternal, user }) {
             ]} />
             {loanType !== "heloc" && (
               <>
-                <Select label="Loan Term" value={isCustomTerm ? "other" : term} onChange={(v) => {
+                <Select label="Loan Term" infoTip={"💡 30 years is the most common — lower monthly payment, more flexibility. 15 years saves a significant amount in total interest and builds equity faster, but the payment is higher.\n\nExample on a $400,000 loan at 7%:\n• 30-yr: ~$2,661/mo, ~$558k total interest\n• 15-yr: ~$3,595/mo, ~$247k total interest\n\nThe 15-year saves ~$311k in interest but costs ~$934 more per month."} value={isCustomTerm ? "other" : term} onChange={(v) => {
                   if (v === "other") setTerm("");
                   else setTerm(v);
                 }} options={[
@@ -1646,7 +1623,7 @@ function PaymentCalculator({ isInternal, user }) {
                       <label style={{ display: "block", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: c.gray, marginBottom: 5, fontFamily: font }}>2nd Lien Amount</label>
                       <div style={{ display: "flex", gap: 8 }}>
                         <div style={wrapStyle}>
-                          <input type="text" inputMode="decimal" value={s2Amt}
+                          <input type="text" onFocus={(e) => e.target.select()} inputMode="decimal" value={s2Amt}
                             onChange={(e) => {
                               const v = e.target.value;
                               if (parseFloat(v) > 100) return;
@@ -1657,7 +1634,7 @@ function PaymentCalculator({ isInternal, user }) {
                         </div>
                         <div style={wrapStyle}>
                           <span style={{ padding: "10px 0 10px 12px", color: c.navy, fontWeight: 600, fontSize: 15, fontFamily: font }}>$</span>
-                          <input type="text" inputMode="numeric"
+                          <input type="text" onFocus={(e) => e.target.select()} inputMode="numeric"
                             key={s2Dollar}
                             defaultValue={s2Dollar > 0 ? addCommasLocal(String(s2Dollar)) : ""}
                             onBlur={(e) => {
@@ -2037,6 +2014,93 @@ function PaymentCalculator({ isInternal, user }) {
                   </SectionCard>
                 );
               })()}
+              {/* ── MI OVERRIDES (LO ONLY) — moved above PMI table ── */}
+              {isInternal && (() => {
+                const la = parseFloat(loanAmount) || 0;
+                const hasOverride = parseFloat(monthlyMiOvr) > 0 || parseFloat(upfrontMiOvr) > 0;
+                return (
+                  <SectionCard title="MI OVERRIDES (LO ONLY)" accent={c.blue}>
+                    <div style={{ fontSize: 12, color: c.gray, fontFamily: font, lineHeight: 1.6, marginBottom: 14 }}>
+                      Enter a factor <em>or</em> a dollar amount to override the system-calculated MI. Leave blank to use the auto value.
+                      {hasOverride && <span style={{ marginLeft: 8, color: "#b45309", fontWeight: 700 }}>⚠ Override active</span>}
+                    </div>
+
+                    {/* Row 1: Monthly MI Factor | Monthly MI $ */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                      <LabeledInput
+                        label="Monthly MI Factor"
+                        value={monthlyMiFactor}
+                        onChange={v => {
+                          setMonthlyMiFactor(v);
+                          const pct = parseFloat(v) || 0;
+                          if (pct > 0 && la > 0) setMonthlyMiOvr(String(parseFloat((la * pct / 100 / 12).toFixed(2))));
+                          else if (!v) setMonthlyMiOvr("");
+                        }}
+                        suffix="% ann."
+                        type="number"
+                        hint="Annual % of loan"
+                        infoTip="Annual MI rate as a % of loan amount. E.g. 0.55% on a $400k loan = $183/mo."
+                      />
+                      <LabeledInput
+                        label="Monthly MI Override"
+                        value={monthlyMiOvr}
+                        onChange={v => {
+                          setMonthlyMiOvr(v);
+                          const mo = parseFloat(v) || 0;
+                          if (mo > 0 && la > 0) setMonthlyMiFactor(String(parseFloat((mo * 12 / la * 100).toFixed(4))));
+                          else if (!v) setMonthlyMiFactor("");
+                        }}
+                        prefix="$"
+                        type="number"
+                        hint={monthlyMiOvr ? `Replaces auto: ${fmt2(calc.autoMonthlyMI)}/mo` : `Auto: ${fmt2(calc.autoMonthlyMI)}/mo`}
+                        infoTip="Dollar amount to replace the system-calculated monthly MI. Leave blank to use auto."
+                      />
+                    </div>
+
+                    {/* Row 2: Upfront MI Factor | Upfront MI $ */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                      <LabeledInput
+                        label="Upfront MI Factor"
+                        value={upfrontMiFactor}
+                        onChange={v => {
+                          setUpfrontMiFactor(v);
+                          const pct = parseFloat(v) || 0;
+                          if (pct > 0 && la > 0) setUpfrontMiOvr(String(parseFloat((la * pct / 100).toFixed(2))));
+                          else if (!v) setUpfrontMiOvr("");
+                        }}
+                        suffix="% of loan"
+                        type="number"
+                        hint="% of loan amount"
+                        infoTip="Upfront MI as a % of loan. FHA UFMIP = 1.75%, USDA = 1%, VA funding fee varies."
+                      />
+                      <LabeledInput
+                        label="Upfront MI Override"
+                        value={upfrontMiOvr}
+                        onChange={v => {
+                          setUpfrontMiOvr(v);
+                          const up = parseFloat(v) || 0;
+                          if (up > 0 && la > 0) setUpfrontMiFactor(String(parseFloat((up / la * 100).toFixed(4))));
+                          else if (!v) setUpfrontMiFactor("");
+                        }}
+                        prefix="$"
+                        type="number"
+                        hint={upfrontMiOvr ? `Replaces auto: ${fmt(calc.autoUpfrontFee)}` : `Auto: ${fmt(calc.autoUpfrontFee)}`}
+                        infoTip="Dollar amount to replace the system-calculated upfront MI fee."
+                      />
+                    </div>
+
+                    {hasOverride && (
+                      <button
+                        onClick={() => { setMonthlyMiOvr(""); setUpfrontMiOvr(""); setMonthlyMiFactor(""); setUpfrontMiFactor(""); }}
+                        style={{ marginTop: 4, background: "none", border: `1px solid ${c.border}`, borderRadius: 6, padding: "5px 14px", fontSize: 12, color: c.gray, fontFamily: font, cursor: "pointer" }}
+                      >
+                        ✕ Clear overrides
+                      </button>
+                    )}
+                  </SectionCard>
+                );
+              })()}
+
               {/* ── PMI BY DOWN PAYMENT — INTERNAL ── */}
               {_miInt && isConvType && loanProgram !== "jumbo" && calc.ltv > 80 && (parseFloat(homePrice) || 0) > 0 && (() => {
                 const hp3 = parseFloat(homePrice) || 0;
@@ -2123,49 +2187,7 @@ function PaymentCalculator({ isInternal, user }) {
                 );
               })()}
 
-              {/* ── MI OVERRIDES (LO ONLY) ── */}
-              {isInternal && (
-                <SectionCard title="MI OVERRIDES (LO ONLY)" accent={c.blue}>
-                  <div style={{ fontSize: 12, color: c.gray, fontFamily: font, lineHeight: 1.6, marginBottom: 14 }}>
-                    Enter a dollar amount to override the system-calculated MI. Leave blank to use the auto value.
-                    {(parseFloat(monthlyMiOvr) > 0 || parseFloat(upfrontMiOvr) > 0) && (
-                      <span style={{ marginLeft: 8, color: "#b45309", fontWeight: 700 }}>⚠ Override active</span>
-                    )}
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                    <div>
-                      <LabeledInput
-                        label="Monthly MI Override"
-                        value={monthlyMiOvr}
-                        onChange={setMonthlyMiOvr}
-                        prefix="$"
-                        type="number"
-                        hint={monthlyMiOvr ? `Replaces auto: ${fmt2(calc.autoMonthlyMI)}/mo` : `Auto: ${fmt2(calc.autoMonthlyMI)}/mo`}
-                        infoTip="Enter a dollar amount to replace the system-calculated monthly mortgage insurance. Use this when the MI company gives you a different rate than the auto-lookup — for example, borrower-paid single premium scenarios, or when you have a manual quote from Enact or Essent. Leave blank to use the auto rate."
-                      />
-                    </div>
-                    <div>
-                      <LabeledInput
-                        label="Upfront MI Override"
-                        value={upfrontMiOvr}
-                        onChange={setUpfrontMiOvr}
-                        prefix="$"
-                        type="number"
-                        hint={upfrontMiOvr ? `Replaces auto: ${fmt(calc.autoUpfrontFee)}` : `Auto: ${fmt(calc.autoUpfrontFee)}`}
-                        infoTip="Enter a dollar amount to replace the system-calculated upfront MI fee. This covers VA funding fees, FHA UFMIP (1.75%), USDA upfront guarantee fee (1%), and conventional single or split premiums. Use when your actual fee differs from the auto calculation — for example, when a borrower's disability rating waives the VA fee partially."
-                      />
-                    </div>
-                  </div>
-                  {(parseFloat(monthlyMiOvr) > 0 || parseFloat(upfrontMiOvr) > 0) && (
-                    <button
-                      onClick={() => { setMonthlyMiOvr(""); setUpfrontMiOvr(""); }}
-                      style={{ marginTop: 10, background: "none", border: `1px solid ${c.border}`, borderRadius: 6, padding: "5px 14px", fontSize: 12, color: c.gray, fontFamily: font, cursor: "pointer" }}
-                    >
-                      ✕ Clear overrides
-                    </button>
-                  )}
-                </SectionCard>
-              )}
+
 
             </div>
             );
@@ -2174,77 +2196,112 @@ function PaymentCalculator({ isInternal, user }) {
       </div>
 
       {/* ═══ PROPERTY TAX ═══ */}
-      <SectionCard title="PROPERTY TAX" accent={c.blue} style={{ maxWidth: 640 }} infoTip="Annual property taxes as a percentage of home value, included in your monthly PITI payment when escrowed. Texas rates typically range 1.5–2.5% depending on county and school district. Enter the monthly dollar amount OR the annual rate — both fields stay in sync.">
+      <SectionCard title={taxOverridden ? "PROPERTY TAX" : "PROPERTY TAX · Default"} accent={c.blue} style={{ maxWidth: 640 }} infoTip="Annual property taxes as a percentage of home value, included in your monthly PITI payment when escrowed. Texas rates typically range 1.5–2.5% depending on county and school district. Enter the monthly dollar amount OR the annual rate — both fields stay in sync.">
         {(() => {
           const hp = parseFloat(homePrice) || 0;
           const basis = homesteadExemption ? hp * 0.70 : hp;
           const rate = parseFloat(propertyTaxRate) || 0;
           const monthlyRaw = basis > 0 ? basis * rate / 100 / 12 : 0;
-          const monthly = monthlyRaw > 0 ? Math.round(monthlyRaw / 50) * 50 : 0;
+          // Round to $50 only for system default; once user has touched anything, round to $1
+          const monthly = monthlyRaw > 0 ? (taxOverridden ? Math.round(monthlyRaw) : Math.round(monthlyRaw / 50) * 50) : 0;
+          const defaultBorderColor = taxOverridden ? c.border : `${c.blue}66`;
           const inputStyle = { flex: 1, border: "none", outline: "none", background: "transparent", padding: "10px 12px", fontSize: 15, fontWeight: 500, color: c.text || c.navy, fontFamily: font, width: "100%", minWidth: 0 };
-          const wrapStyle = { display: "flex", alignItems: "center", background: c.bg, border: `1.5px solid ${c.border}`, borderRadius: 8, overflow: "hidden", flex: 1 };
+          const wrapStyle = { display: "flex", alignItems: "center", background: taxOverridden ? c.bg : `${c.blue}08`, border: `1.5px solid ${defaultBorderColor}`, borderRadius: 8, overflow: "hidden", flex: 1 };
+
+          // Display value: exact user-entered $ if set, otherwise rounded system default
+          const displayDollar = taxDollarStored ? taxDollarStored : (monthly > 0 ? String(Math.round(monthly)) : "");
+
           return (
             <>
-              <div style={{ display: "flex", gap: 8, marginBottom: monthly > 0 ? 4 : 14 }}>
+              <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
                 <div style={wrapStyle}>
                   <span style={{ padding: "10px 0 10px 12px", color: c.navy, fontWeight: 600, fontSize: 15, fontFamily: font }}>$</span>
-                  <input type="text" inputMode="numeric" value={monthly > 0 ? addCommasLocal(String(Math.round(monthly))) : ""}
-                    onChange={(e) => {
+                  <input type="text" inputMode="numeric"
+                    key={"tax-dollar-" + (taxDollarStored || Math.round(monthly / 50))}
+                    defaultValue={displayDollar}
+                    onFocus={function(e) { e.target.select(); }}
+                    onBlur={function(e) {
                       const v = stripCommasLocal(e.target.value);
                       if (String(v).trimStart().startsWith('-')) return;
                       const mo = parseFloat(v) || 0;
+                      setTaxDollarStored(mo > 0 ? String(mo) : "");
                       const basis2 = homesteadExemption ? hp * 0.70 : hp;
                       if (basis2 > 0) setPropertyTaxRate(String(parseFloat((mo * 12 / basis2 * 100).toFixed(3))));
                       setTaxMode("rate");
+                      if (mo > 0) setTaxOverridden(true);
                     }}
                     style={inputStyle} />
                   <span style={{ padding: "10px 12px 10px 0", color: c.gray, fontSize: 13, fontWeight: 500, fontFamily: font }}>/mo</span>
                 </div>
                 <div style={wrapStyle}>
-                  <input type="number" min="0" max="3.5" step="0.001" value={propertyTaxRate}
-                    onChange={(e) => {
+                  <input type="number" inputMode="decimal" onFocus={(e) => e.target.select()} min="0" max="3.5" step="0.001"
+                    value={propertyTaxRate}
+                    onChange={function(e) {
                       const v = e.target.value;
                       if (String(v).trimStart().startsWith('-') || parseFloat(v) > 3.5) return;
                       setPropertyTaxRate(v);
+                      setTaxDollarStored(""); // % change clears the stored $ so it recomputes
                       setTaxMode("rate");
+                      setTaxOverridden(true);
                     }}
                     style={inputStyle} />
                   <span style={{ padding: "10px 12px 10px 0", color: c.gray, fontSize: 13, fontWeight: 500, fontFamily: font }}>% / yr</span>
                 </div>
               </div>
-              {monthly > 0 && (
-                <div style={{ fontSize: 12, color: c.grayLight || c.gray, fontFamily: font, marginBottom: 14, textAlign: "right" }}>
-                  {fmt(Math.round(monthly * 12))} / year
-                </div>
-              )}
+
+              {/* Annual summary + reset link */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                {(taxDollarStored || monthly > 0) ? (
+                  <div style={{ fontSize: 12, color: c.grayLight || c.gray, fontFamily: font }}>
+                    {fmt(Math.round((parseFloat(taxDollarStored) || monthly) * 12))} / year
+                  </div>
+                ) : <div />}
+                {taxOverridden && (
+                  <button
+                    onClick={function() {
+                      const stateDefault = STATE_TAX_RATES[pcState] != null ? String(STATE_TAX_RATES[pcState]) : "2.3";
+                      setPropertyTaxRate(pcState === "TX" ? "2.3" : stateDefault);
+                      setPropertyTax("");
+                      setTaxDollarStored("");
+                      setTaxMode("rate");
+                      setTaxOverridden(false);
+                    }}
+                    style={{ fontSize: 11, color: c.blue, background: "none", border: "none", cursor: "pointer", fontFamily: font, padding: 0, textDecoration: "underline" }}
+                  >
+                    × Reset to default
+                  </button>
+                )}
+              </div>
             </>
           );
         })()}
-        {STATE_TAX_RATES[pcState] != null && (
-          <div style={{ fontSize: 12, color: c.grayLight || c.gray, fontFamily: font, marginTop: 6, lineHeight: 1.5, fontStyle: "italic", padding: "6px 10px", background: c.bgAlt || "#f8f8f8", borderRadius: 6 }}>
-            {(window.STATE_LIST||[]).find(s=>s.value===pcState)?.label || pcState} state average ≈ {STATE_TAX_RATES[pcState]}%; actual rates vary significantly by county and taxing district. Override the rate above as needed.
+
+        {/* Default-state info strips — hidden once user overrides */}
+        {!taxOverridden && STATE_TAX_RATES[pcState] != null && (
+          <div style={{ fontSize: 12, color: c.grayLight || c.gray, fontFamily: font, marginBottom: 6, lineHeight: 1.5, fontStyle: "italic", padding: "6px 10px", background: c.bgAlt || "#f8f8f8", borderRadius: 6 }}>
+            {(window.STATE_LIST||[]).find(s=>s.value===pcState)?.label || pcState} state average ≈ {STATE_TAX_RATES[pcState]}%. Actual rates vary by county — enter your own value to override.
           </div>
         )}
-        {pcState === "TX" && (
-          <div style={{ fontSize: 12, color: c.navy, fontFamily: font, marginTop: 6, lineHeight: 1.5, padding: "6px 10px", background: `${c.blue}12`, border: `1px solid ${c.blue}33`, borderRadius: 6 }}>
-            Our recommendation for North Texas: <strong style={{ color: c.navy }}>2.3%</strong>. Actual rates vary by city and taxing district; verify with the county appraisal district for the specific property.
+        {!taxOverridden && pcState === "TX" && (
+          <div style={{ fontSize: 12, color: c.navy, fontFamily: font, marginBottom: 6, lineHeight: 1.5, padding: "6px 10px", background: `${c.blue}12`, border: `1px solid ${c.blue}33`, borderRadius: 6 }}>
+            North Texas default: <strong style={{ color: c.navy }}>2.3%</strong>. Verify with the county appraisal district for the specific property.
           </div>
         )}
+
+        {/* Homestead notice — always visible when applicable, compact when overridden */}
         {homesteadExemption && (
-          <div style={{ marginTop: 6, fontSize: 12, color: c.textSecondary || c.gray, fontFamily: font, lineHeight: 1.5, padding: "6px 10px", background: c.bgAlt || "#f8f8f8", borderRadius: 6 }}>
+          <div style={{ fontSize: 12, color: taxOverridden ? c.gray : c.navy, fontFamily: font, lineHeight: 1.5, padding: "6px 10px", background: taxOverridden ? (c.bgAlt || "#f8f8f8") : `${c.green}12`, border: `1px solid ${taxOverridden ? c.border : c.green + "44"}`, borderRadius: 6 }}>
             {(() => {
               const hp = parseFloat(homePrice) || 0;
               const rate = parseFloat(propertyTaxRate) || 0;
-              const withExemption    = hp > 0 && rate > 0 ? fmt2(Math.round(hp * 0.70 * rate / 100 / 12 / 50) * 50) : null;
-              const withoutExemption = hp > 0 && rate > 0 ? fmt2(Math.round(hp * rate / 100 / 12 / 50) * 50) : null;
-              return (
-                <>
-                  Homestead exemption applied; tax basis reduced to approx. <strong style={{ color: c.text || c.navy }}>70% of value ({fmt(hp)} × 70% = {fmt(Math.round(hp * 0.70))})</strong>. Actual exemption varies by county.
-                  {withExemption && withoutExemption && (
-                    <span> Without exemption: <strong style={{ color: c.text || c.navy }}>{withoutExemption}/mo</strong>, with exemption: <strong style={{ color: c.green }}>{withExemption}/mo</strong>.</span>
-                  )}
-                </>
-              );
+              const withEx    = hp > 0 && rate > 0 ? fmt2(Math.round(hp * 0.70 * rate / 100 / 12 / 50) * 50) : null;
+              const withoutEx = hp > 0 && rate > 0 ? fmt2(Math.round(hp * rate / 100 / 12 / 50) * 50) : null;
+              return taxOverridden
+                ? <span>✓ TX homestead exemption applied — using 70% of value as tax basis.</span>
+                : <>
+                    ✓ <strong>TX Homestead exemption applied</strong> — tax basis = {fmt(Math.round((parseFloat(homePrice)||0) * 0.70))} (70% of value).
+                    {withEx && withoutEx && <span> Saves <strong style={{ color: c.green }}>{fmt2(Math.round(hp * rate / 100 / 12 / 50) * 50 - Math.round(hp * 0.70 * rate / 100 / 12 / 50) * 50)}/mo</strong> vs. no exemption.</span>}
+                  </>;
             })()}
           </div>
         )}
@@ -2256,41 +2313,49 @@ function PaymentCalculator({ isInternal, user }) {
           const hp = parseFloat(homePrice) || 0;
           const rate = Math.max(0, parseFloat(homeInsuranceRate) || 0);
           const monthlyRaw = hp > 0 ? hp * rate / 100 / 12 : 0;
-          const monthly = monthlyRaw > 0 ? Math.round(monthlyRaw / 50) * 50 : 0;
+          const monthly = monthlyRaw > 0 ? (insOverridden ? Math.round(monthlyRaw) : Math.round(monthlyRaw / 50) * 50) : 0;
           const inputStyle = { flex: 1, border: "none", outline: "none", background: "transparent", padding: "10px 12px", fontSize: 15, fontWeight: 500, color: c.text || c.navy, fontFamily: font, width: "100%", minWidth: 0 };
           const wrapStyle = { display: "flex", alignItems: "center", background: c.bg, border: `1.5px solid ${c.border}`, borderRadius: 8, overflow: "hidden", flex: 1 };
+          const displayInsDollar = insDollarStored ? insDollarStored : (monthly > 0 ? String(Math.round(monthly)) : "");
           return (
             <>
-              <div style={{ display: "flex", gap: 8, marginBottom: monthly > 0 ? 4 : 14 }}>
+              <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
                 <div style={wrapStyle}>
                   <span style={{ padding: "10px 0 10px 12px", color: c.navy, fontWeight: 600, fontSize: 15, fontFamily: font }}>$</span>
-                  <input type="text" inputMode="numeric" value={monthly > 0 ? addCommasLocal(String(Math.round(monthly))) : ""}
-                    onChange={(e) => {
+                  <input type="text" inputMode="numeric"
+                    key={"ins-dollar-" + (insDollarStored || Math.round(monthly / 50))}
+                    defaultValue={displayInsDollar}
+                    onFocus={function(e) { e.target.select(); }}
+                    onBlur={function(e) {
                       const v = stripCommasLocal(e.target.value);
                       if (String(v).trimStart().startsWith('-')) return;
                       const mo = parseFloat(v) || 0;
+                      setInsDollarStored(mo > 0 ? String(mo) : "");
                       if (hp > 0) setHomeInsuranceRate(String(parseFloat((mo * 12 / hp * 100).toFixed(3))));
                       setInsMode("rate");
+                      if (mo > 0) setInsOverridden(true);
                     }}
                     style={inputStyle} />
                   <span style={{ padding: "10px 12px 10px 0", color: c.gray, fontSize: 13, fontWeight: 500, fontFamily: font }}>/mo</span>
                 </div>
                 <div style={wrapStyle}>
-                  <input type="number" min="0" max="2.5" step="0.001" value={homeInsuranceRate}
+                  <input type="number" inputMode="decimal" onFocus={(e) => e.target.select()} min="0" max="2.5" step="0.001" value={homeInsuranceRate}
                     onChange={(e) => {
                       const v = e.target.value;
                       if (String(v).trimStart().startsWith('-') || parseFloat(v) > 2.5) return;
                       setHomeInsuranceRate(v);
+                      setInsDollarStored(""); // % change clears stored $ so it recomputes
                       setInsMode("rate");
+                      setInsOverridden(true);
                     }}
                     onBlur={() => { const n = parseFloat(homeInsuranceRate) || 0; if (n > 0 && n < 0.25) setHomeInsuranceRate("0.25"); }}
                     style={inputStyle} />
                   <span style={{ padding: "10px 12px 10px 0", color: c.gray, fontSize: 13, fontWeight: 500, fontFamily: font }}>% / yr</span>
                 </div>
               </div>
-              {monthly > 0 && (
-                <div style={{ fontSize: 12, color: c.grayLight || c.gray, fontFamily: font, marginBottom: 14, textAlign: "right" }}>
-                  {fmt(Math.round(monthly * 12))} / year
+              {(insDollarStored || monthly > 0) && (
+                <div style={{ fontSize: 12, color: c.grayLight || c.gray, fontFamily: font, marginBottom: 10, textAlign: "right" }}>
+                  {fmt(Math.round((parseFloat(insDollarStored) || monthly) * 12))} / year
                 </div>
               )}
               {rate > 0 && rate < 0.25 && (
@@ -2355,15 +2420,33 @@ function PaymentCalculator({ isInternal, user }) {
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap", justifyContent: "center" }}>
-          <DonutChart
-            data={pieData.map(d => ({ value: d.value, color: d.color }))}
-            size={150}
-            thickness={22}
-            centerLabel="MONTHLY"
-            centerValue={fmt2(total)}
-            centerSub={calc.is100PctDisabledTX ? "TAX WAIVED" : undefined}
-            centerSubColor="#16a34a"
-          />
+          <ExpandableChart title="Payment Breakdown"
+            expandedContent={
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+                <DonutChart data={pieData.map(d => ({ value: d.value, color: d.color }))} size={240} thickness={32} centerLabel="MONTHLY" centerValue={fmt2(total)} centerSub={calc.is100PctDisabledTX ? "TAX WAIVED" : undefined} centerSubColor="#16a34a" />
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
+                  {pieData.map(d => (
+                    <div key={d.label} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "#F7FAFB", borderRadius: 8, border: "1px solid #E0E8E8" }}>
+                      <div style={{ width: 12, height: 12, borderRadius: 6, background: d.color, flexShrink: 0 }} />
+                      <div style={{ flex: 1, fontSize: 14, fontWeight: 600, fontFamily: font }}>{d.label}</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, fontFamily: font }}>{fmt2(d.value)}</div>
+                      <div style={{ fontSize: 13, color: "#6B7D8A", fontFamily: font }}>{total > 0 ? Math.round(d.value / total * 100) : 0}%</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            }
+          >
+            <DonutChart
+              data={pieData.map(d => ({ value: d.value, color: d.color }))}
+              size={150}
+              thickness={22}
+              centerLabel="MONTHLY"
+              centerValue={fmt2(total)}
+              centerSub={calc.is100PctDisabledTX ? "TAX WAIVED" : undefined}
+              centerSubColor="#16a34a"
+            />
+          </ExpandableChart>
           <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1, minWidth: 160 }}>
             {pieData.map((d) => (
               <div key={d.label} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: c.bg, borderRadius: 8, border: `1px solid ${c.border}` }}>
@@ -2932,10 +3015,14 @@ function PaymentCalculator({ isInternal, user }) {
       )}
       {amortYears.length > 1 && (
         <>
+          <SectionCard title="APPRECIATION RATE" accent={c.blue} style={{ maxWidth: 640 }}>
+            <LabeledInput label="Appreciation Rate" value={pcAppr} onChange={setPcAppr} suffix="% / yr" hint={STATE_APPR_RATES[pcState] != null ? `${pcState} avg ≈ ${STATE_APPR_RATES[pcState]}% · Based on U.S. government home price data (5-yr avg) · Edit to override` : "Annual home value growth for equity projection"} infoTip="The estimated annual rate at which the home's value will grow. Historically, U.S. home values have appreciated 3-4% annually on average, though this varies significantly by market. This is used to project your equity over time." />
+          </SectionCard>
           {equityTimeline.length > 1 && (
             <SectionCard title="PROJECTED EQUITY CURVE" accent={c.blue} style={{ maxWidth: 640 }}>
-              <LabeledInput label="Appreciation Rate" value={pcAppr} onChange={setPcAppr} suffix="% / yr" hint={STATE_APPR_RATES[pcState] != null ? `${pcState} avg ≈ ${STATE_APPR_RATES[pcState]}% · Based on U.S. government home price data (5-yr avg) · Edit to override` : "Annual home value growth for equity projection"} infoTip="The estimated annual rate at which the home's value will grow. Historically, U.S. home values have appreciated 3-4% annually on average, though this varies significantly by market. This is used to project your equity over time." />
-              <EquityProjectionChart timeline={equityTimeline} milestones={equityMilestones} />
+              <ExpandableChart title="Projected Equity Curve">
+                <EquityProjectionChart timeline={equityTimeline} milestones={equityMilestones} />
+              </ExpandableChart>
             </SectionCard>
           )}
           <SectionCard title="BALANCE PAYDOWN" accent={c.blue} style={{ maxWidth: 640 }}>
@@ -2944,14 +3031,18 @@ function PaymentCalculator({ isInternal, user }) {
                 {s2AmortYears.length > 0 && (
                   <div style={{ fontSize: 10, fontWeight: 700, color: c.navy, fontFamily: font, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8, paddingBottom: 4, borderBottom: `2px solid ${c.navy}33` }}>1st Lien</div>
                 )}
-                <BalanceCurveChart years={amortYears} />
+                <ExpandableChart title="Balance Paydown">
+                  <BalanceCurveChart years={amortYears} />
+                </ExpandableChart>
               </div>
               {s2AmortYears.length > 0 && (
                 <div>
                   <div style={{ fontSize: 10, fontWeight: 700, color: "#f97316", fontFamily: font, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8, paddingBottom: 4, borderBottom: "2px solid #f9731633" }}>
                     2nd Lien{s2Term === "balloon" ? " · 30/15 Balloon" : ""}
                   </div>
-                  <BalanceCurveChart years={s2AmortYears} />
+                  <ExpandableChart title="Balance Paydown — 2nd Lien">
+                    <BalanceCurveChart years={s2AmortYears} />
+                  </ExpandableChart>
                   {s2Term === "balloon" && (() => {
                     const bb = s2AmortYears[s2AmortYears.length - 1]?.balloonBalance || 0;
                     if (bb <= 0) return null;
@@ -2977,12 +3068,16 @@ function PaymentCalculator({ isInternal, user }) {
                 {s2AmortYears.length > 0 && (
                   <div style={{ fontSize: 10, fontWeight: 700, color: c.navy, fontFamily: font, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8, paddingBottom: 4, borderBottom: `2px solid ${c.navy}33` }}>1st Lien</div>
                 )}
-                <PIStackedBarChart years={amortYears} />
+                <ExpandableChart title="Principal vs Interest by Year">
+                  <PIStackedBarChart years={amortYears} />
+                </ExpandableChart>
               </div>
               {s2AmortYears.length > 0 && (
                 <div>
                   <div style={{ fontSize: 10, fontWeight: 700, color: "#f97316", fontFamily: font, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8, paddingBottom: 4, borderBottom: "2px solid #f9731633" }}>2nd Lien</div>
-                  <PIStackedBarChart years={s2AmortYears} />
+                  <ExpandableChart title="Principal vs Interest — 2nd Lien">
+                    <PIStackedBarChart years={s2AmortYears} />
+                  </ExpandableChart>
                 </div>
               )}
             </div>

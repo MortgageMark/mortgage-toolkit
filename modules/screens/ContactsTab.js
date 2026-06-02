@@ -283,6 +283,7 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
   const [bulkResult,     setBulkResult]     = useState(null);
   const [showMerge,      setShowMerge]      = useState(false);
   const [merging,        setMerging]        = useState(false);
+  const [creatorMap,     setCreatorMap]     = useState({}); // profileId → display_name (admin only)
 
   // ── Auto-open contact when navigating from toolkit ───────────────────
   useEffect(function() {
@@ -329,6 +330,22 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
 
     return function() { cancelled = true; };
   }, [isCloudUser]);
+
+  // ── Creator profile lookup (admin only) ──────────────────────────────
+  useEffect(function() {
+    if (!isAdmin || !isCloudUser) return;
+    var supa = window._supabaseClient;
+    if (!supa) return;
+    supa.from("profiles")
+      .select("id, display_name")
+      .in("role", ["admin", "super_admin", "branch_admin", "internal"])
+      .then(function(res) {
+        if (res.error || !res.data) return;
+        var map = {};
+        res.data.forEach(function(p) { map[p.id] = p.display_name || p.email || p.id; });
+        setCreatorMap(map);
+      });
+  }, [isAdmin, isCloudUser]);
 
   // ── Scenario counts per contact ───────────────────────────────────────
   useEffect(function() {
@@ -512,7 +529,9 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
     const q = searchTerm.trim().toLowerCase();
     if (q) {
       list = list.filter(function(c) {
+        var fullName = ((c.first_name || "") + " " + (c.last_name || "")).toLowerCase();
         return (
+          fullName.includes(q) ||
           (c.first_name || "").toLowerCase().includes(q) ||
           (c.last_name  || "").toLowerCase().includes(q) ||
           (c.email      || "").toLowerCase().includes(q) ||
@@ -565,12 +584,17 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
         const rank = function(c) { return c.fu_priority === "High" ? 0 : c.fu_priority === "Medium" ? 1 : c.fu_priority === "Low" ? 2 : 3; };
         return dir * (rank(a) - rank(b));
       }
+      if (sortBy === "creator_id") {
+        const ca = creatorMap[a.creator_id] || "";
+        const cb = creatorMap[b.creator_id] || "";
+        return dir * ca.localeCompare(cb);
+      }
       // default: created_at
       return dir * (new Date(a.created_at) - new Date(b.created_at));
     });
 
     return list;
-  }, [contacts, typeFilter, categoryFilter, statusFilter, searchTerm, fuWhoFilter, fuPriorityFilter, fuDateFilter, sortBy, sortDir]);
+  }, [contacts, typeFilter, categoryFilter, statusFilter, searchTerm, fuWhoFilter, fuPriorityFilter, fuDateFilter, sortBy, sortDir, creatorMap]);
 
   // ── Callbacks from ContactDetail ──────────────────────────────────────
   function handleContactSaved(updatedContact) {
@@ -1568,6 +1592,11 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
                       onClick: function() { handleSort("created_at"); } },
                       React.createElement("span", null, "Created"), arrow("created_at")
                     ),
+                    // Creator (admin only, hidden in task view)
+                    !isTaskView && isAdmin && React.createElement("th", { key: "creator", style: Object.assign({}, clkTh, { width: "120px" }),
+                      onClick: function() { handleSort("creator_id"); } },
+                      React.createElement("span", null, "Creator"), arrow("creator_id")
+                    ),
                     // Actions column / delete (hidden in task view)
                     !isTaskView && React.createElement("th", { key: "actions", style: Object.assign({}, thStyle, { width: "50px" }) })
                   ].filter(Boolean);
@@ -1690,6 +1719,16 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
                   !isTaskView && React.createElement("td", {
                     style: Object.assign({}, tdStyle, { color: "#475569", whiteSpace: "nowrap" }),
                   }, created),
+
+                  // Creator (admin only, hidden in task view)
+                  !isTaskView && isAdmin && React.createElement("td", {
+                    style: Object.assign({}, tdStyle, { whiteSpace: "nowrap", fontSize: "12px" }),
+                  }, (function() {
+                    if (contact.creator_id && creatorMap[contact.creator_id]) {
+                      return React.createElement("span", { style: { color: "#94a3b8" } }, creatorMap[contact.creator_id]);
+                    }
+                    return React.createElement("span", { style: { color: "#334155" } }, "—");
+                  })()),
 
                   // Delete button (admin only, hidden in task view)
                   !isTaskView && React.createElement("td", {

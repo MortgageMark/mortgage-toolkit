@@ -678,7 +678,7 @@ function DTICalculator() {
               <div style={{ position: "relative", width: COL_AMT, flexShrink: 0 }}>
                 <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)",
                   fontSize: 14, color: c.gray || COLORS.gray, pointerEvents: "none" }}>$</span>
-                <input type="text"
+                <input type="text" inputMode="decimal" onFocus={(e) => e.target.select()}
                   value={addCommas(row.amount)}
                   onChange={e => updateIncome(row.id, "amount", e.target.value.replace(/[^0-9.]/g, ""))}
                   style={{ ...inputStyle, width: "100%", paddingLeft: 20, textAlign: "right",
@@ -744,7 +744,7 @@ function DTICalculator() {
           <div style={{ position: "relative", width: COL_AMT, flexShrink: 0 }}>
             <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)",
               fontSize: 14, color: c.gray || COLORS.gray, pointerEvents: "none" }}>$</span>
-            <input type="text"
+            <input type="text" inputMode="decimal" onFocus={(e) => e.target.select()}
               value={addCommas(pendingAmt)}
               onChange={e => setPendingAmt(e.target.value.replace(/[^0-9.]/g, ""))}
               placeholder="0"
@@ -890,7 +890,7 @@ function DTICalculator() {
                   <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)",
                     fontSize: 14, color: c.gray || COLORS.gray, pointerEvents: "none" }}>$</span>
                 )}
-                <input type="text"
+                <input type="text" inputMode="decimal" onFocus={(e) => e.target.select()}
                   value={addCommas(d.amount)}
                   onChange={e => {
                     // Strip commas first, then allow digits, dot, and a leading minus only
@@ -915,7 +915,7 @@ function DTICalculator() {
               <div style={{ position: "relative", width: COL_BAL, flexShrink: 0 }}>
                 <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)",
                   fontSize: 14, color: c.gray || COLORS.gray, pointerEvents: "none" }}>$</span>
-                <input type="text"
+                <input type="text" inputMode="decimal" onFocus={(e) => e.target.select()}
                   value={addCommas(d.balance)}
                   onChange={e => updateDebt(d.id, "balance", e.target.value.replace(/[^0-9.]/g, ""))}
                   placeholder="—"
@@ -1163,7 +1163,7 @@ function DTICalculator() {
                     <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
                       <span style={{ padding: "6px 8px", background: c.bgAlt, border: `1px solid ${c.border}`,
                         borderRight: "none", borderRadius: "4px 0 0 4px", fontSize: 15, color: c.gray }}>$</span>
-                      <input value={addCommas(loan.balance)} onChange={e => updateSlLoan(loan.id, "balance", e.target.value.replace(/[^0-9.]/g, ""))}
+                      <input inputMode="decimal" onFocus={(e) => e.target.select()} value={addCommas(loan.balance)} onChange={e => updateSlLoan(loan.id, "balance", e.target.value.replace(/[^0-9.]/g, ""))}
                         placeholder="0" style={{ ...inputStyle, borderRadius: "0 4px 4px 0", width: "100%" }} />
                     </div>
                   </div>
@@ -1172,7 +1172,7 @@ function DTICalculator() {
                     <div style={{ display: "flex", alignItems: "center" }}>
                       <span style={{ padding: "6px 8px", background: c.bgAlt, border: `1px solid ${c.border}`,
                         borderRight: "none", borderRadius: "4px 0 0 4px", fontSize: 15, color: c.gray }}>$</span>
-                      <input value={addCommas(loan.creditReportPmt)} onChange={e => updateSlLoan(loan.id, "creditReportPmt", e.target.value.replace(/[^0-9.]/g, ""))}
+                      <input inputMode="decimal" onFocus={(e) => e.target.select()} value={addCommas(loan.creditReportPmt)} onChange={e => updateSlLoan(loan.id, "creditReportPmt", e.target.value.replace(/[^0-9.]/g, ""))}
                         placeholder="0" style={{ ...inputStyle, borderRadius: "0 4px 4px 0", width: "100%" }} />
                     </div>
                   </div>

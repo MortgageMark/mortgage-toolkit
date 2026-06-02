@@ -61,7 +61,7 @@ function getLoanPurposeLabel(purpose) {
 function LeadStatusSelect({ value, onChange, style }) {
   const LEAD_STATUSES = window.LEAD_STATUSES || [];
   const groups = [
-    { label: "Pre-Pipeline",    key: "pre"      },
+    { label: "All",    key: "pre"      },
     { label: "Active Pipeline", key: "active"   },
     { label: "Waiting",         key: "waiting"  },
     { label: "Archived",        key: "archived" },
@@ -135,7 +135,8 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
   const [filterFuPriority, setFilterFuPriority] = useState(""); // "" | "High" | "Medium" | "Low"
   const [filterFuDate,     setFilterFuDate]     = useState(""); // "" | "overdue" | "today" | "this_week" | "this_month" | "none"
   const [filterFuWho,      setFilterFuWho]      = useState(""); // "" | any fu_who value | "_none"
-  const [closingFilter, setClosingFilter] = useState(false);
+  const [closingFilter,    setClosingFilter]    = useState(false);
+  const [pipelineSubFilter, setPipelineSubFilter] = useState(null); // null | "pre" | "pipeline"
   const [cloudLoading, setCloudLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [cloudError, setCloudError] = useState(null);
@@ -204,6 +205,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
   const [tplScopeFilter,         setTplScopeFilter]         = useState("all");
   const [tplSortCol,             setTplSortCol]             = useState("name");
   const [tplSortDir,             setTplSortDir]             = useState("asc");
+  const [profileMenuOpen,        setProfileMenuOpen]        = useState(false);
 
   const isCloudUser = !!(user && user.supabaseUser && supabase);
   // Roles that must link scenarios to a contact (internal, realtor, builder)
@@ -1125,7 +1127,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
   }
 
   const LEAD_STATUSES_GROUPS = [
-    { value: "pre",      label: "Pre-Pipeline"    },
+    { value: "pre",      label: "All"    },
     { value: "active",   label: "Active Pipeline" },
     { value: "waiting",  label: "Waiting"          },
     { value: "archived", label: "Archived"         },
@@ -1140,6 +1142,14 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
         return parts.length >= 2 &&
           parseInt(parts[0], 10) === _now.getFullYear() &&
           parseInt(parts[1], 10) - 1 === _now.getMonth();
+      }
+      if (pipelineSubFilter === "pre") {
+        var m = LEAD_STATUSES_ALL.find(function(x) { return x.value === s.lead_status; });
+        return m ? m.group === "pre" : (s.lead_status === "?" || !s.lead_status);
+      }
+      if (pipelineSubFilter === "pipeline") {
+        var m2 = LEAD_STATUSES_ALL.find(function(x) { return x.value === s.lead_status; });
+        return m2 ? m2.group === "active" : false;
       }
       return getLeadGroup(s.lead_status) === groupFilter;
     })
@@ -1542,27 +1552,51 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
               <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginTop: 1 }}>{user.email}</div>
             )}
           </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
-            {onMyInfo && (
-              <button onClick={onMyInfo} style={{
-                background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)",
-                color: "#fff", borderRadius: 8, padding: "7px 14px",
-                fontSize: 13, fontWeight: 600, cursor: "pointer",
-              }}>📋 My Info</button>
-            )}
-            {onLoginSettings && (
-              <button onClick={onLoginSettings} style={{
-                background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)",
-                color: "#fff", borderRadius: 8, padding: "7px 14px",
-                fontSize: 13, fontWeight: 600, cursor: "pointer",
-              }}>🔑 Login & Password</button>
-            )}
-            {onLogout && (
-              <button onClick={onLogout} style={{
-                background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.25)",
-                color: "rgba(255,255,255,0.85)", borderRadius: 8, padding: "7px 12px",
-                fontSize: 12, cursor: "pointer",
-              }}>Logout</button>
+          {/* Profile avatar — opens dropdown menu */}
+          <div style={{ position: "relative", flexShrink: 0 }}>
+            <button
+              onClick={function() { setProfileMenuOpen(function(o) { return !o; }); }}
+              style={{
+                width: 38, height: 38, borderRadius: "50%",
+                background: "linear-gradient(135deg, #3b82f6, #1d4ed8)",
+                border: "2px solid rgba(255,255,255,0.35)",
+                color: "#fff", fontSize: 14, fontWeight: 700,
+                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              {user.name ? user.name.trim().split(/\s+/).map(function(w) { return w[0]; }).join("").slice(0,2).toUpperCase() : "?"}
+            </button>
+            {profileMenuOpen && (
+              <div style={{
+                position: "absolute", top: 46, right: 0, zIndex: 999,
+                background: "#fff", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+                border: "1px solid #E8EEF4", minWidth: 190, overflow: "hidden",
+              }}
+                onMouseLeave={function() { setProfileMenuOpen(false); }}
+              >
+                {onMyInfo && (
+                  <button onClick={function() { setProfileMenuOpen(false); onMyInfo(); }} style={{
+                    display: "block", width: "100%", textAlign: "left", padding: "12px 16px",
+                    background: "none", border: "none", borderBottom: "1px solid #F0F4F8",
+                    fontSize: 13, fontWeight: 600, color: "#0C4160", cursor: "pointer",
+                  }}>📋 My Info</button>
+                )}
+                {onLoginSettings && (
+                  <button onClick={function() { setProfileMenuOpen(false); onLoginSettings(); }} style={{
+                    display: "block", width: "100%", textAlign: "left", padding: "12px 16px",
+                    background: "none", border: "none", borderBottom: "1px solid #F0F4F8",
+                    fontSize: 13, fontWeight: 600, color: "#0C4160", cursor: "pointer",
+                  }}>🔑 Login & Password</button>
+                )}
+                {onLogout && (
+                  <button onClick={function() { setProfileMenuOpen(false); onLogout(); }} style={{
+                    display: "block", width: "100%", textAlign: "left", padding: "12px 16px",
+                    background: "none", border: "none",
+                    fontSize: 13, fontWeight: 500, color: "#64748B", cursor: "pointer",
+                  }}>Sign Out</button>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -1618,26 +1652,36 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
         {user.isInternal && (
           <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
             {[
-              { label: "Pre-Pipeline",    count: pipelineMetrics.pre,     bg: "rgba(59,130,246,0.08)",  border: "rgba(59,130,246,0.2)",  color: "#1d4ed8", clickable: false },
-              { label: "Active Pipeline", count: pipelineMetrics.active,  bg: "rgba(34,197,94,0.08)",   border: "rgba(34,197,94,0.2)",   color: "#16a34a", clickable: false },
-              { label: "Waiting",           count: pipelineMetrics.waiting, bg: "rgba(245,158,11,0.08)",  border: "rgba(245,158,11,0.2)",  color: "#b45309", clickable: false },
-              { label: "Closing This Month", count: closingThisMonth,       bg: "rgba(239,68,68,0.08)",   border: "rgba(239,68,68,0.2)",   color: "#dc2626", clickable: true  },
+              { label: "All",              count: pipelineMetrics.pre + pipelineMetrics.active, bg: "rgba(59,130,246,0.08)",  border: "rgba(59,130,246,0.2)",  color: "#1d4ed8",
+                onClick: function() { setClosingFilter(false); setGroupFilter("active"); setPipelineSubFilter(null); } },
+              { label: "Active Pipeline",  count: pipelineMetrics.active,  bg: "rgba(34,197,94,0.08)",   border: "rgba(34,197,94,0.2)",   color: "#16a34a",
+                onClick: function() { setClosingFilter(false); setGroupFilter("active"); setPipelineSubFilter("pipeline"); } },
+              { label: "Waiting",          count: pipelineMetrics.waiting, bg: "rgba(245,158,11,0.08)",  border: "rgba(245,158,11,0.2)",  color: "#b45309",
+                onClick: function() { setClosingFilter(false); setGroupFilter("waiting"); setPipelineSubFilter(null); } },
+              { label: "Closing This Month", count: closingThisMonth,      bg: "rgba(239,68,68,0.08)",   border: "rgba(239,68,68,0.2)",   color: "#dc2626",
+                onClick: function() { setClosingFilter(function(prev) { return !prev; }); setPipelineSubFilter(null); } },
             ].map(function(m) {
-              const isActive = m.clickable && closingFilter;
+              const isActive = closingFilter
+                ? m.label === "Closing This Month"
+                : m.label === "All" ? (!pipelineSubFilter && groupFilter !== "waiting")
+                : m.label === "Active Pipeline" ? pipelineSubFilter === "pipeline"
+                : m.label === "Waiting" ? groupFilter === "waiting" && !closingFilter
+                : false;
               return (
                 <div
                   key={m.label}
-                  onClick={m.clickable ? function() { setClosingFilter(function(prev) { return !prev; }); } : undefined}
+                  onClick={m.onClick}
                   style={{
                     display: "flex", alignItems: "center", gap: "6px",
                     padding: "6px 12px", borderRadius: "8px",
                     background: isActive ? m.border : m.bg,
-                    border: "1px solid " + m.border,
-                    cursor: m.clickable ? "pointer" : "default",
+                    border: "1px solid " + (isActive ? m.color : m.border),
+                    cursor: "pointer",
                     userSelect: "none",
+                    transition: "all 0.15s",
                   }}
                 >
-                  <span style={{ fontSize: "12px", color: isActive ? m.color : (c.textSecondary || "#64748b"), fontWeight: isActive ? 700 : 400 }}>{m.label}</span>
+                  <span style={{ fontSize: "12px", color: m.color, fontWeight: isActive ? 700 : 400 }}>{m.label}</span>
                   <span style={{ fontSize: "15px", fontWeight: 700, color: m.color }}>{m.count}</span>
                 </div>
               );

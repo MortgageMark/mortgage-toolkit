@@ -1,6 +1,6 @@
-﻿// modules/screens/UsersPanel.js
+// modules/screens/UsersPanel.js
 // Full-page admin screen for managing team members, roles, and borrower permissions.
-// Replaces/supplements the AdminPanel popup â€” accessible from the Scenario Dashboard.
+// Replaces/supplements the AdminPanel popup --" accessible from the Scenario Dashboard.
 const { useState, useEffect } = React;
 const supabase        = window._supabaseClient;
 const useThemeColors  = window.useThemeColors;
@@ -41,7 +41,7 @@ function upFmtPhone(val) {
   return val;
 }
 
-// â”€â”€ Shared button styles (light theme) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Shared button styles (light theme) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 const BTN_PRIMARY   = { padding: "8px 18px", background: "#0C4160", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: UP_FONT, cursor: "pointer" };
 const BTN_SECONDARY = { padding: "8px 18px", background: "#E8EEF4", color: "#0C4160", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: UP_FONT, cursor: "pointer" };
 const BTN_SM        = { padding: "5px 12px", background: "#0C4160", color: "#fff", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 600, fontFamily: UP_FONT, cursor: "pointer" };
@@ -54,7 +54,7 @@ const HDR_STYLE = {
   padding: "16px 24px", display: "flex", alignItems: "center", gap: 12, color: "#fff",
 };
 
-// â”€â”€ Edit Profile full-screen form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Edit Profile full-screen form â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }) {
   const [form, setForm] = useState({
     display_name:  profile.display_name  || "",
@@ -126,7 +126,7 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }
 
   const FIELDS = [
     { key: "display_name",  label: "Display Name",         placeholder: "Full name",      span: 2 },
-    { key: "email_display", label: "Email â€” PQ Letter",    placeholder: "name@email.com", span: 2 },
+    { key: "email_display", label: "Email - PQ Letter",    placeholder: "name@email.com", span: 2 },
     { key: "title",         label: "Title",                placeholder: "Loan Officer"          },
     { key: "company",       label: "Company",              placeholder: "CMG Home Loans"        },
     { key: "nmls",          label: "NMLS #",               placeholder: "",               loOnly: true },
@@ -152,7 +152,7 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }
   return (
     <div style={{ minHeight: "100vh", background: "#F0F4F8", fontFamily: UP_FONT }}>
       <div style={HDR_STYLE}>
-        <button onClick={onCancel} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.35)", color: "#fff", borderRadius: 8, padding: "7px 16px", fontSize: 13, cursor: "pointer", fontFamily: UP_FONT, fontWeight: 600 }}>â† Back</button>
+        <button onClick={onCancel} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.35)", color: "#fff", borderRadius: 8, padding: "7px 16px", fontSize: 13, cursor: "pointer", fontFamily: UP_FONT, fontWeight: 600 }}>← Back</button>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 17, fontWeight: 700 }}>Edit Profile</div>
           <div style={{ fontSize: 12, opacity: 0.75 }}>{profile.display_name || profile.email}</div>
@@ -161,11 +161,11 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }
       <div style={{ maxWidth: 640, margin: "32px auto", padding: "0 20px" }}>
         <div style={{ background: "#fff", borderRadius: 14, padding: "28px 28px", boxShadow: "0 2px 14px rgba(0,0,0,0.07)" }}>
 
-          {/* Login ID â€” read only */}
+          {/* Login ID --" read only */}
           <div style={{ marginBottom: 18 }}>
-            <label style={LABEL_ST}>Email â€” Login ID <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, fontSize: 10 }}>(read-only â€” managed by Supabase Auth)</span></label>
+            <label style={LABEL_ST}>Email - Login ID <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, fontSize: 10 }}>(read-only - managed by Supabase Auth)</span></label>
             <div style={Object.assign({}, INPUT_ST, { background: "#EEF2F6", color: "#6B7D8A", cursor: "default", display: "flex", alignItems: "center", gap: 8 })}>
-              <span style={{ fontSize: 13 }}>ðŸ”’</span>
+              <span style={{ fontSize: 13 }}>ðŸ"'</span>
               {profile.email || <em style={{ opacity: 0.5 }}>no login email on record</em>}
             </div>
             <div style={{ fontSize: 12, color: "#94A3B0", marginTop: 4, lineHeight: 1.4 }}>
@@ -173,7 +173,7 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }
             </div>
           </div>
 
-          {/* Team Lead + Branch â€” LO roles only */}
+          {/* Team Lead + Branch --" LO roles only */}
           {isLORole && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 20px", marginBottom: 18 }}>
             <div>
               <label style={LABEL_ST}>Team Lead</label>
@@ -182,7 +182,7 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }
                 onChange={function(e) { setField("team_lead_id", e.target.value); }}
                 style={Object.assign({}, INPUT_ST, { cursor: "pointer" })}
               >
-                <option value="">â€” No team (standalone) â€”</option>
+                <option value="">-- No team (standalone) --</option>
                 {potentialLeads.map(function(p) {
                   return (
                     <option key={p.id} value={p.id}>
@@ -199,7 +199,7 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }
                 onChange={function(e) { setField("branch_id", e.target.value); }}
                 style={Object.assign({}, INPUT_ST, { cursor: "pointer" })}
               >
-                <option value="">â€” No branch assigned â€”</option>
+                <option value="">-- No branch assigned --</option>
                 {(branches || []).map(function(b) {
                   return <option key={b.id} value={b.id}>{b.name}{b.nmls ? " (NMLS " + b.nmls + ")" : ""}</option>;
                 })}
@@ -224,7 +224,7 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }
             })}
           </div>
 
-          {error && <div style={{ color: "#B91C1C", fontSize: 13, marginBottom: 14 }}>âš  {error}</div>}
+          {error && <div style={{ color: "#B91C1C", fontSize: 13, marginBottom: 14 }}>! {error}</div>}
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
             <button onClick={onCancel} style={BTN_SECONDARY}>Cancel</button>
             <button
@@ -235,7 +235,7 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }
                 saved  ? { background: "#1B8A5A" } : {}
               )}
             >
-              {saved ? "âœ“ Saved" : saving ? "Savingâ€¦" : "Save Changes"}
+              {saved ? "Saved" : saving ? "Saving..." : "Save Changes"}
             </button>
           </div>
         </div>
@@ -244,27 +244,27 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }
   );
 }
 
-// â”€â”€ Main UsersPanel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Main UsersPanel â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 function UsersPanel({ user, onBack, onLogout }) {
   const [activeTab, setActiveTab] = useState("team");
 
-  // â”€â”€ Supabase profile data â”€â”€â”€â”€
+  // â"€â"€ Supabase profile data â"€â"€â"€â"€
   const [allProfiles,     setAllProfiles]     = useState([]);
   const [profilesLoading, setProfilesLoading] = useState(true);
   const [profilesError,   setProfilesError]   = useState(null);
 
-  // â”€â”€ Role management â”€â”€â”€â”€
+  // â"€â"€ Role management â"€â"€â"€â"€
   const [editRoles, setEditRoles] = useState({});
   const [roleSaving, setRoleSaving] = useState({});
   const [roleSaved,  setRoleSaved]  = useState({});
   const [roleError,  setRoleError]  = useState({});
 
-  // â”€â”€ Team share toggle â”€â”€â”€â”€
-  const [teamShareEdit,   setTeamShareEdit]   = useState({});  // leadId â†’ bool
+  // â"€â"€ Team share toggle â"€â"€â"€â"€
+  const [teamShareEdit,   setTeamShareEdit]   = useState({});  // leadId â†' bool
   const [teamShareSaving, setTeamShareSaving] = useState({});
   const [teamShareSaved,  setTeamShareSaved]  = useState({});
 
-  // â”€â”€ Team bulk selection â”€â”€â”€â”€
+  // â"€â"€ Team bulk selection â"€â"€â"€â"€
   const [selectedTeamIds, setSelectedTeamIds] = useState([]);
   const [bulkRole,        setBulkRole]        = useState("");
   const [bulkRoleSaving,  setBulkRoleSaving]  = useState(false);
@@ -272,7 +272,9 @@ function UsersPanel({ user, onBack, onLogout }) {
   const [bulkResult,      setBulkResult]      = useState(null);  // "deleted" | "role_saved"
   const [confirmBulkDel,  setConfirmBulkDel]  = useState(false);
 
-  // â”€â”€ Directory bulk selection + three-dot menu â”€â”€â”€â”€
+  const [copiedLinkId, setCopiedLinkId] = useState(null); // profile id whose link was just copied
+
+  // â"€â"€ Directory bulk selection + three-dot menu â"€â"€â"€â"€
   const [selectedDirIds,   setSelectedDirIds]   = useState([]);
   const [dirBulkRole,      setDirBulkRole]      = useState("");
   const [dirBulkSaving,    setDirBulkSaving]    = useState(false);
@@ -324,7 +326,7 @@ function UsersPanel({ user, onBack, onLogout }) {
     }
   }
 
-  // â”€â”€ Directory bulk handlers â”€â”€â”€â”€
+  // â"€â"€ Directory bulk handlers â"€â"€â"€â"€
   async function handleDirBulkDelete() {
     if (!supabase || selectedDirIds.length === 0) return;
     setDirBulkDeleting(true);
@@ -359,10 +361,10 @@ function UsersPanel({ user, onBack, onLogout }) {
     setDirMenuOpenId(null);
   }
 
-  // â”€â”€ Edit profile screen â”€â”€â”€â”€
+  // â"€â"€ Edit profile screen â"€â"€â"€â"€
   const [editingProfile, setEditingProfile] = useState(null);
 
-  // â”€â”€ Branches â”€â”€â”€â”€
+  // â"€â"€ Branches â"€â"€â"€â"€
   const [branches,        setBranches]        = useState([]);
   const [branchesLoaded,  setBranchesLoaded]  = useState(false);
   const [branchesLoading, setBranchesLoading] = useState(false);
@@ -371,7 +373,7 @@ function UsersPanel({ user, onBack, onLogout }) {
   const [branchError,     setBranchError]     = useState("");
   const [confirmDelBranch, setConfirmDelBranch] = useState(null);
 
-  // â”€â”€ Activity tab â”€â”€â”€â”€
+  // â"€â"€ Activity tab â"€â"€â"€â"€
   const [actSessions,   setActSessions]   = useState(null);
   const [actLoading,    setActLoading]    = useState(false);
   const [actLoaded,     setActLoaded]     = useState(false);
@@ -382,12 +384,12 @@ function UsersPanel({ user, onBack, onLogout }) {
   const [dirRoleFilter, setDirRoleFilter] = useState("lo");
   const [dirSort, setDirSort] = useState({ col: "name", dir: "asc" });
 
-  // â”€â”€ Team tab search / sort â”€â”€â”€â”€
+  // â"€â"€ Team tab search / sort â"€â"€â"€â"€
   const [teamSearch,     setTeamSearch]     = useState("");
   const [teamRoleFilter, setTeamRoleFilter] = useState("all");
   const [teamSort,       setTeamSort]       = useState({ col: "name", dir: "asc" });
 
-  // — Team Leaders contact data ————————————————————————————————————————————
+  // -- Team Leaders contact data ----------------------------------------------------------------------------------------
   const [teamContacts,        setTeamContacts]        = useState([]);
   const [teamContactsLoading, setTeamContactsLoading] = useState(false);
   const [myContactId,         setMyContactId]         = useState(null);
@@ -395,7 +397,7 @@ function UsersPanel({ user, onBack, onLogout }) {
   const isAdmin      = user && ["super_admin", "admin"].includes(user.role);
   const isSuperAdmin = user && user.role === "super_admin";
 
-  // â”€â”€ Load all Supabase profiles â”€â”€â”€â”€
+  // â"€â"€ Load all Supabase profiles â"€â"€â"€â"€
   useEffect(function() {
     if (!supabase) { setProfilesLoading(false); return; }
     supabase
@@ -428,18 +430,18 @@ function UsersPanel({ user, onBack, onLogout }) {
       });
   }, []);
 
-  // â”€â”€ Load branches lazily when Branches tab is opened â”€â”€â”€â”€
+  // â"€â"€ Load branches on mount (count needed for tab badge) â"€â"€â"€â"€
   useEffect(function() {
-    if ((activeTab !== "branches" && activeTab !== "access") || branchesLoaded || !supabase) return;
+    if (branchesLoaded || !supabase) return;
     setBranchesLoading(true);
     supabase.from("branches").select("*").order("name").then(function(res) {
       setBranchesLoading(false);
       setBranchesLoaded(true);
       if (!res.error) setBranches(res.data || []);
     });
-  }, [activeTab, branchesLoaded]);
+  }, [branchesLoaded]);
 
-  // â”€â”€ Lazy-load activity sessions when Activity tab opens â”€â”€â”€â”€
+  // â"€â"€ Lazy-load activity sessions when Activity tab opens â"€â"€â"€â"€
   useEffect(function() {
     if (activeTab !== "activity" || actLoaded || !supabase || !isAdmin) return;
     var fetchFn = window.fetchUserSessions;
@@ -452,7 +454,7 @@ function UsersPanel({ user, onBack, onLogout }) {
     }).catch(function() { setActLoading(false); setActLoaded(true); });
   }, [activeTab, actLoaded, isAdmin]);
 
-  // — Load business contacts when Team tab opens ——————————————————————————
+  // -- Load business contacts when Team tab opens ----------------------------------------------------
   useEffect(function() {
     if (activeTab !== "team" || !supabase) return;
     setTeamContactsLoading(true);
@@ -484,7 +486,7 @@ function UsersPanel({ user, onBack, onLogout }) {
   // Build team groups: keyed by team lead ID, value = { lead, members[] }
   // A profile is a "member" if team_lead_id points to another profile's id
   const teamGroups = React.useMemo(function() {
-    const leadMap = {};  // leadId â†’ { lead: profile, members: [] }
+    const leadMap = {};  // leadId â†' { lead: profile, members: [] }
     const standalone = [];
     const profileById = {};
     teamProfiles.forEach(function(p) { profileById[p.id] = p; });
@@ -509,7 +511,7 @@ function UsersPanel({ user, onBack, onLogout }) {
           // This person is a team lead
           leadMap[p.id].lead = p;
         } else {
-          // No one is under them â€” standalone
+          // No one is under them --" standalone
           standalone.push(p);
         }
       }
@@ -525,7 +527,7 @@ function UsersPanel({ user, onBack, onLogout }) {
     return { teams, standalone };
   }, [teamProfiles]);
 
-  // â”€â”€ Role save â”€â”€â”€â”€
+  // â"€â"€ Role save â"€â"€â"€â"€
   async function saveRole(profileId) {
     if (!supabase || profileId === user.id) return;
     const newRole = editRoles[profileId];
@@ -546,7 +548,7 @@ function UsersPanel({ user, onBack, onLogout }) {
     }
   }
 
-  // â”€â”€ Team share scenarios toggle â”€â”€â”€â”€
+  // â"€â"€ Team share scenarios toggle â"€â"€â"€â"€
   async function saveTeamShare(leadId) {
     if (!supabase) return;
     const newVal = !!teamShareEdit[leadId];
@@ -564,7 +566,7 @@ function UsersPanel({ user, onBack, onLogout }) {
     }
   }
 
-  // â”€â”€ Branch save / delete â”€â”€â”€â”€
+  // â"€â"€ Branch save / delete â"€â"€â"€â"€
   const EMPTY_BRANCH = { name: "", nmls: "", address: "", city: "", state: "", zip: "" };
 
   async function saveBranch() {
@@ -600,7 +602,7 @@ function UsersPanel({ user, onBack, onLogout }) {
     setConfirmDelBranch(null);
   }
 
-  // â”€â”€ Edit profile callbacks â”€â”€â”€â”€
+  // â"€â"€ Edit profile callbacks â"€â"€â"€â"€
   function handleEditSave(updatedFields) {
     setAllProfiles(function(prev) {
       return prev.map(function(p) {
@@ -610,7 +612,7 @@ function UsersPanel({ user, onBack, onLogout }) {
     setEditingProfile(null);
   }
 
-  // â”€â”€ Activity tab helpers â”€â”€â”€â”€
+  // â"€â"€ Activity tab helpers â"€â"€â"€â"€
   function actDotColor(daysSince) {
     if (daysSince === null) return "#D1D5DB";
     if (daysSince <= 3)  return "#22C55E";
@@ -624,7 +626,7 @@ function UsersPanel({ user, onBack, onLogout }) {
     return daysSince + "d ago";
   }
   function actExactDate(isoStr) {
-    if (!isoStr) return "â€”";
+    if (!isoStr) return "--";
     var d = new Date(isoStr);
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   }
@@ -644,7 +646,7 @@ function UsersPanel({ user, onBack, onLogout }) {
     }).catch(function() { setActLoading(false); });
   }
 
-  // â”€â”€ Activity merged data â”€â”€â”€â”€
+  // â"€â"€ Activity merged data â"€â"€â"€â"€
   var actMerged = React.useMemo(function() {
     var byUser = {};
     (actSessions || []).forEach(function(s) {
@@ -701,7 +703,7 @@ function UsersPanel({ user, onBack, onLogout }) {
   ];
   var actActiveCount = actLoaded ? actMerged.filter(function(u) { return u.sessionCount > 0; }).length : null;
 
-  // â”€â”€ Directory tab helpers â”€â”€â”€â”€
+  // â"€â"€ Directory tab helpers â"€â"€â"€â"€
   var branchById = React.useMemo(function() {
     var map = {};
     branches.forEach(function(b) { map[b.id] = b; });
@@ -779,7 +781,7 @@ function UsersPanel({ user, onBack, onLogout }) {
     });
   }
 
-  // â”€â”€ Tab bar item â”€â”€â”€â”€
+  // â"€â"€ Tab bar item â"€â"€â"€â"€
   function tabBtn(key, label, count) {
     const active = activeTab === key;
     return (
@@ -799,7 +801,7 @@ function UsersPanel({ user, onBack, onLogout }) {
     );
   }
 
-  // â”€â”€ Render edit profile screen â”€â”€â”€â”€
+  // â"€â"€ Render edit profile screen â"€â"€â"€â"€
   if (editingProfile) {
     return (
       <EditProfileScreen
@@ -812,7 +814,7 @@ function UsersPanel({ user, onBack, onLogout }) {
     );
   }
 
-  // â”€â”€ Main page â”€â”€â”€â”€
+  // â"€â"€ Main page â"€â"€â"€â"€
   return (
     <div style={{ minHeight: "100vh", background: "#F0F4F8", fontFamily: UP_FONT }}>
 
@@ -826,10 +828,13 @@ function UsersPanel({ user, onBack, onLogout }) {
 
       {/* Tab bar */}
       <div style={{ background: "#fff", borderBottom: "1px solid #E0E8E8", display: "flex", padding: "0 24px", overflowX: "auto" }}>
-        {tabBtn("team",     "Team Leaders",   teamContacts.length)}
+        {tabBtn("team",     "Team Leaders",   (function() {
+          var allIds = teamContacts.map(function(c) { return c.id; });
+          return allIds.filter(function(id) { return teamContacts.some(function(c) { return c.team_lead_contact_id === id; }); }).length;
+        })())}
         {isAdmin && tabBtn("branches", "Branches", branches.length)}
         {isAdmin && tabBtn("access",   "Access Control", allProfiles.length)}
-        {isAdmin && tabBtn("activity", "Activity", actActiveCount !== null ? actActiveCount + " active" : "â€¦")}
+        {isAdmin && tabBtn("activity", "Activity", actActiveCount !== null ? actActiveCount + " active" : "...")}
       </div>
 
       {/* Body */}
@@ -837,47 +842,47 @@ function UsersPanel({ user, onBack, onLogout }) {
 
         {/* Loading / error */}
         {profilesLoading && activeTab !== "roster" && (
-          <div style={{ textAlign: "center", padding: 60, color: "#6B7D8A", fontSize: 14 }}>Loadingâ€¦</div>
+          <div style={{ textAlign: "center", padding: 60, color: "#6B7D8A", fontSize: 14 }}>Loading...</div>
         )}
         {!profilesLoading && profilesError && activeTab !== "roster" && (
-          <div style={{ background: "#FEE2E2", color: "#B91C1C", padding: "14px 18px", borderRadius: 10, fontSize: 13 }}>âš  {profilesError}</div>
+          <div style={{ background: "#FEE2E2", color: "#B91C1C", padding: "14px 18px", borderRadius: 10, fontSize: 13 }}>! {profilesError}</div>
         )}
 
-        {/* â”€â”€ TEAM LEADERS TAB â”€â”€ */}
-        {activeTab === “team” && (
+        {/* â"€â"€ TEAM LEADERS TAB â"€â"€ */}
+        {activeTab === "team" && (
           <div>
             {teamContactsLoading && (
-              <div style={{ textAlign: “center”, padding: 40, color: “#6B7D8A”, fontSize: 14, fontFamily: UP_FONT }}>Loading team...</div>
+              <div style={{ textAlign: "center", padding: 40, color: "#6B7D8A", fontSize: 14, fontFamily: UP_FONT }}>Loading team...</div>
             )}
             {!teamContactsLoading && (function() {
-              var catColor = { “Loan Officer”: “#0C4160”, “Realtor”: “#7C3AED”, “Builder”: “#D97706” };
-              var catBg = { “Loan Officer”: “#DBEAFE”, “Realtor”: “#F3E8FF”, “Builder”: “#FFF7ED” };
+              var catColor = { "Loan Officer": "#0C4160", "Realtor": "#7C3AED", "Builder": "#D97706" };
+              var catBg = { "Loan Officer": "#DBEAFE", "Realtor": "#F3E8FF", "Builder": "#FFF7ED" };
 
               function contactName(c) {
-                return ((c.first_name || “”) + “ “ + (c.last_name || “”)).trim() || “(unnamed)”;
+                return ((c.first_name || "") + " " + (c.last_name || "")).trim() || "(unnamed)";
               }
 
               function MemberCard({ c }) {
-                var cat = c.contact_category || “”;
+                var cat = c.contact_category || "";
                 return (
                   <div style={{
-                    display: “flex”, alignItems: “center”, gap: 10, padding: “8px 12px”,
-                    background: “#fff”, borderRadius: 8, border: “1px solid #E8EEF4”,
+                    display: "flex", alignItems: "center", gap: 10, padding: "8px 12px",
+                    background: "#fff", borderRadius: 8, border: "1px solid #E8EEF4",
                   }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: “#0C4160”, fontFamily: UP_FONT }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#0C4160", fontFamily: UP_FONT }}>
                         {contactName(c)}
                       </div>
                       {(c.lo_title || c.company) && (
-                        <div style={{ fontSize: 12, color: “#6B7D8A”, fontFamily: UP_FONT }}>
-                          {[c.lo_title, c.company].filter(Boolean).join(“ \xB7 “)}
+                        <div style={{ fontSize: 12, color: "#6B7D8A", fontFamily: UP_FONT }}>
+                          {[c.lo_title, c.company].filter(Boolean).join(" \xB7 ")}
                         </div>
                       )}
                     </div>
                     <span style={{
-                      fontSize: 10, fontWeight: 700, padding: “2px 8px”, borderRadius: 99,
-                      background: catBg[cat] || “#F0F4F8”, color: catColor[cat] || “#6B7D8A”,
-                      whiteSpace: “nowrap”,
+                      fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 99,
+                      background: catBg[cat] || "#F0F4F8", color: catColor[cat] || "#6B7D8A",
+                      whiteSpace: "nowrap",
                     }}>{cat}</span>
                   </div>
                 );
@@ -889,31 +894,26 @@ function UsersPanel({ user, onBack, onLogout }) {
                   : [];
                 return (
                   <div>
-                    <div style={{ fontSize: 13, color: “#6B7D8A”, marginBottom: 16, fontFamily: UP_FONT }}>
-                      {myContactId ? “Showing your assigned team members.” : “No Loan Officer contact record found for your email. Ask an admin to create one.”}
+                    <div style={{ fontSize: 13, color: "#6B7D8A", marginBottom: 16, fontFamily: UP_FONT }}>
+                      {myContactId ? "Showing your assigned team members." : "No Loan Officer contact record found for your email. Ask an admin to create one."}
                     </div>
                     {myTeam.length === 0 && myContactId && (
-                      <div style={{ background: “#fff”, borderRadius: 12, padding: “32px 24px”, textAlign: “center”, color: “#6B7D8A”, fontSize: 14, fontFamily: UP_FONT, border: “1px solid #E8EEF4” }}>
+                      <div style={{ background: "#fff", borderRadius: 12, padding: "32px 24px", textAlign: "center", color: "#6B7D8A", fontSize: 14, fontFamily: UP_FONT, border: "1px solid #E8EEF4" }}>
                         No team members assigned yet. Open a contact record and set you as their Team Lead.
                       </div>
                     )}
-                    <div style={{ display: “flex”, flexDirection: “column”, gap: 8 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       {myTeam.map(function(c) { return <MemberCard key={c.id} c={c} />; })}
                     </div>
                   </div>
                 );
               }
 
-              var loContacts = teamContacts.filter(function(c) { return c.contact_category === “Loan Officer”; });
-
-              var teams = loContacts.map(function(lead) {
+              var teams = teamContacts.map(function(lead) {
                 var members = teamContacts.filter(function(c) { return c.team_lead_contact_id === lead.id; });
                 return { lead: lead, members: members };
-              }).sort(function(a, b) { return contactName(a.lead).localeCompare(contactName(b.lead)); });
-
-              var unassigned = teamContacts.filter(function(c) {
-                return !c.team_lead_contact_id;
-              });
+              }).filter(function(t) { return t.members.length > 0; })
+                .sort(function(a, b) { return contactName(a.lead).localeCompare(contactName(b.lead)); });
 
               return (
                 <div>
@@ -921,30 +921,30 @@ function UsersPanel({ user, onBack, onLogout }) {
                     return (
                       <div key={t.lead.id} style={{ marginBottom: 20 }}>
                         <div style={{
-                          display: “flex”, alignItems: “center”, gap: 10,
-                          padding: “10px 16px”, marginBottom: 6,
-                          background: “linear-gradient(90deg, #0C4160, #1A5E8A)”,
-                          borderRadius: t.members.length > 0 ? “10px 10px 0 0” : 10,
+                          display: "flex", alignItems: "center", gap: 10,
+                          padding: "10px 16px", marginBottom: 6,
+                          background: "linear-gradient(90deg, #0C4160, #1A5E8A)",
+                          borderRadius: t.members.length > 0 ? "10px 10px 0 0" : 10,
                         }}>
                           <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 14, fontWeight: 700, color: “#fff”, fontFamily: UP_FONT }}>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", fontFamily: UP_FONT }}>
                               {contactName(t.lead)}
                             </div>
                             {(t.lead.lo_title || t.lead.company) && (
-                              <div style={{ fontSize: 12, color: “rgba(255,255,255,0.65)”, fontFamily: UP_FONT }}>
-                                {[t.lead.lo_title, t.lead.company].filter(Boolean).join(“ \xB7 “)}
+                              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", fontFamily: UP_FONT }}>
+                                {[t.lead.lo_title, t.lead.company].filter(Boolean).join(" \xB7 ")}
                               </div>
                             )}
                           </div>
-                          <span style={{ fontSize: 11, color: “rgba(255,255,255,0.7)”, fontFamily: UP_FONT }}>
-                            {t.members.length} member{t.members.length !== 1 ? “s” : “”}
+                          <span style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", fontFamily: UP_FONT }}>
+                            {t.members.length} member{t.members.length !== 1 ? "s" : ""}
                           </span>
                         </div>
                         {t.members.length > 0 && (
                           <div style={{
-                            border: “1px solid #E8EEF4”, borderTop: “none”,
-                            borderRadius: “0 0 10px 10px”, overflow: “hidden”,
-                            display: “flex”, flexDirection: “column”, gap: 1, background: “#F7FAFB”,
+                            border: "1px solid #E8EEF4", borderTop: "none",
+                            borderRadius: "0 0 10px 10px", overflow: "hidden",
+                            display: "flex", flexDirection: "column", gap: 1, background: "#F7FAFB",
                           }}>
                             {t.members.map(function(m) {
                               return (
@@ -958,18 +958,8 @@ function UsersPanel({ user, onBack, onLogout }) {
                       </div>
                     );
                   })}
-                  {unassigned.length > 0 && (
-                    <div style={{ marginBottom: 20 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: “0.07em”, textTransform: “uppercase”, color: “#8A99A8”, marginBottom: 8, fontFamily: UP_FONT }}>
-                        No Team Lead Assigned ({unassigned.length})
-                      </div>
-                      <div style={{ display: “flex”, flexDirection: “column”, gap: 6 }}>
-                        {unassigned.map(function(c) { return <MemberCard key={c.id} c={c} />; })}
-                      </div>
-                    </div>
-                  )}
-                  {teams.length === 0 && unassigned.length === 0 && (
-                    <div style={{ background: “#fff”, borderRadius: 12, padding: “40px 24px”, textAlign: “center”, color: “#6B7D8A”, fontSize: 14, fontFamily: UP_FONT }}>
+                  {teams.length === 0 && (
+                    <div style={{ background: "#fff", borderRadius: 12, padding: "40px 24px", textAlign: "center", color: "#6B7D8A", fontSize: 14, fontFamily: UP_FONT }}>
                       No Loan Officer, Realtor, or Builder contacts found. Add Business contacts with those categories to see them here.
                     </div>
                   )}
@@ -979,13 +969,38 @@ function UsersPanel({ user, onBack, onLogout }) {
           </div>
         )}
 
-        {/* ── ACCESS CONTROL TAB ── */}
+        {/* -- ACCESS CONTROL TAB -- */}
         {activeTab === "access" && isAdmin && !profilesLoading && !profilesError && (
           <div>
             <div style={{ fontSize: 13, color: "#6B7D8A", marginBottom: 16, fontFamily: UP_FONT, lineHeight: 1.6 }}>
               Manage login roles for all users. Role controls what each person can access in the app.
               Profile info (NMLS, display email, team assignments) is managed in their Contact record.
             </div>
+            {/* Your own referral link */}
+            {(function() {
+              var me = allProfiles.find(function(p) { return p.id === user.id; });
+              if (!me || !me.nmls) return null;
+              var myLink = window.location.origin + window.location.pathname + "?lo=" + encodeURIComponent(me.nmls);
+              return (
+                <div style={{ background: "linear-gradient(90deg, #0C4160, #1A5E8A)", borderRadius: 10, padding: "12px 16px", marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.7)", fontFamily: UP_FONT, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 3 }}>Your Referral Link</div>
+                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.85)", fontFamily: UP_FONT, wordBreak: "break-all" }}>{myLink}</div>
+                  </div>
+                  <button
+                    onClick={function() {
+                      navigator.clipboard.writeText(myLink).then(function() {
+                        setCopiedLinkId("self");
+                        setTimeout(function() { setCopiedLinkId(null); }, 2000);
+                      });
+                    }}
+                    style={{ background: copiedLinkId === "self" ? "#1B8A5A" : "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.35)", color: "#fff", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: UP_FONT, whiteSpace: "nowrap" }}
+                  >
+                    {copiedLinkId === "self" ? "✓ Copied!" : "📋 Copy Link"}
+                  </button>
+                </div>
+              );
+            })()}
             <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #E8EEF4", overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
@@ -994,18 +1009,23 @@ function UsersPanel({ user, onBack, onLogout }) {
                     <th style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#6B7D8A", textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: UP_FONT }}>Email</th>
                     <th style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#6B7D8A", textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: UP_FONT }}>Current Role</th>
                     <th style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#6B7D8A", textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: UP_FONT, width: 220 }}>Change Role</th>
+                    <th style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#6B7D8A", textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: UP_FONT }}>Referral Link</th>
                   </tr>
                 </thead>
                 <tbody>
                   {allProfiles.filter(function(p) { return p.id !== user.id; }).map(function(p, idx) {
                     var selRole = editRoles[p.id] || p.role || "borrower";
                     var hasChanged = selRole !== (p.role || "borrower");
+                    var isInternal = ["admin","internal","branch_admin","super_admin"].includes(p.role);
+                    var referralLink = (isInternal && p.nmls)
+                      ? (window.location.origin + window.location.pathname + "?lo=" + encodeURIComponent(p.nmls))
+                      : null;
                     return (
                       <tr key={p.id} style={{ borderBottom: "1px solid #F0F4F8", background: idx % 2 === 0 ? "#fff" : "#FAFBFC" }}>
                         <td style={{ padding: "10px 14px", fontSize: 13, fontWeight: 600, color: "#0C4160", fontFamily: UP_FONT }}>
                           {p.display_name || "(no name)"}
                         </td>
-                        <td style={{ padding: "10px 14px", fontSize: 12, color: "#6B7D8A", fontFamily: UP_FONT }}>{p.email || "—"}</td>
+                        <td style={{ padding: "10px 14px", fontSize: 12, color: "#6B7D8A", fontFamily: UP_FONT }}>{p.email || "--"}</td>
                         <td style={{ padding: "10px 14px" }}><RoleBadge role={p.role} /></td>
                         <td style={{ padding: "10px 14px" }}>
                           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -1022,10 +1042,29 @@ function UsersPanel({ user, onBack, onLogout }) {
                             </select>
                             <button onClick={function() { saveRole(p.id); }} disabled={!hasChanged || roleSaving[p.id]}
                               style={Object.assign({}, BTN_SM, { padding: "5px 10px", fontSize: 11, opacity: (!hasChanged || roleSaving[p.id]) ? 0.3 : 1, cursor: (!hasChanged || roleSaving[p.id]) ? "default" : "pointer" }, roleSaved[p.id] ? { background: "#1B8A5A" } : {})}>
-                              {roleSaved[p.id] ? "✓" : roleSaving[p.id] ? "…" : "Save"}
+                              {roleSaved[p.id] ? "✓" : roleSaving[p.id] ? "..." : "Save"}
                             </button>
-                            {roleError[p.id] && <span style={{ fontSize: 11, color: "#B91C1C", fontFamily: UP_FONT }}>⚠</span>}
+                            {roleError[p.id] && <span style={{ fontSize: 11, color: "#B91C1C", fontFamily: UP_FONT }}>!</span>}
                           </div>
+                        </td>
+                        <td style={{ padding: "10px 14px" }}>
+                          {referralLink ? (
+                            <button
+                              onClick={function() {
+                                navigator.clipboard.writeText(referralLink).then(function() {
+                                  setCopiedLinkId(p.id);
+                                  setTimeout(function() { setCopiedLinkId(null); }, 2000);
+                                });
+                              }}
+                              style={{ ...BTN_GHOST, fontSize: 11, padding: "4px 10px", background: copiedLinkId === p.id ? "#E6F9F0" : undefined, color: copiedLinkId === p.id ? "#1B8A5A" : undefined, borderColor: copiedLinkId === p.id ? "#1B8A5A" : undefined }}
+                            >
+                              {copiedLinkId === p.id ? "✓ Copied!" : "📋 Copy Link"}
+                            </button>
+                          ) : (
+                            <span style={{ fontSize: 11, color: "#CBD5E1", fontFamily: UP_FONT }}>
+                              {isInternal ? "No NMLS on profile" : "--"}
+                            </span>
+                          )}
                         </td>
                       </tr>
                     );
@@ -1036,7 +1075,7 @@ function UsersPanel({ user, onBack, onLogout }) {
           </div>
         )}
 
-        {/* â”€â”€ BRANCHES TAB â”€â”€ */}
+        {/* â"€â"€ BRANCHES TAB â"€â"€ */}
         {activeTab === "branches" && isAdmin && (
           <div>
             <p style={{ fontSize: 13, color: "#6B7D8A", margin: "0 0 20px 0", lineHeight: 1.5 }}>
@@ -1084,18 +1123,18 @@ function UsersPanel({ user, onBack, onLogout }) {
                     );
                   })}
                 </div>
-                {branchError && <div style={{ color: "#B91C1C", fontSize: 13, marginBottom: 12 }}>âš  {branchError}</div>}
+                {branchError && <div style={{ color: "#B91C1C", fontSize: 13, marginBottom: 12 }}>! {branchError}</div>}
                 <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
                   <button onClick={function() { setBranchForm(null); setBranchError(""); }} style={BTN_SECONDARY}>Cancel</button>
                   <button onClick={saveBranch} disabled={branchSaving} style={Object.assign({}, BTN_PRIMARY, branchSaving ? { opacity: 0.6, cursor: "wait" } : {})}>
-                    {branchSaving ? "Savingâ€¦" : "Save Branch"}
+                    {branchSaving ? "Saving..." : "Save Branch"}
                   </button>
                 </div>
               </div>
             )}
 
             {/* Loading */}
-            {branchesLoading && <div style={{ textAlign: "center", padding: 40, color: "#6B7D8A" }}>Loadingâ€¦</div>}
+            {branchesLoading && <div style={{ textAlign: "center", padding: 40, color: "#6B7D8A" }}>Loading...</div>}
 
             {/* Branch table */}
             {!branchesLoading && branches.length === 0 && (
@@ -1120,11 +1159,11 @@ function UsersPanel({ user, onBack, onLogout }) {
                       return (
                         <tr key={b.id}>
                           <td style={{ ...TD, fontWeight: 600 }}>{b.name}</td>
-                          <td style={{ ...TD, color: "#6B7D8A" }}>{b.nmls || "â€”"}</td>
-                          <td style={{ ...TD, color: "#6B7D8A" }}>{b.address || "â€”"}</td>
-                          <td style={{ ...TD, color: "#6B7D8A" }}>{b.city || "â€”"}</td>
-                          <td style={{ ...TD, color: "#6B7D8A" }}>{b.state || "â€”"}</td>
-                          <td style={{ ...TD, color: "#6B7D8A" }}>{b.zip || "â€”"}</td>
+                          <td style={{ ...TD, color: "#6B7D8A" }}>{b.nmls || "--"}</td>
+                          <td style={{ ...TD, color: "#6B7D8A" }}>{b.address || "--"}</td>
+                          <td style={{ ...TD, color: "#6B7D8A" }}>{b.city || "--"}</td>
+                          <td style={{ ...TD, color: "#6B7D8A" }}>{b.state || "--"}</td>
+                          <td style={{ ...TD, color: "#6B7D8A" }}>{b.zip || "--"}</td>
                           <td style={{ ...TD, whiteSpace: "nowrap" }}>
                             <div style={{ display: "flex", gap: 6 }}>
                               <button onClick={function() { setBranchForm(Object.assign({}, b)); setBranchError(""); }}
@@ -1159,7 +1198,7 @@ function UsersPanel({ user, onBack, onLogout }) {
           </div>
         )}
 
-        {/* â”€â”€ ACTIVITY TAB â”€â”€ */}
+        {/* â"€â"€ ACTIVITY TAB â"€â"€ */}
         {activeTab === "activity" && isAdmin && (
           <div>
 
@@ -1169,7 +1208,7 @@ function UsersPanel({ user, onBack, onLogout }) {
                 type="text"
                 value={actSearch}
                 onChange={function(e) { setActSearch(e.target.value); }}
-                placeholder="Search name or emailâ€¦"
+                placeholder="Search name or email..."
                 style={Object.assign({}, INPUT_ST, { maxWidth: 240, flex: "1 1 180px" })}
               />
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", flex: "1 1 auto" }}>
@@ -1191,16 +1230,16 @@ function UsersPanel({ user, onBack, onLogout }) {
                 disabled={actLoading}
                 style={Object.assign({}, BTN_GHOST, actLoading ? { opacity: 0.6, cursor: "wait" } : {})}
               >
-                {actLoading ? "Loadingâ€¦" : "â†º Refresh"}
+                {actLoading ? "Loading..." : "-> Refresh"}
               </button>
             </div>
 
             {/* Legend */}
             <div style={{ display: "flex", gap: 16, marginBottom: 14, flexWrap: "wrap" }}>
               {[
-                { color: "#22C55E", label: "Active â‰¤ 3 days" },
-                { color: "#F59E0B", label: "Active â‰¤ 7 days" },
-                { color: "#F97316", label: "Active â‰¤ 15 days" },
+                { color: "#22C55E", label: "Active <= 3 days" },
+                { color: "#F59E0B", label: "Active <= 7 days" },
+                { color: "#F97316", label: "Active <= 15 days" },
                 { color: "#D1D5DB", label: "Never / no data" },
               ].map(function(item) {
                 return (
@@ -1237,7 +1276,7 @@ function UsersPanel({ user, onBack, onLogout }) {
 
             {/* Loading spinner */}
             {actLoading && !actLoaded && (
-              <div style={{ textAlign: "center", padding: 60, color: "#6B7D8A", fontSize: 14 }}>Loading activity dataâ€¦</div>
+              <div style={{ textAlign: "center", padding: 60, color: "#6B7D8A", fontSize: 14 }}>Loading activity data...</div>
             )}
 
             {/* Table */}
@@ -1264,7 +1303,7 @@ function UsersPanel({ user, onBack, onLogout }) {
                             }}>
                             {h.label}
                             <span style={{ marginLeft: 4, opacity: isActive ? 1 : 0.3 }}>
-                              {isActive ? (actSort.dir === "asc" ? " â†‘" : " â†“") : " â†•"}
+                              {isActive ? (actSort.dir === "asc" ? " ^" : " v") : " -"}
                             </span>
                           </th>
                         );
@@ -1318,7 +1357,7 @@ function UsersPanel({ user, onBack, onLogout }) {
                           <td style={{ padding: "12px 12px" }}>
                             {u.sessionCount > 0
                               ? <span style={{ display: "inline-block", background: "#EFF6FF", color: "#1E40AF", border: "1px solid #BFDBFE", borderRadius: 99, padding: "2px 10px", fontSize: 12, fontWeight: 700, fontFamily: UP_FONT }}>{u.sessionCount}</span>
-                              : <span style={{ fontSize: 12, color: "#D1D5DB", fontFamily: UP_FONT }}>â€”</span>
+                              : <span style={{ fontSize: 12, color: "#D1D5DB", fontFamily: UP_FONT }}>--"</span>
                             }
                           </td>
                           {/* Exact date */}

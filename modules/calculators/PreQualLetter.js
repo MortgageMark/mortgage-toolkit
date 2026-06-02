@@ -30,6 +30,15 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
   const c = useThemeColors();
   const isClient = user?.role === "borrower";
 
+  // Collapse to single column on iPad and smaller (≤1024px)
+  const [isNarrow, setIsNarrow] = React.useState(() => window.innerWidth <= 1024);
+  React.useEffect(function() {
+    function onResize() { setIsNarrow(window.innerWidth <= 1024); }
+    window.addEventListener("resize", onResize);
+    return function() { window.removeEventListener("resize", onResize); };
+  }, []);
+  const cols2 = isNarrow ? "1fr" : "1fr 1fr";
+
   // ── State ──
   const [purchasePrice, setPurchasePrice] = useLocalStorage("pq_pp", "");
   const [loanAmount, setLoanAmount] = useLocalStorage("pq_la", "");
@@ -519,7 +528,7 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
     },
       // Card 1: Customize PQ Letter (all users)
       React.createElement(SectionCard, { title: "Customize PQ Letter (Optional)" },
-        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" } },
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: cols2, gap: "12px" } },
           React.createElement(LabeledInput, { label: "Purchase Price", value: bPurchasePrice, onChange: handleBPurchasePrice, prefix: "$", useCommas: true, hint: purchasePrice ? "Max: $" + Number(String(purchasePrice).replace(/,/g, "")).toLocaleString() : undefined, infoTip: "The maximum purchase price the buyer can be pre-qualified for. It's common practice to write the letter for the actual offer price rather than the maximum, so the seller doesn't know the buyer's full budget ceiling." }),
           React.createElement(LabeledInput, { label: "Loan Amount", value: bLoanAmount, onChange: handleBLoanAmount, prefix: "$", useCommas: true, hint: loanAmount ? "Max: $" + Number(String(loanAmount).replace(/,/g, "")).toLocaleString() : undefined, infoTip: "The maximum loan amount the buyer is pre-qualified for based on their income, debts, and credit profile. This is a preliminary estimate — the final approved amount is determined after full underwriting. The letter can be written for any amount up to this maximum." }),
           React.createElement(LabeledInput, { label: "Property Address (optional)", value: propertyAddress, onChange: setPropertyAddress, type: "text" }),
@@ -527,7 +536,7 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
         ),
         React.createElement("div", { style: { borderTop: "1px solid #e2e8f0", marginTop: "16px", paddingTop: "16px" } },
           React.createElement("div", { style: { fontSize: "13px", fontWeight: 700, color: "#1e3a5f", marginBottom: "10px" } }, "Co-Borrower: Optional"),
-          React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "10px" } },
+          React.createElement("div", { style: { display: "grid", gridTemplateColumns: cols2, gap: "12px", marginBottom: "10px" } },
             React.createElement(LabeledInput, { label: "First Name", value: abtC2First, onChange: setAbtC2First, type: "text", placeholder: "Co-borrower first name", infoTip: "The name(s) as they should appear on the letter. This should match their legal name as it appears on their ID and will appear on all loan documents." }),
             React.createElement(LabeledInput, { label: "Last Name",  value: abtC2Last,  onChange: setAbtC2Last,  type: "text", placeholder: "Co-borrower last name", infoTip: "The name(s) as they should appear on the letter. This should match their legal name as it appears on their ID and will appear on all loan documents." })
           ),
@@ -539,7 +548,7 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
       // Card 2: PQ Parameters — editable for internal, read-only display for clients when params are set
       (isInternal || paramsReady) ? React.createElement(SectionCard, { title: "PQ Parameters (only LO can edit)" },
         isInternal
-          ? React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" } },
+          ? React.createElement("div", { style: { display: "grid", gridTemplateColumns: cols2, gap: "12px" } },
               React.createElement(LabeledInput, { label: "Max Purchase Price", value: purchasePrice, onChange: setPurchasePrice, prefix: "$", useCommas: true, infoTip: "The maximum purchase price the buyer can be pre-qualified for. It's common practice to write the letter for the actual offer price rather than the maximum, so the seller doesn't know the buyer's full budget ceiling." }),
               React.createElement(LabeledInput, { label: "Max Loan Amount", value: loanAmount, onChange: setLoanAmount, prefix: "$", useCommas: true, infoTip: "The maximum loan amount the buyer is pre-qualified for based on their income, debts, and credit profile. This is a preliminary estimate — the final approved amount is determined after full underwriting. The letter can be written for any amount up to this maximum." }),
               React.createElement(Select, { label: "Loan Type", value: loanType, onChange: setLoanType, options: ["Conventional", "FHA", "VA", "USDA"].map(v => ({ value: v, label: v })) }),
@@ -549,7 +558,7 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
               React.createElement("div", { style: { fontSize: 12, color: c.textSecondary || "#64748b", marginBottom: 12, fontStyle: "italic" } },
                 "These parameters were set by your Loan Officer."
               ),
-              React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 24px" } },
+              React.createElement("div", { style: { display: "grid", gridTemplateColumns: cols2, gap: "10px 24px" } },
                 [
                   { label: "Max Purchase Price", val: purchasePrice ? "$" + Number(String(purchasePrice).replace(/,/g, "")).toLocaleString("en-US") : "—" },
                   { label: "Max Loan Amount",    val: loanAmount    ? "$" + Number(String(loanAmount).replace(/,/g, "")).toLocaleString("en-US")    : "—" },
@@ -1132,7 +1141,7 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
     // Two-column layout: form left, live letter preview right
     React.createElement("div", {
       className: "mtk-grid-2",
-      style: { display: "grid", gridTemplateColumns: "minmax(300px, 640px) 1fr", gap: "24px", alignItems: "start" }
+      style: { display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "minmax(300px, 640px) 1fr", gap: "24px", alignItems: "start" }
     },
 
       // ── LEFT column: form + history + share log

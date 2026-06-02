@@ -304,7 +304,7 @@ function BuildersBuyerTab() {
             <div style={{ display: "flex" }}>
               <span style={prefixSt}>$</span>
               <input
-                type="text" inputMode="numeric"
+                type="text" onFocus={(e) => e.target.select()} inputMode="numeric"
                 placeholder="450,000"
                 value={dollarDisplay(bbPrice)}
                 onChange={function(e) { setBbPrice(dollarStrip(e.target.value)); }}
@@ -317,7 +317,7 @@ function BuildersBuyerTab() {
             <div style={{ display: "flex" }}>
               <span style={prefixSt}>$</span>
               <input
-                type="text" inputMode="numeric"
+                type="text" onFocus={(e) => e.target.select()} inputMode="numeric"
                 placeholder="10,000"
                 value={dollarDisplay(bbConc)}
                 onChange={function(e) { setBbConc(dollarStrip(e.target.value)); }}
@@ -333,7 +333,7 @@ function BuildersBuyerTab() {
             <label style={labelSt}>Perm Buydown Rate</label>
             <div style={{ display: "flex" }}>
               <input
-                type="number" min="0.125" step="0.125"
+                type="number" inputMode="decimal" onFocus={(e) => e.target.select()} min="0.125" step="0.125"
                 value={permRate}
                 onChange={function(e) { setPermRate(e.target.value); }}
                 placeholder={(noteRate - 0.5).toFixed(3)}

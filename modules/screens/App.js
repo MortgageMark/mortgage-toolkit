@@ -628,7 +628,7 @@ function ClientMyInfoPanel({ user, onClose, onLogout }) {
 
             {/* ── Name ── */}
             <div style={secHead}>Name</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div>
                 <label style={lSt}>First Name</label>
                 <input value={firstName} onChange={function(e) { setFirstName(e.target.value); }} style={iSt} placeholder="First name" />
@@ -641,7 +641,7 @@ function ClientMyInfoPanel({ user, onClose, onLogout }) {
 
             {/* ── Phone ── */}
             <div style={secHead}>Phone</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div>
                 <label style={lSt}>Cell</label>
                 <input type="tel" value={phoneCell}
@@ -675,7 +675,7 @@ function ClientMyInfoPanel({ user, onClose, onLogout }) {
 
             {/* ── Email ── */}
             <div style={secHead}>Email</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div>
                 <label style={lSt}>Personal Email</label>
                 <input type="email" value={emailPersonal}
@@ -704,7 +704,7 @@ function ClientMyInfoPanel({ user, onClose, onLogout }) {
                 <label style={lSt}>Street Address</label>
                 <input value={address1} onChange={function(e) { setAddress1(e.target.value); }} style={iSt} placeholder="123 Main St" />
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 10 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 <div>
                   <label style={lSt}>City</label>
                   <input value={city1} onChange={function(e) { setCity1(e.target.value); }} style={iSt} placeholder="Austin" />
@@ -750,7 +750,7 @@ function ClientMyInfoPanel({ user, onClose, onLogout }) {
                   borderRadius: "0 0 8px 8px", padding: "16px 16px 12px",
                   background: "#F9FBFD",
                 }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 12 }}>
                     <div>
                       <label style={lSt}>First Name</label>
                       <input value={cbFirstName} onChange={function(e) { setCbFirstName(e.target.value); }} style={iSt} placeholder="First name" />
@@ -1019,6 +1019,19 @@ function App() {
     var viewToken = params.get("view_token");
     var dest      = params.get("dest");
     var liveId    = params.get("live");
+    var loNmls    = params.get("lo");
+    var fromId    = params.get("from");
+
+    // Handle ?lo= referral link — store NMLS so LoginScreen can auto-assign
+    if (loNmls) {
+      try { sessionStorage.setItem("mtk_lo_ref",   loNmls.trim()); } catch(e) {}
+      try { sessionStorage.removeItem("mtk_from_ref"); } catch(e) {}
+    }
+    // Handle ?from= referral link — Realtor/Builder contact UUID
+    if (fromId) {
+      try { sessionStorage.setItem("mtk_from_ref", fromId.trim()); } catch(e) {}
+      try { sessionStorage.removeItem("mtk_lo_ref"); } catch(e) {}
+    }
 
     // Handle ?live= invite link
     if (liveId) {
@@ -1366,10 +1379,8 @@ function App() {
         setProfileContactId(userData.newContactId);
         setShowProfileSetup(true);
       }
-    } else if (userData && userData.role === "borrower" && userData.supabaseUser) {
-      // Borrowers (clients) go to their contact card first
-      setShowMyInfo(true);
     }
+    // Borrowers → go straight to Scenario Dashboard (My Info accessible via profile menu)
     // LO / Builder / Realtor → fall through to ScenarioDashboard (activeScenario is null)
   };
 
@@ -1700,25 +1711,34 @@ function App() {
     </svg>
   );
 
-  function sidebarNavBtn(label, isActive, onClick) {
+  function sidebarNavBtn(label, isActive, onClick, icon) {
+    var collapsed = !sidebarPinned && !isMobile;
     return (
       <button
         key={label}
         onClick={function() { onClick(); if (isMobile) setMobileSidebarOpen(false); }}
+        title={collapsed ? label : undefined}
         style={{
-          display: "block", width: "100%", textAlign: "left",
-          padding: "9px 16px", border: "none", cursor: "pointer",
+          display: "flex", alignItems: "center",
+          justifyContent: collapsed ? "center" : "flex-start",
+          gap: 9,
+          width: "100%", textAlign: "left",
+          padding: collapsed ? "12px 0" : "12px 16px",
+          minHeight: 44,
+          border: "none", cursor: "pointer",
           background: isActive ? "rgba(255,255,255,0.12)" : "transparent",
           color: isActive ? "#fff" : "rgba(255,255,255,0.75)",
-          fontSize: 13, fontWeight: isActive ? 700 : 500,
+          fontSize: collapsed ? 20 : 14,
+          fontWeight: isActive ? 700 : 500,
           fontFamily: "'Inter', system-ui, sans-serif",
-          borderLeft: isActive ? "3px solid #60a5fa" : "3px solid transparent",
+          borderLeft: (!collapsed && isActive) ? "3px solid #60a5fa" : "3px solid transparent",
           whiteSpace: "nowrap", transition: "background 0.15s",
         }}
         onMouseEnter={function(e) { if (!isActive) e.currentTarget.style.background = "rgba(255,255,255,0.07)"; }}
         onMouseLeave={function(e) { if (!isActive) e.currentTarget.style.background = "transparent"; }}
       >
-        {label}
+        {icon && <span style={{ fontSize: collapsed ? 18 : 15, lineHeight: 1, flexShrink: 0, filter: "grayscale(1) brightness(1.8)" }}>{icon}</span>}
+        {!collapsed && label}
       </button>
     );
   }
@@ -1848,81 +1868,99 @@ function App() {
             )}
           </div>
 
-          {/* Nav items — shown when expanded (desktop) or always (mobile) */}
-          {(sidebarPinned || isMobile) && (
-            <div style={{ flex: 1, overflowY: "auto", paddingTop: 8, paddingBottom: 8 }}>
+          {/* Nav items — always rendered; icon-only when collapsed */}
+          <div style={{ flex: 1, overflowY: "auto", paddingTop: 8, paddingBottom: 8 }}>
 
-              {/* ── DASHBOARD section ── */}
+            {/* ── DASHBOARD section ── */}
+            {(sidebarPinned || isMobile) && (
               <div style={{ padding: "8px 16px 4px", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.38)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
                 Dashboard
               </div>
-              {(isInternal || isPartner) && sidebarNavBtn("Contacts", showContacts && !showTasksContacts, function() {
-                setTypeFilter("all");
-                // Always bump key — deselects any open contact and returns to list
-                setContactsKey(function(k) { return k + 1; });
-                setShowContacts(true);
+            )}
+            {(isInternal || isPartner) && sidebarNavBtn("Contacts", showContacts && !showTasksContacts, function() {
+              setTypeFilter("all");
+              setContactsKey(function(k) { return k + 1; });
+              setShowContacts(true);
+              setShowTasksScenarios(false);
+              setShowTasksContacts(false);
+              setShowUsers(false);
+              setPendingContactId(null);
+              if (isMobile) setMobileSidebarOpen(false);
+            }, "👤")}
+            {(function() {
+              const active = !showContacts && !showTasksScenarios && !showTasksContacts && groupFilter === "active";
+              return sidebarNavBtn("Scenarios", active, function() {
+                setGroupFilter("active");
+                setShowContacts(false);
                 setShowTasksScenarios(false);
                 setShowTasksContacts(false);
                 setShowUsers(false);
-                setPendingContactId(null);
+                if (activeScenario !== null) { handleBackToScenarios(); }
                 if (isMobile) setMobileSidebarOpen(false);
-              })}
-              {(function() {
-                const active = !showContacts && !showTasksScenarios && !showTasksContacts && groupFilter === "active";
-                return sidebarNavBtn("Scenarios", active, function() {
-                  setGroupFilter("active");
-                  setShowContacts(false);
-                  setShowTasksScenarios(false);
-                  setShowTasksContacts(false);
-                  setShowUsers(false);
-                  // If a scenario is open in the toolkit, save and close it back to the dashboard
-                  if (activeScenario !== null) { handleBackToScenarios(); }
-                  if (isMobile) setMobileSidebarOpen(false);
-                });
-              })()}
+              }, "📋");
+            })()}
 
-
-              {/* ── TEAM section (admin only) ── */}
-              {loggedInUser && loggedInUser.role === "admin" && (
-                <React.Fragment>
-                  <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "8px 16px 0" }} />
+            {/* ── TEAM section (admin only) ── */}
+            {loggedInUser && loggedInUser.role === "admin" && (
+              <React.Fragment>
+                {(sidebarPinned || isMobile) && <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "8px 16px 0" }} />}
+                {(sidebarPinned || isMobile) && (
                   <div style={{ padding: "8px 16px 4px", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.38)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
                     Team
                   </div>
-                  {sidebarNavBtn("Teams & Users", showUsers, function() {
-                    setShowUsers(true);
-                    setShowContacts(false);
-                    setShowTasksScenarios(false);
-                    setShowTasksContacts(false);
-                    if (isMobile) setMobileSidebarOpen(false);
-                  })}
-                </React.Fragment>
-              )}
+                )}
+                {sidebarNavBtn("Teams & Users", showUsers, function() {
+                  setShowUsers(true);
+                  setShowContacts(false);
+                  setShowTasksScenarios(false);
+                  setShowTasksContacts(false);
+                  if (isMobile) setMobileSidebarOpen(false);
+                }, "👥")}
+              </React.Fragment>
+            )}
 
-            </div>
-          )}
+          </div>
 
-          {/* ── Profile pinned to bottom of sidebar ── */}
-          {(sidebarPinned || isMobile) && window.AppHeader && (
-            <div style={{
-              flexShrink: 0,
-              borderTop: "1px solid rgba(255,255,255,0.12)",
-              padding: "8px 14px",
-              display: "flex", alignItems: "center",
-            }}>
-              {React.createElement(window.AppHeader, {
-                user: loggedInUser,
-                darkMode: darkMode,
-                setDarkMode: setDarkMode,
-                userRole: userRole,
-                setUserRole: isInternal ? setUserRole : null,
-                onTeam: (loggedInUser && loggedInUser.role === "admin") ? function() { setShowUsers(true); } : null,
-                onLogout: handleLogout,
-                isInternal: isInternal,
-                isAdmin: !!(loggedInUser && loggedInUser.role === "admin"),
-              })}
-            </div>
-          )}
+          {/* ── Profile pinned to bottom of sidebar — always visible ── */}
+          <div style={{
+            flexShrink: 0,
+            borderTop: "1px solid rgba(255,255,255,0.12)",
+            padding: (sidebarPinned || isMobile) ? "8px 14px" : "8px 0",
+            display: "flex", alignItems: "center",
+            justifyContent: (sidebarPinned || isMobile) ? "flex-start" : "center",
+          }}>
+            {(sidebarPinned || isMobile) && window.AppHeader
+              ? React.createElement(window.AppHeader, {
+                  user: loggedInUser,
+                  darkMode: darkMode,
+                  setDarkMode: setDarkMode,
+                  userRole: userRole,
+                  setUserRole: isInternal ? setUserRole : null,
+                  onTeam: (loggedInUser && loggedInUser.role === "admin") ? function() { setShowUsers(true); } : null,
+                  onLogout: handleLogout,
+                  isInternal: isInternal,
+                  isAdmin: !!(loggedInUser && loggedInUser.role === "admin"),
+                })
+              : (
+                <button
+                  title={(loggedInUser && loggedInUser.name) || "Profile"}
+                  onClick={function() { setSidebarPinned(true); }}
+                  style={{
+                    width: 32, height: 32, borderRadius: "50%",
+                    background: "linear-gradient(135deg, #3b82f6, #1d4ed8)",
+                    border: "2px solid rgba(255,255,255,0.25)",
+                    color: "#fff", fontSize: 13, fontWeight: 700,
+                    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                    fontFamily: "'Inter', system-ui, sans-serif", flexShrink: 0,
+                  }}
+                >
+                  {loggedInUser && loggedInUser.name
+                    ? loggedInUser.name.trim().split(/\s+/).map(function(w) { return w[0]; }).join("").slice(0, 2).toUpperCase()
+                    : "?"}
+                </button>
+              )
+            }
+          </div>
         </div>
       )}
 
@@ -1934,7 +1972,6 @@ function App() {
         display: "flex", flexDirection: "column",
       }}>
         {pageContent}
-        {!inToolkit && <PersistentFooter />}
       </div>
     </React.Fragment>
   );

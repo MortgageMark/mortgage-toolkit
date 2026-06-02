@@ -701,6 +701,11 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
     propagateSharedValues();
   }, [activeModule, propagateSharedValues]);
 
+  // Scroll content to top whenever the active tab changes
+  useEffect(() => {
+    if (contentRef.current) contentRef.current.scrollTop = 0;
+  }, [activeModule]);
+
   // Also listen for localStorage changes (covers Payment Calculator edits in real-time)
   useEffect(() => {
     const watchKeys = ["mtk_pc_hp", "mtk_pc_la", "mtk_pc_rate", "mtk_pc_taxm", "mtk_pc_taxr", "mtk_pc_tax", "mtk_pc_insm", "mtk_pc_insr", "mtk_pc_ins", "mtk_pc_hse", "mtk_pc_state", "mtk_pc_city", "mtk_pc_county"];
@@ -1372,18 +1377,13 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                   isInternal={isInternal}
                   isAdmin={isAdmin}
                 />
-                {!navCollapsed && (
-                  <span style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.65)", fontFamily: window.font, marginLeft: 4, userSelect: "none" }}>
-                    {({ admin: "Admin View", lo: "LO View", client: "Client View", realtor: "Realtor View", builder: "Builder View" })[userRole] || "LO View"}
-                  </span>
-                )}
               </div>
             )}
           </div>
         )}
 
         {/* ── Content ── */}
-        <div ref={contentRef} style={{ flex: 1, minWidth: 0, padding: isMobile ? "12px 12px 40px" : 20, overflowY: "auto", overflowX: "hidden" }}>
+        <div ref={contentRef} style={{ flex: 1, minWidth: 0, padding: isMobile ? "12px 12px 0" : "20px 20px 0", paddingBottom: isMobile ? "max(100px, calc(env(safe-area-inset-bottom, 0px) + 80px))" : 40, overflowY: "auto", overflowX: "hidden" }}>
         {isSharedView && (
           <div style={{ padding: "8px 14px", background: darkMode ? "#1A3040" : "#E8F4FD", borderRadius: 8, marginBottom: 16, fontSize: 12, color: COLORS.blue, fontWeight: 600, fontFamily: font, border: `1px solid ${COLORS.blue}33` }}>
             {"\uD83D\uDCCE"} Shared View — Showing {filteredModules.length} selected tool{filteredModules.length !== 1 ? "s" : ""}. <a href={window.location.href.split("?")[0]} style={{ color: COLORS.blue, textDecoration: "underline" }}>{"View full toolkit \u2192"}</a>
@@ -1528,11 +1528,27 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
           </button>
         </div>
 
+        {/* ── Disclaimer Footer ── */}
+        <div style={{
+          marginTop: 24,
+          background: "rgba(10, 34, 56, 0.94)",
+          borderTop: "1px solid rgba(255,255,255,0.10)",
+          padding: "6px 20px",
+          textAlign: "center",
+          fontSize: 12,
+          color: "rgba(255,255,255,0.68)",
+          fontFamily: font,
+          lineHeight: 1.55,
+        }}>
+          Not a commitment to lend. All loans subject to credit approval and underwriting.
+          Rates shown are estimates only and subject to change without notice.{" "}
+          Mark Pfeiffer | NMLS #729612 | CMG Home Loans | NMLS #1820 | Equal Housing Lender |{" "}
+          NMLS Consumer Access: www.nmlsconsumeraccess.org
+        </div>
+
       </div>
 
       </div>{/* end page-body flex */}
-
-      <div style={{ height: 32 }} />
 
       {/* ── Live Session Popover — fixed, escapes overflow:hidden sidebar ── */}
       {showLivePanel && livePanelPos && LiveSessionBar && syncScenarioId && (

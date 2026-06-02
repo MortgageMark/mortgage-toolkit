@@ -1,5 +1,5 @@
 // modules/screens/LoginScreen.js
-const { useState } = React;
+const { useState, useEffect } = React;
 const useThemeColors = window.useThemeColors;
 const supabase = window._supabaseClient;
 const resolvePendingSharesForUser = window.resolvePendingSharesForUser;
@@ -7,8 +7,50 @@ const resolvePendingSharesForUser = window.resolvePendingSharesForUser;
 function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
   const c = useThemeColors();
   const font = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-  // If arriving from a magic link, default to signup so new clients can create an account
-  const [mode, setMode] = useState(viewPrefill ? "signup" : "signin");
+  // LO referral — resolved from ?lo= NMLS param stored in sessionStorage
+  const [loRef,   setLoRef]   = useState(null); // { id, display_name, nmls }
+  // Realtor/Builder referral — resolved from ?from= contact UUID
+  const [fromRef, setFromRef] = useState(null); // { id, first_name, last_name, company, photo_url, logo_url, assigned_lo_id, assigned_lo_name }
+
+  useEffect(function() {
+    if (!supabase) return;
+    // Resolve ?lo= (LO by NMLS)
+    var nmls = null;
+    try { nmls = sessionStorage.getItem("mtk_lo_ref"); } catch(e) {}
+    if (nmls) {
+      supabase.from("profiles")
+        .select("id, display_name, nmls, role")
+        .eq("nmls", nmls)
+        .in("role", ["admin", "internal"])
+        .limit(1).maybeSingle()
+        .then(function(res) { if (res.data) setLoRef(res.data); });
+    }
+    // Resolve ?from= (Realtor/Builder by contact UUID)
+    var fromId = null;
+    try { fromId = sessionStorage.getItem("mtk_from_ref"); } catch(e) {}
+    if (fromId) {
+      supabase.from("contacts")
+        .select("id, first_name, last_name, company, photo_url, logo_url, assigned_lo_id, contact_category")
+        .eq("id", fromId)
+        .limit(1).maybeSingle()
+        .then(function(res) {
+          if (!res.data) return;
+          var c = res.data;
+          // If they have an assigned LO, fetch that name too
+          if (c.assigned_lo_id) {
+            supabase.from("profiles").select("id, display_name").eq("id", c.assigned_lo_id).limit(1).maybeSingle()
+              .then(function(loRes) {
+                setFromRef(Object.assign({}, c, { assigned_lo_name: loRes.data ? (loRes.data.display_name || "") : "" }));
+              });
+          } else {
+            setFromRef(Object.assign({}, c, { assigned_lo_name: "" }));
+          }
+        });
+    }
+  }, []);
+
+  // If arriving from a magic link or referral link, default to signup
+  const [mode, setMode] = useState((viewPrefill || (() => { try { return !!(sessionStorage.getItem("mtk_lo_ref") || sessionStorage.getItem("mtk_from_ref")); } catch(e) { return false; } })()) ? "signup" : "signin");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
@@ -197,7 +239,12 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
         syncProfileToRoster(user.id, displayName, role, profile);
 
         // Ensure a contact record exists; returns new contact ID for brand-new users
-        const newContactId = await ensureContactForNewUser(displayName, user.email, role, suPhone.trim(), suFirstName.trim(), suLastName.trim());
+        const assignedLoId      = loRef   ? loRef.id          : (fromRef && fromRef.assigned_lo_id ? fromRef.assigned_lo_id : null);
+        const referredByContact = fromRef ? fromRef.id         : null;
+        const newContactId = await ensureContactForNewUser(displayName, user.email, role, suPhone.trim(), suFirstName.trim(), suLastName.trim(), assignedLoId, referredByContact);
+        // Clear referral tokens after successful signup
+        try { sessionStorage.removeItem("mtk_lo_ref");   } catch(e) {}
+        try { sessionStorage.removeItem("mtk_from_ref"); } catch(e) {}
 
         // Resolve any pending scenario shares addressed to this email
         if (resolvePendingSharesForUser) {
@@ -244,7 +291,7 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
 
   // Helper: create a contact record for a newly registered user.
   // Returns the new contact's ID if just created, or null if one already existed.
-  async function ensureContactForNewUser(displayName, email, role, phone, firstName, lastName) {
+  async function ensureContactForNewUser(displayName, email, role, phone, firstName, lastName, assignedLoId, referredByContactId) {
     if (!supabase || !email) return null;
     try {
       // Check if a contact with this email already exists in this tenant
@@ -263,18 +310,23 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
       const resolvedFirst = (firstName || "").trim() || ((displayName || "").trim().split(/\s+/)[0] || "");
       const resolvedLast  = (lastName  || "").trim() || ((displayName || "").trim().split(/\s+/).slice(1).join(" ") || "");
 
-      const { data: newContact, error: insertErr } = await supabase.from("contacts").insert({
+      const contactPayload = {
         first_name:      resolvedFirst,
         last_name:       resolvedLast,
         email:           email.toLowerCase(),
         email_personal:  email.toLowerCase(),
-        phone_cell:      (phone || "").replace(/\D/g, ""),  // digits only → matches phone_cell column
+        phone_cell:      (phone || "").replace(/\D/g, ""),
         contact_type:    "client",
-        status:       "active",
-        tags:         [],
-        source:       "self-signup",
-        notes:        "",
-      }).select("id").single();
+        status:          "active",
+        tags:            [],
+        source:          "self-signup",
+        notes:           "",
+      };
+      if (assignedLoId)        contactPayload.assigned_lo_id         = assignedLoId;
+      if (referredByContactId) contactPayload.referred_by_contact_id = referredByContactId;
+      if (assignedLoId)        contactPayload.creator_id             = assignedLoId;
+
+      const { data: newContact, error: insertErr } = await supabase.from("contacts").insert(contactPayload).select("id").single();
 
       if (insertErr) {
         // Likely missing RLS INSERT policy — deploy supabase-signup-contact-migration.sql
@@ -564,6 +616,36 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
 
       // ── Sign Up tab ──
       mode === "signup" && React.createElement("div", null,
+        // Referral attribution banner — LO link or Realtor/Builder link
+        (loRef || fromRef) && React.createElement("div", {
+          style: {
+            display: "flex", alignItems: "center", gap: 12,
+            background: "linear-gradient(90deg, #0C4160, #1A5E8A)",
+            borderRadius: 10, padding: "12px 16px", marginBottom: 16,
+          }
+        },
+          // Photo / logo
+          fromRef && (fromRef.photo_url || fromRef.logo_url)
+            ? React.createElement("img", {
+                src: fromRef.photo_url || fromRef.logo_url,
+                alt: "",
+                style: { width: 48, height: 48, borderRadius: fromRef.photo_url ? "50%" : 8, objectFit: "cover", flexShrink: 0, border: "2px solid rgba(255,255,255,0.3)" }
+              })
+            : React.createElement("span", { style: { fontSize: 24, lineHeight: 1 } }, "🏠"),
+          React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 11, color: "rgba(255,255,255,0.70)", fontFamily: font, marginBottom: 2 } },
+              fromRef ? "You're signing up through" : "You're signing up with"
+            ),
+            React.createElement("div", { style: { fontSize: 15, fontWeight: 700, color: "#fff", fontFamily: font } },
+              fromRef
+                ? (((fromRef.first_name || "") + " " + (fromRef.last_name || "")).trim() || "Your Agent") + (fromRef.company ? "  ·  " + fromRef.company : "")
+                : (loRef.display_name || "Your Loan Officer")
+            ),
+            fromRef && fromRef.assigned_lo_name && React.createElement("div", { style: { fontSize: 12, color: "rgba(255,255,255,0.75)", fontFamily: font, marginTop: 2 } },
+              "with " + fromRef.assigned_lo_name
+            )
+          )
+        ),
         React.createElement("div", { style: { display: "flex", gap: 10, marginBottom: 14 } },
           React.createElement("div", { style: { flex: 1 } },
             React.createElement("label", { style: labelStyle }, "FIRST NAME"),

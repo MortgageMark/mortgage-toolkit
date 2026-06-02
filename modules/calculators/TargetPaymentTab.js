@@ -356,7 +356,7 @@ function TargetPaymentTab() {
                 <span style={{ padding: "10px 11px", background: isDark ? "#1A2530" : "#E8EEF5", border: "1.5px solid " + (isDark ? "#3A5A7A" : "#93B8D4"), borderRight: "none", borderRadius: "8px 0 0 8px", fontSize: 15, color: c.textSecondary || "#64748b", fontWeight: 600 }}>$</span>
                 <input
                   type="text"
-                  inputMode="numeric"
+                  onFocus={(e) => e.target.select()} inputMode="numeric"
                   placeholder={"e.g. " + (analysis ? Math.round((paymentMode === "PITI" ? analysis.currentPITI : analysis.currentPI) * 0.9).toLocaleString("en-US") : "2,000")}
                   value={targetPI ? Number(targetPI).toLocaleString("en-US") : ""}
                   onChange={function(e) {
@@ -651,7 +651,7 @@ function TargetPaymentTab() {
                   <span style={{ fontSize: 12, color: c.textSecondary || "#64748b" }}>SPMI premium override:</span>
                   <div style={{ display: "flex", alignItems: "center" }}>
                     <span style={{ ...inpStyle, background: isDark ? "#1A2530" : "#E8EEF5", borderRight: "none", borderRadius: "6px 0 0 6px" }}>$</span>
-                    <input type="text" inputMode="numeric"
+                    <input type="text" onFocus={(e) => e.target.select()} inputMode="numeric"
                       placeholder={"~" + spmi.costEst.toLocaleString("en-US")}
                       value={spmiOvr ? Number(spmiOvr).toLocaleString("en-US") : ""}
                       onChange={function(e) { setSpmiOvr(e.target.value.replace(/[^0-9]/g, "")); }}
@@ -713,7 +713,7 @@ function TargetPaymentTab() {
                 <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <span style={{ fontSize: 12, color: c.textSecondary || "#64748b" }}>Rate increase override:</span>
                   <div style={{ display: "flex", alignItems: "center" }}>
-                    <input type="text" inputMode="decimal"
+                    <input type="text" onFocus={(e) => e.target.select()} inputMode="decimal"
                       placeholder={"~" + lpmi.rateIncEst.toFixed(3)}
                       value={lpmiOvr || ""}
                       onChange={function(e) { setLpmiOvr(e.target.value.replace(/[^0-9.]/g, "")); }}

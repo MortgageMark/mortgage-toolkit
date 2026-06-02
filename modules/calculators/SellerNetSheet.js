@@ -92,7 +92,7 @@ function dayOfYear(dateStr) {
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
-function SellerNetSheet({ isInternal = false, user = null }) {
+function SellerNetSheet({ isInternal = false, user = null, contact = null, scenario = null }) {
   const today = new Date();
   const defaultCD = `${today.getFullYear()}-${String(today.getMonth() + 2 > 12 ? 1 : today.getMonth() + 2).padStart(2, "0")}-15`;
 
@@ -116,8 +116,11 @@ function SellerNetSheet({ isInternal = false, user = null }) {
   const [annualTax, setAnnualTax]   = useLocalStorage("sns_anntax", "");
   const [taxMode, setTaxMode]       = useLocalStorage("sns_taxmode", "auto");
   const [taxManual, setTaxManual]   = useLocalStorage("sns_taxmanual", "");
-  const [hoaTransfer, setHoaTransfer] = useLocalStorage("sns_hoatrans2", "");
-  const [prepaidHOA, setPrepaidHOA]   = useLocalStorage("sns_hoapre", "");
+  const [hoaTransfer,   setHoaTransfer]   = useLocalStorage("sns_hoatrans2", "");
+  const [annualHOA,     setAnnualHOA]     = useLocalStorage("sns_hoa_annual", "");
+  const [hoaPaidThrough, setHoaPaidThrough] = useLocalStorage("sns_hoa_paid_thru", (() => {
+    const y = new Date().getFullYear(); return y + "-12-31";
+  })());
 
   // Options
   const [sellerPaysTitle, setSellerPaysTitle] = useLocalStorage("sns_title_on", true);
@@ -179,7 +182,24 @@ function SellerNetSheet({ isInternal = false, user = null }) {
 
     const hoaTrans   = parseFloat(hoaTransfer) || 0;
     const repair     = parseFloat(repairCredits) || 0;
-    const totalPropAdj = taxProrate + hoaTrans + repair;
+
+    // HOA proration: positive = credit to seller (add-back), negative = debit to seller
+    const annHOA = parseFloat(annualHOA) || 0;
+    let hoaProrate = 0;
+    let hoaProrateLabel = "";
+    if (annHOA > 0 && closingDate && hoaPaidThrough) {
+      const closing  = new Date(closingDate  + "T00:00:00");
+      const paidThru = new Date(hoaPaidThrough + "T00:00:00");
+      const diffDays = Math.round((paidThru - closing) / (1000 * 60 * 60 * 24));
+      hoaProrate = Math.round(annHOA / 365 * diffDays);
+      hoaProrateLabel = diffDays > 0
+        ? "Seller pre-paid " + diffDays + " day" + (diffDays !== 1 ? "s" : "") + " of HOA → credit to seller"
+        : diffDays < 0
+          ? "HOA owed for " + Math.abs(diffDays) + " day" + (Math.abs(diffDays) !== 1 ? "s" : "") + " → debit to seller"
+          : "HOA paid through closing — no adjustment";
+    }
+
+    const totalPropAdj = taxProrate + hoaTrans + repair + (hoaProrate < 0 ? Math.abs(hoaProrate) : 0);
 
     const conc       = parseFloat(sellerConc) || 0;
     const titleAmt     = sellerPaysTitle ? Math.round(stT.basicRate(sp)) : 0;
@@ -209,8 +229,8 @@ function SellerNetSheet({ isInternal = false, user = null }) {
     const totalDeductions = totalMortPayoffs + commission + totalBuyerCosts + totalPropAdj + totalSellerFees + totalOtherExpenses;
 
     const realtorCred    = parseFloat(realtorCredit) || 0;
-    const prepaidHOAAmt  = parseFloat(prepaidHOA) || 0;
-    const totalAddBacks  = realtorCred + prepaidHOAAmt + esc;
+    const hoaAddBack     = hoaProrate > 0 ? hoaProrate : 0;
+    const totalAddBacks  = realtorCred + hoaAddBack + esc;
 
     const netProceeds = sp - totalDeductions + totalAddBacks;
 
@@ -222,7 +242,8 @@ function SellerNetSheet({ isInternal = false, user = null }) {
       settlement, docPrep, courier, taxCert, recording, transferTax, guaranty, attorney, totalSellerFees,
       oth1, oth2, oth3, totalOtherExpenses,
       totalDeductions,
-      realtorCred, prepaidHOAAmt, escRefund: esc, totalAddBacks,
+      hoaProrate, hoaProrateLabel, hoaAddBack,
+      realtorCred, escRefund: esc, totalAddBacks,
       netProceeds,
       transferTaxLabel: stF.transferTaxLabel,
       stateName: stT.name || selectedState,
@@ -240,7 +261,7 @@ function SellerNetSheet({ isInternal = false, user = null }) {
     };
   }, [selectedState, salePrice, closingDate, mort1, mort2, escrowBal,
       commissionPct, sellerConc, repairCredits, realtorCredit,
-      annualTax, taxMode, taxManual, hoaTransfer, prepaidHOA,
+      annualTax, taxMode, taxManual, hoaTransfer, annualHOA, hoaPaidThrough,
       sellerPaysTitle, includeHW, hwAmt, includeSurvey, surveyAmt,
       ovSettlement, ovDocPrep, ovCourier, ovTaxCert, ovRecording, ovTransfer, ovAttorney, ovGuaranty,
       otherAmt1, otherAmt2, otherAmt3]);
@@ -324,8 +345,7 @@ function SellerNetSheet({ isInternal = false, user = null }) {
                 Closing Date (for the sale of your home)
               </label>
               <input type="date" value={closingDate} onChange={e => setClosingDate(e.target.value)}
-                style={{ width: "100%", padding: "8px 10px", border: `1px solid ${COLORS.border}`, borderRadius: 6,
-                  fontSize: 13, fontFamily: font, color: COLORS.navy, background: "#fff", outline: "none", boxSizing: "border-box" }} />
+                style={{ width: "100%", padding: "10px 12px", border: `1.5px solid ${COLORS.border}`, borderRadius: 8, fontSize: 15, fontFamily: font, color: COLORS.navy, background: "#fff", outline: "none", boxSizing: "border-box" }} />
               {closingDate && taxMode === "auto" && parseFloat(annualTax) > 0 && (
                 <div style={{ fontSize: 12, color: COLORS.grayLight, marginTop: 2, fontFamily: font }}>
                   Day {dayOfYear(closingDate)} of year — tax prorate auto-calculated
@@ -377,27 +397,20 @@ function SellerNetSheet({ isInternal = false, user = null }) {
           <SectionCard title="PROPERTY & HOA" accent={COLORS.blue}>
             <LabeledInput label="Annual Property Taxes" prefix="$" value={annualTax} onChange={setAnnualTax} useCommas
               infoTip="Enter the most recent full-year property tax bill. This is used to calculate the seller's tax proration — the portion of the year's taxes owed for the days they owned the property. In Texas, taxes are paid in arrears, so the seller credits the buyer for the days already passed in the tax year." />
-            <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
-              <button onClick={() => setTaxMode("auto")} style={{ flex: 1, padding: "6px 10px", borderRadius: 6, border: `1px solid ${taxMode === "auto" ? COLORS.blue : COLORS.border}`, background: taxMode === "auto" ? COLORS.blue : "#fff", color: taxMode === "auto" ? "#fff" : COLORS.navy, fontSize: 12, fontWeight: 600, fontFamily: font, cursor: "pointer" }}>
-                Auto Prorate
-              </button>
-              <button onClick={() => setTaxMode("manual")} style={{ flex: 1, padding: "6px 10px", borderRadius: 6, border: `1px solid ${taxMode === "manual" ? COLORS.blue : COLORS.border}`, background: taxMode === "manual" ? COLORS.blue : "#fff", color: taxMode === "manual" ? "#fff" : COLORS.navy, fontSize: 12, fontWeight: 600, fontFamily: font, cursor: "pointer" }}>
-                Manual
-              </button>
+            <div style={{ fontSize: 12, color: COLORS.grayLight, marginBottom: 8, fontFamily: font }}>
+              Auto-prorated: days elapsed ÷ 365 × annual taxes
             </div>
-            {taxMode === "manual" && (
-              <LabeledInput label="Tax Prorate (manual)" prefix="$" value={taxManual} onChange={setTaxManual} useCommas />
-            )}
-            {taxMode === "auto" && (
-              <div style={{ fontSize: 12, color: COLORS.grayLight, marginBottom: 8, fontFamily: font }}>
-                Auto: days elapsed ÷ 365 × annual taxes
+            <LabeledInput label="Annual HOA Dues" prefix="$" value={annualHOA} onChange={setAnnualHOA} useCommas
+              infoTip="The total annual HOA dues for this property. Used to calculate the proration at closing — whether the seller owes money or gets a credit depends on when dues are paid through vs. the closing date." />
+            <LabeledInput label="HOA Dues Paid Through" value={hoaPaidThrough} onChange={setHoaPaidThrough} type="date"
+              infoTip="The date through which the seller has already paid HOA dues. If this is after the closing date, the buyer reimburses the seller for the overpaid days (credit). If before, the seller owes dues for the gap (debit)." />
+            {annualHOA && closingDate && calc.hoaProrateLabel && (
+              <div style={{ fontSize: 12, color: calc.hoaProrate > 0 ? COLORS.green : calc.hoaProrate < 0 ? COLORS.red : COLORS.grayLight, fontFamily: font, marginBottom: 8, padding: "6px 10px", background: calc.hoaProrate > 0 ? COLORS.greenLight : calc.hoaProrate < 0 ? COLORS.redLight : COLORS.bg, borderRadius: 6, border: `1px solid ${calc.hoaProrate > 0 ? COLORS.green + "44" : calc.hoaProrate < 0 ? COLORS.red + "44" : COLORS.border}` }}>
+                {calc.hoaProrateLabel}{calc.hoaProrate !== 0 ? " (" + fmt(Math.abs(calc.hoaProrate)) + ")" : ""}
               </div>
             )}
             <LabeledInput label="HOA Transfer Fee" prefix="$" value={hoaTransfer} onChange={setHoaTransfer} useCommas
-              infoTip="A fee charged by the HOA to transfer membership from the seller to the buyer. Who pays — and how much — is typically determined by the sales contract. For existing homes, $250 is common. For new construction, it can be $1,200 or more at closing." />
-            <LabeledInput label="Prepaid HOA Dues (add-back)" prefix="$" value={prepaidHOA} onChange={setPrepaidHOA} useCommas
-              hint="Reimbursed to seller by buyer"
-              infoTip="If the seller has already paid HOA dues covering a period beyond the closing date, the buyer reimburses the seller for those unused days. This is an add-back — it increases the seller's net proceeds rather than reducing them." />
+              infoTip="A fee charged by the HOA to transfer membership from the seller to the buyer. For existing homes, $250 is common. For new construction, it can be $1,200 or more at closing." />
           </SectionCard>
 
           {/* OPTIONAL: SELLER PAID ITEMS */}
@@ -477,7 +490,18 @@ function SellerNetSheet({ isInternal = false, user = null }) {
             <div>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", color: COLORS.grayLight, textTransform: "uppercase" }}>Prepared For</div>
               <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.navy, marginTop: 2 }}>
-                {sellerName ? sellerName : <span style={{ color: COLORS.grayLight, fontStyle: "italic", fontWeight: 400, fontSize: 12 }}>Add seller name in Sale Details →</span>}
+                {(function() {
+                  if (sellerName) return sellerName;
+                  if (contact) {
+                    var name = [contact.first_name, contact.last_name].filter(Boolean).join(" ").trim();
+                    if (name) return name;
+                  }
+                  if (scenario) {
+                    var sn = (scenario.clientName || scenario.name || "").trim();
+                    if (sn) return sn;
+                  }
+                  return null;
+                })() || <span style={{ color: COLORS.grayLight, fontStyle: "italic", fontWeight: 400, fontSize: 12 }}>No contact linked to this scenario</span>}
               </div>
             </div>
             <div style={{ textAlign: "right" }}>
@@ -563,10 +587,9 @@ function SellerNetSheet({ isInternal = false, user = null }) {
             {calc.totalPropAdj > 0 && (
               <div style={{ marginBottom: 14 }}>
                 <GroupHeader label="PROPERTY ADJUSTMENTS" />
-                {calc.taxProrate > 0 && (
-                  <FeeRow label={`Property Tax Prorate${taxMode === "auto" ? " (auto)" : " (manual)"}`} amount={calc.taxProrate} indent />
-                )}
+                {calc.taxProrate > 0 && <FeeRow label="Property Tax Prorate (auto)" amount={calc.taxProrate} indent />}
                 {calc.hoaTrans > 0 && <FeeRow label="HOA Transfer Fee" amount={calc.hoaTrans} indent />}
+                {calc.hoaProrate < 0 && <FeeRow label="HOA Dues Owed at Closing" amount={Math.abs(calc.hoaProrate)} indent />}
                 {calc.repair > 0 && <FeeRow label="Repair Credits" amount={calc.repair} indent />}
                 <FeeRow label="Subtotal — Property Adjustments" amount={calc.totalPropAdj} bold />
               </div>
@@ -594,7 +617,7 @@ function SellerNetSheet({ isInternal = false, user = null }) {
               <div style={{ marginBottom: 14 }}>
                 <GroupHeader label="ADD-BACKS (RETURNED TO SELLER)" />
                 {calc.realtorCred > 0 && <FeeRow label="Realtor Credit to Seller" amount={calc.realtorCred} indent color={COLORS.green} />}
-                {calc.prepaidHOAAmt > 0 && <FeeRow label="Prepaid HOA Reimbursement" amount={calc.prepaidHOAAmt} indent color={COLORS.green} />}
+                {calc.hoaAddBack > 0 && <FeeRow label="HOA Dues Credit to Seller" amount={calc.hoaAddBack} indent color={COLORS.green} />}
                 {calc.escRefund > 0 && <FeeRow label="Escrow Account Balance Refund" amount={calc.escRefund} indent color={COLORS.green} />}
                 <FeeRow label="Total Add-Backs" amount={calc.totalAddBacks} bold color={COLORS.green} />
               </div>

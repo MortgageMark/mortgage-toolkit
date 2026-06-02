@@ -132,10 +132,10 @@ function FeeRow({ label, amount, bold, indent, color, editKey, editValue, onEdit
     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:`${bold?10:6}px 0`, borderBottom: bold?`2px solid ${COLORS.navy}`:`1px solid ${COLORS.border}`, marginLeft: indent?20:0, gap:8 }}>
       <span style={{ fontSize:bold?14:13, fontWeight:bold?700:400, color:color||COLORS.navy, fontFamily:font, flex:1 }}>{label}</span>
       {isInternal && editKey ? (
-        <input type="text"
+        <input type="text" inputMode="decimal"
           value={focused ? localVal : (localVal !== "" ? Number(localVal).toLocaleString() : "")}
           placeholder={fmt(defaultVal)}
-          onFocus={() => setFocused(true)}
+          onFocus={(e) => { setFocused(true); e.target.select(); }}
           onBlur={()  => setFocused(false)}
           onChange={e => { const raw = e.target.value.replace(/[^0-9.]/g,""); setLocalVal(raw); if (onEdit) onEdit(raw); }}
           style={{ width:120, textAlign:"right", fontSize:13, fontWeight:600, fontFamily:font, color:localVal!==""?COLORS.blue:COLORS.navy, border:`1px solid ${localVal!==""?COLORS.blue:COLORS.border}`, borderRadius:4, padding:"2px 6px", background:localVal!==""?"#EAF4FB":"transparent", outline:"none" }} />
@@ -154,9 +154,9 @@ function OtherFeeAmtInput({ amt, setAmt, border }) {
   const display = (!focused && raw !== "" && !isNaN(parsed)) ? (parsed < 0 ? "-" : "") + Math.abs(Math.round(parsed)).toLocaleString("en-US") : raw;
   return (
     <input
-      type="text"
+      type="text" inputMode="decimal"
       value={display}
-      onFocus={() => setFocused(true)}
+      onFocus={(e) => { setFocused(true); e.target.select(); }}
       onBlur={() => setFocused(false)}
       onChange={e => { const v = e.target.value.replace(/[^0-9\-]/g, "").replace(/(?!^)-/g, ""); setAmt(v); }}
       placeholder="0"
@@ -1087,7 +1087,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
               <input type="date" value={closingDate} onChange={e => {
                 const val = e.target.value;
                 setClosingDate(val);
-              }} style={{ width:"100%", padding:"8px 10px", border:`1px solid ${COLORS.border}`, borderRadius:6, fontSize:13, fontFamily:font, color:COLORS.navy, background:"#fff", outline:"none", boxSizing:"border-box" }} />
+              }} style={{ width:"100%", padding:"10px 12px", border:`1.5px solid ${COLORS.border}`, borderRadius:8, fontSize:15, fontFamily:font, color:COLORS.navy, background:"#fff", outline:"none", boxSizing:"border-box" }} />
               {fees.shortPayAdj > 0 ? (
                 <div style={{ marginTop:4, padding:"4px 8px", borderRadius:5, background:"#FFF3E0", border:"1px solid #B86B00", fontFamily:font }}>
                   <span style={{ fontSize:12, fontWeight:700, color:"#B86B00" }}>⚠ Short Pay Active</span>
@@ -1226,7 +1226,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                   type="date"
                   value={origTitleDate}
                   onChange={e => setOrigTitleDate(e.target.value)}
-                  style={{ width:"100%", padding:"6px 10px", border:`1px solid ${COLORS.border}`, borderRadius:6, fontSize:13, fontFamily:font, color:COLORS.navy, background:"#fff", outline:"none" }}
+                  style={{ width:"100%", padding:"10px 12px", border:`1.5px solid ${COLORS.border}`, borderRadius:8, fontSize:15, fontFamily:font, color:COLORS.navy, background:"#fff", outline:"none", boxSizing:"border-box" }}
                 />
                 {fees.txReissueCredit > 0 && (
                   <div style={{ fontSize:12, color:COLORS.green, fontWeight:600, marginTop:4, fontFamily:font }}>
@@ -1303,7 +1303,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                       setSellerExistingSurvey(v === "existing");
                     }
                   }}
-                  style={{ width:"100%", padding:"6px 10px", border:`1px solid ${COLORS.border}`, borderRadius:6, fontSize:13, fontFamily:font, color:COLORS.navy, background:"#fff", outline:"none" }}
+                  style={{ width:"100%", padding:"10px 12px", border:`1.5px solid ${COLORS.border}`, borderRadius:8, fontSize:15, fontFamily:font, color:COLORS.navy, background:"#fff", outline:"none", boxSizing:"border-box" }}
                 >
                   <option value="none">Buyer Pays for Survey</option>
                   <option value="new">Seller Pays for New Survey</option>
@@ -1373,7 +1373,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                   Next Tax Due Date{!nextTaxDueDate && <span style={{ color:COLORS.blue, fontWeight:400 }}> — default: Dec 31</span>}
                 </label>
                 <input type="date" value={nextTaxDueDate || effectiveTaxDue} onChange={e => setNextTaxDueDate(e.target.value)}
-                  style={{ width:"100%", padding:"6px 10px", border:`1px solid ${nextTaxDueDate ? COLORS.border : COLORS.blue}`, borderRadius:6, fontSize:13, fontFamily:font, color:COLORS.navy, background: nextTaxDueDate ? "#fff" : "#f0f5ff", outline:"none", boxSizing:"border-box", marginBottom:4 }} />
+                  style={{ width:"100%", padding:"10px 12px", border:`1.5px solid ${nextTaxDueDate ? COLORS.border : COLORS.blue}`, borderRadius:8, fontSize:15, fontFamily:font, color:COLORS.navy, background: nextTaxDueDate ? "#fff" : "#f0f5ff", outline:"none", boxSizing:"border-box", marginBottom:4 }} />
                 {!nextTaxDueDate && (() => {
                   const stateInfo = STATE_TAX_DUE_DATES[selectedState];
                   return (
@@ -1393,7 +1393,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                       {!insRenewalDate && !origTitleDate && <span style={{ color:COLORS.blue, fontWeight:400 }}> — default: 1 yr from closing</span>}
                     </label>
                     <input type="date" value={insRenewalDate || origTitleDate || ""} onChange={e => setInsRenewalDate(e.target.value)}
-                      style={{ width:"100%", padding:"6px 10px", border:`1px solid ${insRenewalDate ? COLORS.border : COLORS.blue}`, borderRadius:6, fontSize:13, fontFamily:font, color:COLORS.navy, background: insRenewalDate ? "#fff" : "#f0f5ff", outline:"none", boxSizing:"border-box", marginBottom:4 }} />
+                      style={{ width:"100%", padding:"10px 12px", border:`1.5px solid ${insRenewalDate ? COLORS.border : COLORS.blue}`, borderRadius:8, fontSize:15, fontFamily:font, color:COLORS.navy, background: insRenewalDate ? "#fff" : "#f0f5ff", outline:"none", boxSizing:"border-box", marginBottom:4 }} />
                     {!insRenewalDate && origTitleDate && (
                       <div style={{ fontSize:12, color:COLORS.blue, marginTop:2, marginBottom:4, fontFamily:font, fontStyle:"italic" }}>
                         ℹ Using next renewal {_nextInsRenewal} (based on Original Loan Date month/day) — override above if different.
@@ -1604,7 +1604,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                 <div style={{ marginTop:4, marginBottom:4 }}>
                   <label style={{ display:"block", fontSize:11, fontWeight:600, color:COLORS.grayLight, marginBottom:3, fontFamily:font, letterSpacing:"0.04em" }}>HOA Collection Frequency</label>
                   <select value={hoaFrequency} onChange={e => setHoaFrequency(e.target.value)}
-                    style={{ width:"100%", padding:"6px 10px", border:`1px solid ${COLORS.border}`, borderRadius:6, fontSize:13, fontFamily:font, color:COLORS.navy, background:"#fff", outline:"none" }}>
+                    style={{ width:"100%", padding:"10px 12px", border:`1.5px solid ${COLORS.border}`, borderRadius:8, fontSize:15, fontFamily:font, color:COLORS.navy, background:"#fff", outline:"none", boxSizing:"border-box" }}>
                     <option value="annual">Annual</option>
                     <option value="semi-annual">Semi-Annual</option>
                     <option value="quarterly">Quarterly</option>
@@ -1647,7 +1647,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                   <div style={{ marginTop:6 }}>
                     <label style={{ display:"block", fontSize:11, fontWeight:600, color:COLORS.grayLight, marginBottom:3, fontFamily:font, letterSpacing:"0.04em" }}>Escrow Type</label>
                     <select value={ncEscrowType} onChange={e => setNcEscrowType(e.target.value)}
-                      style={{ width:"100%", padding:"6px 10px", border:`1px solid ${COLORS.border}`, borderRadius:6, fontSize:13, fontFamily:font, color:COLORS.navy, background:"#fff", outline:"none" }}>
+                      style={{ width:"100%", padding:"10px 12px", border:`1.5px solid ${COLORS.border}`, borderRadius:8, fontSize:15, fontFamily:font, color:COLORS.navy, background:"#fff", outline:"none", boxSizing:"border-box" }}>
                       <option value="improved">Improved Escrows (Full Tax)</option>
                       <option value="unimproved">Unimproved Escrows (ex: based off value lower than sales price)</option>
                     </select>
@@ -1655,7 +1655,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                   <div style={{ marginTop:6 }}>
                     <label style={{ display:"block", fontSize:11, fontWeight:600, color:COLORS.grayLight, marginBottom:3, fontFamily:font, letterSpacing:"0.04em" }}>Prorated Taxes from Seller</label>
                     <select value={ncProratedType} onChange={e => setNcProratedType(e.target.value)}
-                      style={{ width:"100%", padding:"6px 10px", border:`1px solid ${COLORS.border}`, borderRadius:6, fontSize:13, fontFamily:font, color:COLORS.navy, background:"#fff", outline:"none" }}>
+                      style={{ width:"100%", padding:"10px 12px", border:`1.5px solid ${COLORS.border}`, borderRadius:8, fontSize:15, fontFamily:font, color:COLORS.navy, background:"#fff", outline:"none", boxSizing:"border-box" }}>
                       <option value="unimproved">Unimproved Rate (Default)</option>
                       <option value="improved">Full Improved Rate</option>
                       <option value="none">No Seller Credit</option>
