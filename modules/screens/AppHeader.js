@@ -114,8 +114,8 @@ function AppHeader({
   return (
     <div ref={rootRef} style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
 
-      {/* ── View label ── */}
-      {userRole && (
+      {/* ── View label — only show for actual admins ── */}
+      {userRole && isAdmin && (
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{
             fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)",
