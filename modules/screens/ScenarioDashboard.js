@@ -94,7 +94,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
   // Read lang directly from localStorage (bypasses JSON.parse which breaks plain strings)
   const t = function(str) {
     var lang = "en";
-    try { lang = localStorage.getItem("app_lang") || "en"; } catch(e) {}
+    try { var _raw = localStorage.getItem("app_lang"); if (_raw) { try { lang = JSON.parse(_raw); } catch(e2) { lang = _raw; } } } catch(e) {}
     if (lang !== "es") return str;
     var tr = window.TRANSLATIONS_ES;
     return (tr && tr[str]) ? tr[str] : str;

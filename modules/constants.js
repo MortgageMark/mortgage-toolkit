@@ -594,7 +594,9 @@ const TRANSLATIONS_ES = {
 // Translation function — call t("English text") in any component
 function t(str) {
   try {
-    var lang = localStorage.getItem("app_lang") || "en";
+    var _raw = localStorage.getItem("app_lang");
+    var lang = "en";
+    if (_raw) { try { lang = JSON.parse(_raw); } catch(e2) { lang = _raw; } }
     if (lang === "es" && TRANSLATIONS_ES[str]) return TRANSLATIONS_ES[str];
   } catch(e) {}
   return str;
