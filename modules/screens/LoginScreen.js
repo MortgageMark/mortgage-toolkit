@@ -77,6 +77,7 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
   const [suPassword, setSuPassword] = useState("");
   const [suPassword2, setSuPassword2] = useState("");
   const [suRole, setSuRole] = useState("borrower");
+  const [suNmls, setSuNmls] = useState("");
 
   // Forgot password
   const [forgotMode, setForgotMode] = useState(false);
@@ -238,9 +239,16 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
 
         syncProfileToRoster(user.id, displayName, role, profile);
 
+        // Save NMLS to profile if provided (LO signup)
+        if (suRole === "internal" && suNmls.trim()) {
+          await supabase.from("profiles").update({ nmls: suNmls.trim() }).eq("id", user.id);
+        }
+
         // Ensure a contact record exists; returns new contact ID for brand-new users
-        const assignedLoId      = loRef   ? loRef.id          : (fromRef && fromRef.assigned_lo_id ? fromRef.assigned_lo_id : null);
-        const referredByContact = fromRef ? fromRef.id         : null;
+        // ?lo= links (LO referral) → auto-assign that LO
+        // ?from= links (Realtor/Builder referral) → NO auto-assign; Realtor uses Refer button
+        const assignedLoId      = loRef ? loRef.id : null;
+        const referredByContact = fromRef ? fromRef.id : null;
         const newContactId = await ensureContactForNewUser(displayName, user.email, role, suPhone.trim(), suFirstName.trim(), suLastName.trim(), assignedLoId, referredByContact);
         // Clear referral tokens after successful signup
         try { sessionStorage.removeItem("mtk_lo_ref");   } catch(e) {}
@@ -294,17 +302,29 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
   async function ensureContactForNewUser(displayName, email, role, phone, firstName, lastName, assignedLoId, referredByContactId) {
     if (!supabase || !email) return null;
     try {
-      // Check if a contact with this email already exists in this tenant
+      const emailLower = email.toLowerCase();
+
+      // Search across all email columns — Realtors/Builders may exist in multiple LOs' contacts
       const { data: existing, error: selectErr } = await supabase
         .from("contacts")
-        .select("id")
-        .eq("email", email.toLowerCase())
-        .limit(1);
+        .select("id, email, email_personal, email_work")
+        .or(`email.eq.${emailLower},email_personal.eq.${emailLower},email_work.eq.${emailLower}`);
       if (selectErr) {
         console.warn("Contact lookup failed:", selectErr.message, selectErr.code);
         return null;
       }
-      if (existing && existing.length > 0) return null; // already exists — returning user
+
+      if (existing && existing.length > 0) {
+        // For Realtors/Builders: stamp email_personal on ALL matching contacts so
+        // every LO's copy is properly linked to this account via email matching.
+        if (role === "realtor" || role === "builder") {
+          const ids = existing.map(function(c) { return c.id; });
+          await supabase.from("contacts")
+            .update({ email_personal: emailLower })
+            .in("id", ids);
+        }
+        return existing[0].id; // return first match as primary contact
+      }
 
       // Use explicitly-provided names; fall back to splitting displayName only as a safety net
       const resolvedFirst = (firstName || "").trim() || ((displayName || "").trim().split(/\s+/)[0] || "");
@@ -316,7 +336,11 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
         email:           email.toLowerCase(),
         email_personal:  email.toLowerCase(),
         phone_cell:      (phone || "").replace(/\D/g, ""),
-        contact_type:    "client",
+        contact_type:    (role === "internal" || role === "realtor" || role === "builder") ? "business" : "client",
+        contact_category: role === "internal" ? "Loan Officer"
+                        : role === "realtor"  ? "Realtor"
+                        : role === "builder"  ? "Home Builder"
+                        : null,
         status:          "active",
         tags:            [],
         source:          "self-signup",
@@ -641,7 +665,7 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
                 ? (((fromRef.first_name || "") + " " + (fromRef.last_name || "")).trim() || "Your Agent") + (fromRef.company ? "  ·  " + fromRef.company : "")
                 : (loRef.display_name || "Your Loan Officer")
             ),
-            fromRef && fromRef.assigned_lo_name && React.createElement("div", { style: { fontSize: 12, color: "rgba(255,255,255,0.75)", fontFamily: font, marginTop: 2 } },
+            false && fromRef && fromRef.assigned_lo_name && React.createElement("div", { style: { fontSize: 12, color: "rgba(255,255,255,0.75)", fontFamily: font, marginTop: 2 } },
               "with " + fromRef.assigned_lo_name
             )
           )
@@ -693,13 +717,27 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
           React.createElement("label", { style: labelStyle }, "I AM A"),
           React.createElement("select", {
             value: suRole,
-            onChange: function(e) { setSuRole(e.target.value); },
+            onChange: function(e) { setSuRole(e.target.value); setSuNmls(""); },
             style: inputStyle
           },
             React.createElement("option", { value: "borrower" }, "Client / Borrower"),
             React.createElement("option", { value: "realtor" }, "Realtor"),
             React.createElement("option", { value: "builder" }, "Builder"),
             React.createElement("option", { value: "internal" }, "Loan Officer")
+          )
+        ),
+        suRole === "internal" && React.createElement("div", { style: { marginBottom: 14 } },
+          React.createElement("label", { style: labelStyle }, "NMLS #"),
+          React.createElement("input", {
+            type: "text",
+            inputMode: "numeric",
+            value: suNmls,
+            onChange: function(e) { setSuNmls(e.target.value.replace(/\D/g, "")); },
+            style: inputStyle,
+            placeholder: "e.g. 729612"
+          }),
+          React.createElement("div", { style: { fontSize: 11, color: "#94A3B0", marginTop: 4, fontFamily: font } },
+            "Your NMLS number is used to generate your unique referral link."
           )
         ),
         React.createElement("div", { style: { marginBottom: 14 } },

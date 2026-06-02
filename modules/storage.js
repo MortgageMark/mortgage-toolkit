@@ -207,22 +207,44 @@ async function saveScenarioToSupabase({
   }
 }
 
-// --- fetchScenariosFromSupabase (original line 264) ---
+// --- fetchScenariosFromSupabase ---
 async function fetchScenariosFromSupabase() {
   const { data: { user }, error: authErr } = await supabase.auth.getUser();
   if (authErr || !user) return { data: [], error: authErr || new Error("Not logged in") };
+
   const { data: profile } = await supabase
-    .from("profiles").select("role").eq("id", user.id).single();
+    .from("profiles").select("role, team_lead_id").eq("id", user.id).single();
   const role = profile && profile.role;
-  const INTERNAL_ROLES = ["super_admin", "admin", "branch_admin", "internal"];
-  const canSeeAll = INTERNAL_ROLES.includes(role);
-  // RLS handles the actual row filtering (own + team scenarios for internal,
-  // all tenant scenarios for admin/super_admin/branch_admin).
-  // The user_id filter below is only a safeguard for non-internal roles (borrowers, realtors).
+
+  // Only true admins see everything
+  const ADMIN_ROLES = ["super_admin", "admin", "branch_admin"];
+  const isAdmin = ADMIN_ROLES.includes(role);
+
+  let allowedUserIds = null; // null = no filter (admin sees all)
+
+  if (!isAdmin) {
+    // Build team: own id + anyone who shares team_lead_id with me + my direct reports
+    let teamIds = [user.id];
+    const myTeamLeadId = profile && profile.team_lead_id;
+    if (myTeamLeadId) {
+      // Get teammates (same team lead) + the team lead themselves
+      const { data: teammates } = await supabase.from("profiles")
+        .select("id").eq("team_lead_id", myTeamLeadId);
+      if (teammates) teammates.forEach(t => teamIds.push(t.id));
+      teamIds.push(myTeamLeadId);
+    }
+    // Also include people who report directly to me
+    const { data: reports } = await supabase.from("profiles")
+      .select("id").eq("team_lead_id", user.id);
+    if (reports) reports.forEach(r => teamIds.push(r.id));
+    allowedUserIds = [...new Set(teamIds)];
+  }
+
   let query = supabase.from("scenarios").select("*").order("updated_at", { ascending: false });
-  if (!canSeeAll) { query = query.eq("user_id", user.id); }
+  if (allowedUserIds) query = query.in("user_id", allowedUserIds);
   const { data, error } = await query;
   if (error || !data) return { data: data || [], error };
+
   const userIds = [...new Set(data.map(r => r.user_id))];
   const { data: profiles } = await supabase
     .from("profiles").select("id, display_name").in("id", userIds);
@@ -435,10 +457,34 @@ async function fetchPQShares(scenarioId) {
 async function fetchContactsFromSupabase() {
   const { data: { user }, error: authErr } = await supabase.auth.getUser();
   if (authErr || !user) return { data: [], error: authErr || new Error("Not logged in") };
-  const { data, error } = await supabase
-    .from("contacts")
-    .select("*")
-    .order("updated_at", { ascending: false });
+
+  const { data: profile } = await supabase
+    .from("profiles").select("role, team_lead_id").eq("id", user.id).single();
+  const role = profile && profile.role;
+
+  const ADMIN_ROLES = ["super_admin", "admin", "branch_admin"];
+  const isAdmin = ADMIN_ROLES.includes(role);
+
+  let query = supabase.from("contacts").select("*").order("updated_at", { ascending: false });
+
+  if (!isAdmin) {
+    // Build team user ids (same logic as scenarios)
+    let teamIds = [user.id];
+    const myTeamLeadId = profile && profile.team_lead_id;
+    if (myTeamLeadId) {
+      const { data: teammates } = await supabase.from("profiles")
+        .select("id").eq("team_lead_id", myTeamLeadId);
+      if (teammates) teammates.forEach(t => teamIds.push(t.id));
+      teamIds.push(myTeamLeadId);
+    }
+    const { data: reports } = await supabase.from("profiles")
+      .select("id").eq("team_lead_id", user.id);
+    if (reports) reports.forEach(r => teamIds.push(r.id));
+    const allowedUserIds = [...new Set(teamIds)];
+    query = query.in("created_by_user_id", allowedUserIds);
+  }
+
+  const { data, error } = await query;
   return { data: data || [], error };
 }
 

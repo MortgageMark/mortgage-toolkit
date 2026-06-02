@@ -139,15 +139,17 @@ function build() {
 
   // ── 7. Copy static assets ─────────────────────────────────────────────────
   console.log('\nCopying static assets…');
-  for (const f of [
+  const STATIC_FILES = [
     '_redirects',
+    'index.html',
     'view.html',
     'stateConfig.js',
     'stateOverrides.js',
     'altaEndorsements.js',
     'texasTitleEndorsements.js',
     'modules/images/mortgage-mark-logo.png',
-  ]) {
+  ];
+  for (const f of STATIC_FILES) {
     const src = path.join(ROOT, f);
     if (fs.existsSync(src)) {
       copyFile(src, path.join(DIST, f));
@@ -155,6 +157,22 @@ function build() {
     } else {
       process.stdout.write('  ⚠  missing: ' + f + '\n');
     }
+  }
+
+  // Copy supabase/functions directory recursively
+  const funcSrc = path.join(ROOT, 'supabase', 'functions');
+  if (fs.existsSync(funcSrc)) {
+    function copyDir(src, dest) {
+      ensureDir(dest);
+      for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+        const s = path.join(src, entry.name);
+        const d = path.join(dest, entry.name);
+        if (entry.isDirectory()) copyDir(s, d);
+        else { fs.copyFileSync(s, d); }
+      }
+    }
+    copyDir(funcSrc, path.join(DIST, 'supabase', 'functions'));
+    process.stdout.write('  ✓  supabase/functions/\n');
   }
 
   const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
