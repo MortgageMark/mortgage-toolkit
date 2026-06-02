@@ -1551,7 +1551,7 @@ function PaymentCalculator({ isInternal, user }) {
                 <div style={{ fontSize: 12, color: c.gray, fontFamily: font, marginTop: 4 }}>Interest-only during draw period, then fully amortizing during repayment.</div>
               </div>
             )}
-            <LabeledInput label="Interest Rate" value={rate} onChange={(v) => { if (!/^(\d*\.?\d*)$/.test(String(v))) return; setRate(v); }} onBlur={handleRateBlur} suffix="%" type="text" infoTip="Your annual mortgage interest rate — not to be confused with APR, which includes fees. Even a 0.125% difference in rate can meaningfully change your monthly payment and total interest paid over the life of the loan." />
+            <LabeledInput label="Interest Rate" value={rate} onChange={(v) => { if (!/^(\d*\.?\d*)$/.test(String(v))) return; setRate(v); }} onBlur={handleRateBlur} suffix="%" type="number" step="0.125" infoTip="Your annual mortgage interest rate — not to be confused with APR, which includes fees. Even a 0.125% difference in rate can meaningfully change your monthly payment and total interest paid over the life of the loan." />
             {calc.apr > 0 && calc.apr !== (parseFloat(rate) || 0) && (
               <div style={{ fontSize: 12, color: c.gray, fontFamily: font, marginTop: -4, marginBottom: 6, paddingLeft: 2 }}>
                 APR {calc.apr.toFixed((() => { const s = String(rate || "").trim(); const d = s.indexOf("."); return d === -1 ? 2 : Math.max(2, s.length - d - 1); })())}%

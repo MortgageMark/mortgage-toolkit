@@ -65,7 +65,7 @@ const MODULES = [
   { id: "amort",        label: "Amortization",           icon: "\uD83D\uDCC5", component: AmortizationSchedule },
   { id: "recast",       label: "Loan Recast",            icon: "\uD83D\uDCB8", component: RecastCalculator },
   { id: "dti",          label: "DTI Calculator",         icon: "\uD83D\uDCD0", component: DTICalculator },
-  { id: "fees",         label: "Fee Sheet",              icon: "\uD83D\uDCB2", component: FeeSheetGenerator },
+  { id: "fees",         label: "Fee Sheet",              icon: "\uD83E\uDDFE", component: FeeSheetGenerator },
   { id: "compare",      label: "Compare Loans",          icon: "\u2696\uFE0F", component: MortgageComparison },
   { id: "prequal",      label: "Pre-Qual Letter",        icon: "\u2705",       component: PreQualLetter },
   { id: "sellernet",    label: "Seller Net Sheet",       icon: "\uD83D\uDCB0", component: SellerNetSheet },
@@ -974,7 +974,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
 
   return (
     <ThemeContext.Provider value={{ dark: darkMode, colors }}>
-    <div style={{ fontFamily: font, background: darkMode ? "linear-gradient(180deg, #1A2530 0%, #152028 100%)" : "linear-gradient(180deg, #F5F8FA 0%, #EDF2F5 100%)", height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden", transition: "background 0.3s" }}>
+    <div style={{ fontFamily: font, background: darkMode ? "linear-gradient(180deg, #1A2530 0%, #152028 100%)" : "linear-gradient(180deg, #F5F8FA 0%, #EDF2F5 100%)", height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden", transition: "background 0.3s" }}>
 
       {/* ── Print-only branded header ── */}
       <div className="mtk-print-only mtk-print-header">
@@ -1220,10 +1220,11 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
         {(!isMobile || sidebarOpen) && (
           <div className="mtk-no-print" style={isMobile ? {
             /* Mobile: fixed overlay */
-            position: "fixed", top: 0, left: 0, height: "100vh", width: 230, zIndex: 100,
+            position: "fixed", top: 0, left: 0, height: "100%", width: 230, zIndex: 100,
             background: headerBg, overflow: "hidden",
             display: "flex", flexDirection: "column",
             boxShadow: "4px 0 24px rgba(0,0,0,0.45)",
+            paddingTop: "env(safe-area-inset-top, 0px)",
           } : {
             /* Desktop: always full height, overflow hidden — nav scrolls inside, profile pinned bottom */
             width: navCollapsed ? 44 : 192, flexShrink: 0,

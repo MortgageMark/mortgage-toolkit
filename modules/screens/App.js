@@ -19,6 +19,8 @@ const _font = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-seri
 // Full-screen overlay shown once per browser session (sessionStorage-gated).
 // All interaction with the page behind it is blocked until the checkbox is
 // checked and the "I Understand" button is clicked.
+const _appT = window.t || function(s) { return s; };
+
 function DisclaimerModal({ onAck }) {
   const [checked, setChecked] = React.useState(false);
 
@@ -967,6 +969,12 @@ function LoginSettingsPanel({ user, onClose }) {
 
 function App() {
   const [loggedInUser, setLoggedInUser] = useLocalStorage("app_user", null);
+  const [_appLang] = useLocalStorage("app_lang", "en");
+  const t = function(str) {
+    if (_appLang !== "es") return str;
+    var tr = window.TRANSLATIONS_ES;
+    return (tr && tr[str]) ? tr[str] : str;
+  };
   const [activeScenario, setActiveScenario] = useLocalStorage("active_scenario", null);
   const scenarioSnapshotRef = useRef(null); // before-snapshot for audit diffing
   const [authLoading, setAuthLoading] = React.useState(true);
@@ -1407,6 +1415,24 @@ function App() {
     setLoggedInUser(null);
   };
 
+  // Open the LO's own contact card (for internal users to edit their NMLS / PQ info)
+  const handleOpenMyProfile = async () => {
+    if (!loggedInUser || !supabase) return;
+    const email = loggedInUser.email;
+    if (!email) { setShowContacts(true); return; }
+    try {
+      const { data } = await supabase.from("contacts")
+        .select("id")
+        .or(`email_personal.eq.${email.toLowerCase()},email_work.eq.${email.toLowerCase()},email.eq.${email.toLowerCase()}`)
+        .limit(1).maybeSingle();
+      if (data && data.id) setPendingContactId(data.id);
+    } catch(e) {}
+    setShowContacts(true);
+    setShowTasksScenarios(false);
+    setShowTasksContacts(false);
+    setShowUsers(false);
+  };
+
   const handleSelectScenario = (scenario) => {
     if (scenario === null) {
       restoreCalculatorData({});
@@ -1671,8 +1697,8 @@ function App() {
         activeScenario={currentScenario}
         onBackToScenarios={showDashboard ? handleBackToScenarios : null}
         onOpenContact={(isInternal || (loggedInUser && (loggedInUser.role === "realtor" || loggedInUser.role === "builder"))) ? function(contactId) { setPendingContactId(contactId); setShowContacts(true); setActiveScenario(null); } : null}
-        onOpenProfile={!isInternal ? function() { setShowMyInfo(true); } : null}
-        onContactInfo={!isInternal ? function() { setShowMyInfo(true); } : null}
+        onOpenProfile={isInternal ? handleOpenMyProfile : function() { setShowMyInfo(true); }}
+        onContactInfo={isInternal ? handleOpenMyProfile : function() { setShowMyInfo(true); }}
         onLoginSettings={!isInternal && loggedInUser && loggedInUser.supabaseUser ? function() { setShowLoginSettings(true); } : null}
         onTeam={loggedInUser && loggedInUser.role === "admin" ? function() { setShowUsers(true); } : null}
       />
@@ -1780,17 +1806,19 @@ function App() {
       {showSidebar && (!isMobile || mobileSidebarOpen) && (
         <div style={isMobile ? {
           position: "fixed", left: 0, top: 0,
-          width: 240, height: "100vh",
+          width: 240, height: "100%",
           background: "#1e3a5f", zIndex: 200,
           display: "flex", flexDirection: "column",
           overflow: "hidden", boxSizing: "border-box",
           boxShadow: "4px 0 24px rgba(0,0,0,0.35)",
+          paddingTop: "env(safe-area-inset-top, 0px)",
         } : {
           position: "fixed", left: 0, top: 0,
           width: sidebarPinned ? 220 : 42,
-          height: "100vh",
+          height: "100%",
           background: "#1e3a5f", zIndex: 200,
           display: "flex", flexDirection: "column",
+          paddingTop: "env(safe-area-inset-top, 0px)",
           overflow: "hidden", transition: "width 0.2s ease",
           borderRight: "1px solid rgba(0,0,0,0.18)",
           boxSizing: "border-box",
@@ -1843,14 +1871,22 @@ function App() {
               </span>
             )}
             {isMobile ? (
-              <button
-                onClick={function() { setMobileSidebarOpen(false); }}
+              /* Profile avatar in top-right corner on mobile */
+              <div
                 style={{
-                  background: "rgba(255,255,255,0.12)", border: "none", borderRadius: 6,
-                  padding: "5px 10px", color: "#fff", fontSize: 16, cursor: "pointer",
-                  lineHeight: 1, flexShrink: 0,
+                  width: 32, height: 32, borderRadius: "50%",
+                  background: "linear-gradient(135deg, #3b82f6, #1d4ed8)",
+                  border: "2px solid rgba(255,255,255,0.3)",
+                  color: "#fff", fontSize: 12, fontWeight: 700,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0, cursor: "default",
+                  fontFamily: "'Inter', system-ui, sans-serif",
                 }}
-              >&#10005;</button>
+              >
+                {loggedInUser && loggedInUser.name
+                  ? loggedInUser.name.trim().split(/\s+/).map(function(w) { return w[0]; }).join("").slice(0,2).toUpperCase()
+                  : "?"}
+              </div>
             ) : (
               <button
                 onClick={function() { setSidebarPinned(function(p) { return !p; }); }}
@@ -1879,7 +1915,7 @@ function App() {
                 Dashboard
               </div>
             )}
-            {(isInternal || isPartner) && sidebarNavBtn("Contacts", showContacts && !showTasksContacts, function() {
+            {(isInternal || isPartner) && sidebarNavBtn(t("Contacts"), showContacts && !showTasksContacts, function() {
               setTypeFilter("all");
               setContactsKey(function(k) { return k + 1; });
               setShowContacts(true);
@@ -1891,7 +1927,7 @@ function App() {
             }, "👤")}
             {(function() {
               const active = !showContacts && !showTasksScenarios && !showTasksContacts && groupFilter === "active";
-              return sidebarNavBtn("Scenarios", active, function() {
+              return sidebarNavBtn(t("Scenarios"), active, function() {
                 setGroupFilter("active");
                 setShowContacts(false);
                 setShowTasksScenarios(false);
@@ -1911,7 +1947,11 @@ function App() {
                     Team
                   </div>
                 )}
-                {sidebarNavBtn("Teams & Users", showUsers, function() {
+                {isInternal && sidebarNavBtn(t("My Profile & NMLS"), false, function() {
+                  handleOpenMyProfile();
+                  if (isMobile) setMobileSidebarOpen(false);
+                }, "👤")}
+                {sidebarNavBtn(t("Teams & Users"), showUsers, function() {
                   setShowUsers(true);
                   setShowContacts(false);
                   setShowTasksScenarios(false);
@@ -1970,7 +2010,7 @@ function App() {
       <div style={{
         marginLeft: sidebarWidth,
         transition: "margin-left 0.2s ease",
-        minHeight: "100vh",
+        minHeight: "100dvh",
         display: "flex", flexDirection: "column",
       }}>
         {pageContent}

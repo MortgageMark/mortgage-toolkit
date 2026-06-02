@@ -1,6 +1,7 @@
 // modules/screens/ScenarioDashboard.js
 const { useState, useEffect } = React;
 const useLocalStorage = window.useLocalStorage;
+const _t = window.t || function(s) { return s; };
 const useThemeColors = window.useThemeColors;
 const supabase = window._supabaseClient;
 const fetchScenariosFromSupabase = window.fetchScenariosFromSupabase;
@@ -89,6 +90,13 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
   const c = useThemeColors();
   const isTaskView = pageTitle === "Tasks: Scenarios"; // tasks view hides/adds specific columns
   const [darkMode, setDarkMode] = useLocalStorage("app_dark", false);
+  const [appLang, setAppLangPref] = useLocalStorage("app_lang", "en");
+  // Translation function — reactive to appLang state
+  const t = function(str) {
+    if (appLang !== "es") return str;
+    var tr = window.TRANSLATIONS_ES;
+    return (tr && tr[str]) ? tr[str] : str;
+  };
   const [scenarios, setScenarios] = useLocalStorage("scenarios", []);
   const [groupFilterInternal, setGroupFilterInternal] = useState("active");
   // Use controlled value from App.js sidebar if provided, otherwise internal state
@@ -1605,6 +1613,21 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                     fontSize: 13, fontWeight: 600, color: "#0C4160", cursor: "pointer",
                   }}>🔑 Login & Password</button>
                 )}
+                {/* Language toggle */}
+                <button
+                  onClick={function() {
+                    var next = appLang === "es" ? "en" : "es";
+                    try { localStorage.setItem("app_lang", next); } catch(e) {}
+                    setTimeout(function() { window.location.reload(); }, 50);
+                  }}
+                  style={{
+                    display: "block", width: "100%", textAlign: "left", padding: "12px 16px",
+                    background: "none", border: "none", borderBottom: "1px solid #F0F4F8",
+                    fontSize: 13, fontWeight: 600, color: "#0C4160", cursor: "pointer",
+                  }}
+                >
+                  {appLang === "es" ? "🇺🇸 Switch to English" : "🇲🇽 Cambiar a Español"}
+                </button>
                 {onLogout && (
                   <button onClick={function() { setProfileMenuOpen(false); onLogout(); }} style={{
                     display: "block", width: "100%", textAlign: "left", padding: "12px 16px",
@@ -1668,13 +1691,13 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
         {user.isInternal && (
           <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
             {[
-              { label: "All",              count: pipelineMetrics.pre + pipelineMetrics.active, bg: "rgba(59,130,246,0.08)",  border: "rgba(59,130,246,0.2)",  color: "#1d4ed8",
+              { label: t("All"),              count: pipelineMetrics.pre + pipelineMetrics.active, bg: "rgba(59,130,246,0.08)",  border: "rgba(59,130,246,0.2)",  color: "#1d4ed8",
                 onClick: function() { setClosingFilter(false); setGroupFilter("active"); setPipelineSubFilter(null); } },
-              { label: "Active Pipeline",  count: pipelineMetrics.active,  bg: "rgba(34,197,94,0.08)",   border: "rgba(34,197,94,0.2)",   color: "#16a34a",
+              { label: t("Active Pipeline"),  count: pipelineMetrics.active,  bg: "rgba(34,197,94,0.08)",   border: "rgba(34,197,94,0.2)",   color: "#16a34a",
                 onClick: function() { setClosingFilter(false); setGroupFilter("active"); setPipelineSubFilter("pipeline"); } },
-              { label: "Waiting",          count: pipelineMetrics.waiting, bg: "rgba(245,158,11,0.08)",  border: "rgba(245,158,11,0.2)",  color: "#b45309",
+              { label: t("Waiting"),          count: pipelineMetrics.waiting, bg: "rgba(245,158,11,0.08)",  border: "rgba(245,158,11,0.2)",  color: "#b45309",
                 onClick: function() { setClosingFilter(false); setGroupFilter("waiting"); setPipelineSubFilter(null); } },
-              { label: "Closing This Month", count: closingThisMonth,      bg: "rgba(239,68,68,0.08)",   border: "rgba(239,68,68,0.2)",   color: "#dc2626",
+              { label: t("Closing This Month"), count: closingThisMonth,      bg: "rgba(239,68,68,0.08)",   border: "rgba(239,68,68,0.2)",   color: "#dc2626",
                 onClick: function() { setClosingFilter(function(prev) { return !prev; }); setPipelineSubFilter(null); } },
             ].map(function(m) {
               const isActive = closingFilter
@@ -2088,7 +2111,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
               {searchTerm
                 ? "Try a different search term"
                 : groupFilter === "active"
-                  ? "Create your first scenario to get started"
+                  ? t("Create your first scenario to get started")
                   : (LEAD_GROUP_LABELS[groupFilter] + (user.isInternal ? " leads" : " scenarios") + " will appear here")}
             </p>
             {!searchTerm && groupFilter === "active" && (
@@ -2482,7 +2505,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                         {/* Scenario Name */}
                         <td style={tdStyle}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                            <span style={{ fontWeight: 600 }}>{scenario.clientName}</span>
+                            <span style={{ fontWeight: 600, color: "#2563eb", textDecoration: "underline", cursor: "pointer" }}>{scenario.clientName}</span>
                             {user.isInternal && referralScenarioIds.has(scenario.id) && (
                               <span title="Referred by a partner" style={{
                                 fontSize: "10px", fontWeight: 700,
@@ -3044,7 +3067,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                           {/* Scenario Name */}
                           <td style={tdStyle}>
                             <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                              <span style={{ fontWeight: 600 }}>{scenario.clientName}</span>
+                              <span style={{ fontWeight: 600, color: "#2563eb", textDecoration: "underline", cursor: "pointer" }}>{scenario.clientName}</span>
                               {referredIds.has(scenario.id) && (
                                 <span style={{ fontSize: 12, fontWeight: 700, background: "rgba(124,58,237,0.12)", color: "#7c3aed", border: "1px solid rgba(124,58,237,0.25)", borderRadius: 99, padding: "1px 7px", whiteSpace: "nowrap" }}>⭐ Referred</span>
                               )}

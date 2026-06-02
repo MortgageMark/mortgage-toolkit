@@ -212,9 +212,17 @@ async function fetchScenariosFromSupabase() {
   const { data: { user }, error: authErr } = await supabase.auth.getUser();
   if (authErr || !user) return { data: [], error: authErr || new Error("Not logged in") };
 
-  // Read role from sessionStorage (cached at login) — avoids DB query that triggers RLS issues
+  // Get role from profile (get_my_role() is now VOLATILE — safe to call)
+  // Fall back to sessionStorage if profile query fails
   var role = "borrower";
-  try { role = sessionStorage.getItem("mtk_user_role") || "borrower"; } catch(e) {}
+  try {
+    var cached = sessionStorage.getItem("mtk_user_role");
+    if (cached) { role = cached; }
+    else {
+      var { data: prof } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+      if (prof && prof.role) { role = prof.role; try { sessionStorage.setItem("mtk_user_role", role); } catch(e) {} }
+    }
+  } catch(e) {}
 
   const ADMIN_ROLES = ["super_admin", "admin", "branch_admin"];
   const canSeeAll = ADMIN_ROLES.includes(role);
@@ -438,14 +446,23 @@ async function fetchContactsFromSupabase() {
   const { data: { user }, error: authErr } = await supabase.auth.getUser();
   if (authErr || !user) return { data: [], error: authErr || new Error("Not logged in") };
 
+  // Get role from profile — always accurate, no stale sessionStorage issues
   var role = "borrower";
-  try { role = sessionStorage.getItem("mtk_user_role") || "borrower"; } catch(e) {}
+  try {
+    var cached = sessionStorage.getItem("mtk_user_role");
+    if (cached) { role = cached; }
+    else {
+      var { data: prof } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+      if (prof && prof.role) { role = prof.role; try { sessionStorage.setItem("mtk_user_role", role); } catch(e) {} }
+    }
+  } catch(e) {}
 
   const ADMIN_ROLES = ["super_admin", "admin", "branch_admin"];
   const isAdmin = ADMIN_ROLES.includes(role);
 
   let query = supabase.from("contacts").select("*").order("updated_at", { ascending: false });
-  if (!isAdmin) query = query.eq("created_by_user_id", user.id);
+  // Non-admins see contacts they created OR contacts assigned to them as LO
+  if (!isAdmin) query = query.or(`created_by_user_id.eq.${user.id},assigned_lo_id.eq.${user.id}`);
 
   const { data, error } = await query;
   return { data: data || [], error };
@@ -454,7 +471,7 @@ async function fetchContactsFromSupabase() {
 // --- saveContactToSupabase ---
 async function saveContactToSupabase({
   contactId, prefix, first_name, last_name, nickname,
-  company, team_name, photo_url, logo_url,
+  company, team_name, photo_url, logo_url, signature_url,
   contact_type, contact_category, referred_by_contact_id,
   // phone
   phone_cell, phone_work, phone_home, phone_best,
@@ -489,8 +506,9 @@ async function saveContactToSupabase({
     nickname:   nickname   || null,
     company:    company    || null,
     team_name:  team_name  || null,
-    photo_url:  photo_url  || null,
-    logo_url:   logo_url   || null,
+    photo_url:     photo_url     || null,
+    logo_url:      logo_url      || null,
+    signature_url: signature_url || null,
     contact_type:           contact_type           || "client",
     contact_category:       contact_category       || null,
     referred_by_contact_id: referred_by_contact_id || null,

@@ -28,7 +28,7 @@
   document.head.appendChild(s);
 })();
 
-function LabeledInput({ label, value, onChange, onBlur, prefix, suffix, type = "number", step, hint, useCommas, disabled, small, noNegative, rightAddon, infoTip }) {
+function LabeledInput({ label, value, onChange, onBlur, prefix, suffix, type = "number", step, hint, useCommas, disabled, small, noNegative, rightAddon, infoTip, inputMode: inputModeProp }) {
   const c = useThemeColors();
   // For useCommas inputs: show raw digits while focused, formatted on blur
   const [isFocused, setIsFocused] = React.useState(false);
@@ -46,7 +46,7 @@ function LabeledInput({ label, value, onChange, onBlur, prefix, suffix, type = "
     <div style={{ flex: rightAddon ? 1 : undefined, display: "flex", alignItems: "center", background: disabled ? (c === COLORS_DARK ? "#1A2530" : "#f0f0f0") : c.bg, border: `1.5px solid ${c.border}`, borderRadius: 8, overflow: "hidden" }}>
       {prefix && <span style={{ padding: "8px 0 8px 10px", color: c.navy, fontWeight: 600, fontSize: small ? 13 : 15, fontFamily: font }}>{prefix}</span>}
       <input type={useCommas ? "text" : type} value={displayVal}
-        inputMode={type === "number" || useCommas ? "decimal" : undefined}
+        inputMode={inputModeProp || (type === "number" || useCommas ? "decimal" : undefined)}
         onFocus={(e) => { setIsFocused(true); e.target.select(); }}
         onChange={(e) => handleChange(useCommas ? stripCommas(e.target.value) : e.target.value)}
         onBlur={(e) => {

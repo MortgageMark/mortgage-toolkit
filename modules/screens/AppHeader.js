@@ -3,6 +3,7 @@
 // Used across MortgageToolkit, ScenarioDashboard, and ContactsTab.
 
 const { useState: _ahUseState, useEffect: _ahUseEffect, useRef: _ahUseRef } = React;
+const _ahUseLocalStorage = window.useLocalStorage;
 
 function AppHeader({
   user,
@@ -25,6 +26,7 @@ function AppHeader({
 }) {
   const [showProfile, setShowProfile] = _ahUseState(false);
   const [dropPos, setDropPos] = _ahUseState(null);
+  const [appLang, setAppLangAH] = _ahUseLocalStorage ? _ahUseLocalStorage("app_lang", "en") : _ahUseState("en");
   const rootRef = _ahUseRef(null);
   const btnRef  = _ahUseRef(null);
   const f = window.font || "'DM Sans', sans-serif";
@@ -167,7 +169,7 @@ function AppHeader({
                 style={dropItem}
                 onClick={() => { onContactInfo(); setShowProfile(false); }}
               >
-                📋 Update Contact Info
+                📋 My Profile &amp; NMLS
               </button>
             )}
 
@@ -254,6 +256,19 @@ function AppHeader({
                 ))}
               </>
             )}
+
+            <hr style={divider} />
+            <button
+              style={dropItem}
+              onClick={() => {
+                var next = appLang === "es" ? "en" : "es";
+                try { localStorage.setItem("app_lang", next); } catch(e) {}
+                setShowProfile(false);
+                setTimeout(function() { window.location.reload(); }, 50);
+              }}
+            >
+              {appLang === "es" ? "🇺🇸 Switch to English" : "🇲🇽 Cambiar a Español"}
+            </button>
 
             <hr style={divider} />
             <button

@@ -187,6 +187,17 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
   const isPartner  = !!(user && (user.role === "realtor" || user.role === "builder"));
   const canManage  = isInternal || isPartner;
 
+  // Collapse to single column on mobile (≤768px)
+  const [isMobileCD, setIsMobileCD] = React.useState(() => window.innerWidth <= 768);
+  React.useEffect(function() {
+    function onResize() { setIsMobileCD(window.innerWidth <= 768); }
+    window.addEventListener("resize", onResize);
+    return function() { window.removeEventListener("resize", onResize); };
+  }, []);
+  const cols2  = isMobileCD ? "1fr" : "1fr 1fr";
+  const cols3  = isMobileCD ? "1fr" : "1fr 1fr 1fr";
+  const gap2   = isMobileCD ? "12px" : "24px";
+
   // ── LO profiles for Assigned LO dropdown ─────────────────────────────────
   const [loProfiles, setLoProfiles] = useState([]);
   useEffectCD(function() {
@@ -245,8 +256,9 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
     last_name:  contact.last_name  || "",
     company:    contact.company    || "",
     team_name:  contact.team_name  || "",
-    photo_url:  contact.photo_url  || "",
-    logo_url:   contact.logo_url   || "",
+    photo_url:     contact.photo_url     || "",
+    logo_url:      contact.logo_url      || "",
+    signature_url: contact.signature_url || "",
     // Classification
     contact_type:           contact.contact_type            || "client",
     contact_category:       contact.contact_category        || "",
@@ -348,13 +360,30 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
     });
   }, [contact.id]);
 
+  const [uploadError, setUploadError] = useState("");
   async function handlePhotoUpload(file, field) {
     if (!file || !supabaseCD) return;
+    setUploadError("");
+    // Validate file type
+    const allowed = ["jpg","jpeg","png","gif","webp","svg"];
+    const ext = file.name.split(".").pop().toLowerCase();
+    if (!allowed.includes(ext)) {
+      setUploadError("Unsupported file type. Please use JPG, PNG, GIF, WebP, or SVG.");
+      return;
+    }
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError("File is too large. Maximum size is 5MB. Try compressing the image first.");
+      return;
+    }
     setPhotoUploading(true);
-    const ext  = file.name.split(".").pop().toLowerCase();
     const path = contact.id + "/" + field + "-" + Date.now() + "." + ext;
     const { error: upErr } = await supabaseCD.storage.from("contact-photos").upload(path, file, { upsert: true });
-    if (upErr) { setPhotoUploading(false); alert("Upload failed: " + upErr.message); return; }
+    if (upErr) {
+      setPhotoUploading(false);
+      setUploadError("Upload failed: " + upErr.message + ". Make sure the 'contact-photos' bucket exists in Supabase Storage.");
+      return;
+    }
     const { data: urlData } = supabaseCD.storage.from("contact-photos").getPublicUrl(path);
     handleFieldChange(field, urlData.publicUrl);
     setPhotoUploading(false);
@@ -799,9 +828,9 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
 
         {/* ── Content scroll area ─────────────────────────────────── */}
-        <div style={{ flex: 1, overflowY: "auto", background: "#f1f5f9" }}>
+        <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", background: "#f1f5f9" }}>
         <div
-          style={{ maxWidth: "1000px", margin: "0 auto", padding: "24px 16px", paddingBottom: editMode ? "120px" : "24px" }}
+          style={{ maxWidth: "1000px", margin: "0 auto", padding: isMobileCD ? "16px 12px" : "24px 16px", paddingBottom: editMode ? "120px" : "24px", boxSizing: "border-box", width: "100%" }}
           onDoubleClick={isInternal && !editMode ? function (e) {
             if (e.target.tagName === "BUTTON" || e.target.tagName === "A" ||
                 e.target.tagName === "INPUT"  || e.target.tagName === "SELECT" ||
@@ -1031,7 +1060,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
         <div style={sectionStyle}>{cardNum(2)}
           <div style={sectionTitleStyle}>Personal Info</div>
           {editMode ? (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: cols2, gap: gap2 }}>
               {/* Left: Name (Client 1) */}
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 <div>
@@ -1096,71 +1125,12 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                   />
                 </div>
               </div>
-              {/* Right: Classification */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                <div>
-                  <label style={labelStyle}>Type</label>
-                  <select
-                    style={fieldStyle}
-                    value={editForm.contact_type}
-                    onChange={function (e) {
-                      const newType    = e.target.value;
-                      const defaultCat = newType === "business" ? "Other" : "Client";
-                      setEditForm(function (prev) {
-                        return Object.assign({}, prev, { contact_type: newType, contact_category: defaultCat });
-                      });
-                    }}
-                  >
-                    <option value="client">Client</option>
-                    <option value="business">Business</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={labelStyle}>Category</label>
-                  <select
-                    style={fieldStyle}
-                    value={editForm.contact_category}
-                    onChange={function (e) { handleFieldChange("contact_category", e.target.value); }}
-                  >
-                    {(editForm.contact_type === "business" ? CD_BUSINESS_CATEGORIES : CD_CLIENT_CATEGORIES)
-                      .map(function (cat) {
-                        return <option key={cat} value={cat}>{cat}</option>;
-                      })}
-                  </select>
-                </div>
-                <div>
-                  <label style={labelStyle}>Source (Referred By)</label>
-                  <ReferralPickerCD
-                    value={editForm.referred_by_contact_id}
-                    onChange={function (id) { handleFieldChange("referred_by_contact_id", id); }}
-                    contacts={contacts || []}
-                    excludeId={contact.id}
-                  />
-                </div>
-                {editForm.contact_type !== "business" && (
-                  <div>
-                    <label style={labelStyle}>Assigned LO</label>
-                    <select
-                      style={fieldStyle}
-                      value={editForm.assigned_lo_id || ""}
-                      onChange={function(e) { handleFieldChange("assigned_lo_id", e.target.value || null); }}
-                    >
-                      <option value="">— Unassigned —</option>
-                      {loProfiles.map(function(lo) {
-                        return (
-                          <option key={lo.id} value={lo.id}>
-                            {lo.display_name || lo.email || lo.id}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </div>
-                )}
-              </div>
+              {/* Right column intentionally empty — classification moved to Internal Info section */}
+              <div />
             </div>
           ) : (
             /* Read View */
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: cols2, gap: "16px" }}>
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 {/* Photo + logo display for business contacts */}
                 {isBusiness && (contact.photo_url || contact.logo_url) && (
@@ -1175,144 +1145,107 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                 <InfoRow label="Last Name"  value={contact.last_name} />
                 <InfoRow label="Company"    value={contact.company} />
               </div>
+              {/* Classification moved to Internal Info section below */}
+              <div />
+            </div>
+          )}
+
+        </div>
+
+        {/* Internal Info - LO/Admin only */}
+        {(isInternal || isAdmin) && (
+          <div style={sectionStyle}>
+            <div style={sectionTitleStyle}>Internal Info</div>
+            {editMode ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                <InfoRow
-                  label="Type"
-                  value={contact.contact_type
-                    ? contact.contact_type.charAt(0).toUpperCase() + contact.contact_type.slice(1)
-                    : ""}
-                />
+                <div>
+                  <label style={labelStyle}>Type</label>
+                  <select style={fieldStyle} value={editForm.contact_type}
+                    onChange={function(e) {
+                      var newType = e.target.value;
+                      var defaultCat = newType === "business" ? "Other" : "Client";
+                      setEditForm(function(prev) { return Object.assign({}, prev, { contact_type: newType, contact_category: defaultCat }); });
+                    }}>
+                    <option value="client">Client</option>
+                    <option value="business">Business</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Category</label>
+                  <select style={fieldStyle} value={editForm.contact_category}
+                    onChange={function(e) { handleFieldChange("contact_category", e.target.value); }}>
+                    {(editForm.contact_type === "business" ? CD_BUSINESS_CATEGORIES : CD_CLIENT_CATEGORIES)
+                      .map(function(cat) { return <option key={cat} value={cat}>{cat}</option>; })}
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Source (Referred By)</label>
+                  <ReferralPickerCD value={editForm.referred_by_contact_id}
+                    onChange={function(id) { handleFieldChange("referred_by_contact_id", id); }}
+                    contacts={contacts || []} excludeId={contact.id} />
+                </div>
+                {editForm.contact_type !== "business" && (
+                  <div>
+                    <label style={labelStyle}>Assigned LO</label>
+                    <select style={fieldStyle} value={editForm.assigned_lo_id || ""}
+                      onChange={function(e) { handleFieldChange("assigned_lo_id", e.target.value || null); }}>
+                      <option value="">-- Unassigned --</option>
+                      {loProfiles.map(function(lo) { return <option key={lo.id} value={lo.id}>{lo.display_name || lo.email}</option>; })}
+                    </select>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <InfoRow label="Type" value={contact.contact_type ? contact.contact_type.charAt(0).toUpperCase() + contact.contact_type.slice(1) : ""} />
                 <InfoRow label="Category" value={contact.contact_category} />
                 <div>
-                  <div style={{
-                    fontSize: "11px", fontWeight: "600", color: "#94a3b8",
-                    textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px",
-                  }}>Source (Referred By)</div>
+                  <div style={{ fontSize: "11px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>Source (Referred By)</div>
                   {(() => {
-                    const rb = contact.referred_by_contact_id && contacts
-                      ? contacts.find(function (c) { return c.id === contact.referred_by_contact_id; })
-                      : null;
-                    if (!rb) return <div style={{ fontSize: "14px", color: "#cbd5e1" }}>&mdash;</div>;
-                    const rbName = `${rb.first_name || ""} ${rb.last_name || ""}`.trim() || "Unnamed";
-                    const rbCat  = rb.contact_category || rb.contact_type || "";
+                    var rb2 = contact.referred_by_contact_id && contacts ? contacts.find(function(c) { return c.id === contact.referred_by_contact_id; }) : null;
+                    if (!rb2) return <div style={{ fontSize: "14px", color: "#cbd5e1" }}>&mdash;</div>;
+                    var rbn = ((rb2.first_name || "") + " " + (rb2.last_name || "")).trim() || "Unnamed";
+                    var rbc = rb2.contact_category || rb2.contact_type || "";
                     return (
                       <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                        <span style={{ fontSize: "14px", color: "#1e293b" }}>
-                          {rbName}{rbCat ? `  \u00b7  ${rbCat}` : ""}
-                        </span>
-                        {onSelectContact && (
-                          <button
-                            onClick={function () { onSelectContact(rb); }}
-                            style={{
-                              background: "#e0f2fe", color: "#0369a1", border: "none",
-                              borderRadius: "6px", padding: "3px 10px",
-                              cursor: "pointer", fontSize: "12px", fontWeight: "600",
-                            }}
-                          >Open &rarr;</button>
-                        )}
+                        <span style={{ fontSize: "14px", color: "#1e293b" }}>{rbn}{rbc ? "  ·  " + rbc : ""}</span>
+                        {onSelectContact && <button onClick={function() { onSelectContact(rb2); }} style={{ background: "#e0f2fe", color: "#0369a1", border: "none", borderRadius: "6px", padding: "3px 10px", cursor: "pointer", fontSize: "12px", fontWeight: "600" }}>Open →</button>}
                       </div>
                     );
                   })()}
                 </div>
                 {contact.contact_type !== "business" && (() => {
-                  const assignedLo = contact.assigned_lo_id
-                    ? loProfiles.find(function(lo) { return lo.id === contact.assigned_lo_id; })
-                    : null;
-                  return (
-                    <InfoRow
-                      label="Assigned LO"
-                      value={assignedLo ? (assignedLo.display_name || assignedLo.email) : null}
-                    />
-                  );
+                  var alo = contact.assigned_lo_id ? loProfiles.find(function(lo) { return lo.id === contact.assigned_lo_id; }) : null;
+                  return <InfoRow label="Assigned LO" value={alo ? (alo.display_name || alo.email) : null} />;
                 })()}
                 {isAdmin && (() => {
-                  var creatorName = null;
-                  if (contact.creator_id) {
-                    var cp = loProfiles.find(function(p) { return p.id === contact.creator_id; });
-                    creatorName = cp ? (cp.display_name || cp.email) : null;
-                  }
-                  // Fallback: if no creator_id but has a referral contact, show that name
-                  if (!creatorName && contact.referred_by_contact_id && contacts) {
-                    var rb = contacts.find(function(c) { return c.id === contact.referred_by_contact_id; });
-                    if (rb) creatorName = ((rb.first_name || "") + " " + (rb.last_name || "")).trim() || null;
-                  }
-                  return <InfoRow label="Creator" value={creatorName} />;
+                  var cn = null;
+                  if (contact.creator_id) { var cp2 = loProfiles.find(function(p) { return p.id === contact.creator_id; }); cn = cp2 ? (cp2.display_name || cp2.email) : null; }
+                  return <InfoRow label="Creator" value={cn} />;
                 })()}
-                {/* Referral link + Partner invite for Realtor / Builder business contacts */}
                 {isBusiness && (contact.contact_category === "Realtor" || contact.contact_category === "Builder") && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     <div>
                       <div style={{ fontSize: "11px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "6px" }}>Referral Link</div>
-                      <button
-                        onClick={function() {
-                          var link = window.location.origin + window.location.pathname + "?from=" + encodeURIComponent(contact.id);
-                          navigator.clipboard.writeText(link).then(function() {
-                            setCopiedRefLink(true);
-                            setTimeout(function() { setCopiedRefLink(false); }, 2000);
-                          });
-                        }}
-                        style={{ background: copiedRefLink ? "#E6F9F0" : "#F0F4F8", color: copiedRefLink ? "#1B8A5A" : "#0C4160", border: "1px solid " + (copiedRefLink ? "#1B8A5A" : "#D1D9E6"), borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
-                      >
+                      <button onClick={function() { var lnk = window.location.origin + window.location.pathname + "?from=" + encodeURIComponent(contact.id); navigator.clipboard.writeText(lnk).then(function() { setCopiedRefLink(true); setTimeout(function() { setCopiedRefLink(false); }, 2000); }); }} style={{ background: copiedRefLink ? "#E6F9F0" : "#F0F4F8", color: copiedRefLink ? "#1B8A5A" : "#0C4160", border: "1px solid " + (copiedRefLink ? "#1B8A5A" : "#D1D9E6"), borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
                         {copiedRefLink ? "✓ Copied!" : "📋 Copy Referral Link"}
                       </button>
                     </div>
-                    {/* Partner status */}
                     {isAdmin && (
                       <div>
                         <div style={{ fontSize: "11px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "6px" }}>Partnership</div>
-                        {partnerStatus === "active" && (
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <span style={{ fontSize: 12, fontWeight: 700, color: "#1B8A5A", background: "#E6F9F0", borderRadius: 6, padding: "5px 10px" }}>✓ Active Partner</span>
-                            <button onClick={async function() {
-                              if (!window.removePartnership || !partnershipId) return;
-                              setPartnerSaving(true);
-                              await window.removePartnership(partnershipId);
-                              setPartnerStatus(null); setPartnershipId(null); setPartnerSaving(false);
-                            }} style={{ fontSize: 11, color: "#94a3b8", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
-                              Unlink
-                            </button>
-                          </div>
-                        )}
-                        {partnerStatus === "pending" && (
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <span style={{ fontSize: 12, fontWeight: 600, color: "#b45309", background: "#fffbeb", borderRadius: 6, padding: "5px 10px" }}>⏳ Invite Pending</span>
-                            <button onClick={async function() {
-                              if (!window.removePartnership || !partnershipId) return;
-                              setPartnerSaving(true);
-                              await window.removePartnership(partnershipId);
-                              setPartnerStatus(null); setPartnershipId(null); setPartnerSaving(false);
-                            }} style={{ fontSize: 11, color: "#94a3b8", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
-                              Cancel Invite
-                            </button>
-                          </div>
-                        )}
-                        {!partnerStatus && (
-                          <button
-                            disabled={partnerSaving || !contact.email_personal}
-                            onClick={async function() {
-                              if (!window.invitePartner || partnerSaving) return;
-                              setPartnerSaving(true);
-                              var res = await window.invitePartner({ partnerContactId: contact.id, partnerEmail: contact.email_personal });
-                              if (!res.error) { setPartnerStatus("pending"); setPartnershipId(res.data && res.data.id); }
-                              setPartnerSaving(false);
-                            }}
-                            style={{ background: "#0C4160", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: partnerSaving ? "wait" : "pointer", opacity: (!contact.email_personal || partnerSaving) ? 0.5 : 1, fontFamily: "inherit" }}
-                          >
-                            {partnerSaving ? "Sending…" : "🤝 Invite to Partner"}
-                          </button>
-                        )}
-                        {!contact.email_personal && !partnerStatus && (
-                          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>Add an email to this contact to invite them.</div>
-                        )}
+                        {partnerStatus === "active" && <div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ fontSize: 12, fontWeight: 700, color: "#1B8A5A", background: "#E6F9F0", borderRadius: 6, padding: "5px 10px" }}>✓ Active Partner</span><button onClick={async function() { setPartnerSaving(true); if (window.removePartnership) await window.removePartnership(partnershipId); setPartnerStatus(null); setPartnershipId(null); setPartnerSaving(false); }} style={{ fontSize: 11, color: "#94a3b8", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Unlink</button></div>}
+                        {partnerStatus === "pending" && <div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ fontSize: 12, fontWeight: 600, color: "#b45309", background: "#fffbeb", borderRadius: 6, padding: "5px 10px" }}>⏳ Invite Pending</span><button onClick={async function() { setPartnerSaving(true); if (window.removePartnership) await window.removePartnership(partnershipId); setPartnerStatus(null); setPartnershipId(null); setPartnerSaving(false); }} style={{ fontSize: 11, color: "#94a3b8", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Cancel</button></div>}
+                        {!partnerStatus && <button disabled={partnerSaving || !contact.email_personal} onClick={async function() { if (!window.invitePartner || partnerSaving) return; setPartnerSaving(true); var r = await window.invitePartner({ partnerContactId: contact.id, partnerEmail: contact.email_personal }); if (!r.error) { setPartnerStatus("pending"); setPartnershipId(r.data && r.data.id); } setPartnerSaving(false); }} style={{ background: "#0C4160", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: partnerSaving ? "wait" : "pointer", opacity: (!contact.email_personal || partnerSaving) ? 0.5 : 1 }}>{partnerSaving ? "Sending…" : "🤝 Invite to Partner"}</button>}
                       </div>
                     )}
                   </div>
                 )}
               </div>
-            </div>
-          )}
+            )}
+          </div>
+        )}
 
-        </div>
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
         {/* Contact Info                                                        */}
@@ -1321,7 +1254,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
         <div style={sectionStyle}>
           <div style={sectionTitleStyle}>Contact Info</div>
           {editMode ? (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: cols2, gap: gap2 }}>
               {/* Left: Phone */}
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 <div>
@@ -1414,7 +1347,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
             </div>
           ) : (
             /* Read View */
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: cols2, gap: "16px" }}>
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                 <InfoRow label="Phone: Cell" value={cdFormatPhone(contact.phone_cell || contact.phone)} />
                 <InfoRow label="Phone: Work" value={cdFormatPhone(contact.phone_work)} />
@@ -1728,7 +1661,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
             </button>
           </div>
           {showPerson2 && editMode ? (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: cols2, gap: gap2 }}>
               {/* Left: Name (Client 2) */}
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 <div>
@@ -1796,7 +1729,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
             </div>
           ) : showPerson2 ? (
             (contact.first_name2 || contact.last_name2) ? (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: cols2, gap: "16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                   <InfoRow label="Prefix"     value={contact.prefix2} />
                   <InfoRow label="First Name" value={contact.first_name2} />
@@ -1829,7 +1762,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
               </button>
             </div>
             {showContact2 && editMode ? (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: cols2, gap: gap2 }}>
                 {/* Left: Phone */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                   <div>
@@ -1922,7 +1855,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
               </div>
             ) : showContact2 ? (
               /* Read View */
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: cols2, gap: "16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   <InfoRow label="Phone: Cell" value={cdFormatPhone(contact.phone2)} />
                   <InfoRow label="Phone: Work" value={cdFormatPhone(contact.phone2_work)} />
@@ -1947,7 +1880,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
         <div style={sectionStyle}>{cardNum(8)}
           <div style={sectionTitleStyle}>Address Information</div>
           {editMode ? (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: cols2, gap: gap2 }}>
               {/* Left: Address 1 */}
               <div>
                 <div style={addrSubheadStyle}>Mailing Address 1</div>
@@ -2057,7 +1990,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
             </div>
           ) : (
             /* Read View */
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: cols2, gap: "16px" }}>
               <div>
                 <div style={addrSubheadStyle}>
                   Mailing Address 1{contact.address1_type ? ` (${contact.address1_type})` : ""}
@@ -2117,7 +2050,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
 
                 {/* ── Professional Info ── */}
                 <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0C4160", marginBottom: 4 }}>Professional Info</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div style={{ display: "grid", gridTemplateColumns: cols2, gap: 12 }}>
                   {/* Left column */}
                   <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                     <div>
@@ -2163,7 +2096,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
 
                 {/* ── Team ── */}
                 <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0C4160", marginTop: 8, marginBottom: 4 }}>Team</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div style={{ display: "grid", gridTemplateColumns: cols2, gap: 12 }}>
                   <div>
                     <label style={labelStyle}>Team Lead</label>
                     <select style={fieldStyle} value={editForm.team_lead_contact_id || ""} onChange={function(e) { handleFieldChange("team_lead_contact_id", e.target.value || null); }}>
@@ -2185,7 +2118,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
 
               </div>
             ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 24px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: cols2, gap: "8px 16px" }}>
                 {contact.lo_title         && <InfoRow label="Title"              value={contact.lo_title} />}
                 {contact.lo_nmls          && <InfoRow label="NMLS #"             value={"#" + contact.lo_nmls} />}
                 {contact.lo_license       && <InfoRow label="License #"          value={contact.lo_license} />}
@@ -2212,62 +2145,80 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
           </div>
         )}
 
-        {/* ── Photo & Logo ── */}
-        {isBusiness && (
+        {/* ── Photo, Logo & Signature (LO/Admin only) ── */}
+        {isBusiness && (isInternal || isAdmin) && (
           <div style={sectionStyle}>
-            <div style={sectionTitleStyle}>Photo &amp; Logo</div>
+            <div style={sectionTitleStyle}>Photos &amp; Signature</div>
             {editMode ? (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                {[["photo_url","Headshot","👤"],["logo_url","Company Logo","🏢"]].map(function(f) {
-                  var field = f[0], label = f[1], icon = f[2];
-                  var url = editForm[field];
-                  return (
-                    <div key={field}>
-                      <label style={labelStyle}>{label}</label>
-                      <div
-                        onClick={function() {
-                          var inp = document.createElement("input");
-                          inp.type = "file"; inp.accept = "image/*";
-                          inp.onchange = function(e) { if (e.target.files[0]) handlePhotoUpload(e.target.files[0], field); };
-                          inp.click();
-                        }}
-                        style={{ border: "1.5px dashed #D1D9E6", borderRadius: 10, padding: 16, cursor: "pointer", textAlign: "center", background: "#F7FAFB", minHeight: 100, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8 }}
-                      >
-                        {url
-                          ? <img src={url} alt={label} style={{ maxHeight: 80, maxWidth: "100%", objectFit: "contain", borderRadius: field === "photo_url" ? "50%" : 8 }} />
-                          : <>
-                              <span style={{ fontSize: 28 }}>{icon}</span>
-                              <span style={{ fontSize: 12, color: "#94a3b8" }}>{photoUploading ? "Uploading..." : "Click to upload"}</span>
-                            </>
-                        }
+              <>
+                {/* File requirements note */}
+                <div style={{ fontSize: 12, color: "#6B7D8A", background: "#F7FAFB", border: "1px solid #E0E8E8", borderRadius: 8, padding: "8px 12px", marginBottom: 14, lineHeight: 1.6 }}>
+                  <strong>Accepted formats:</strong> JPG, PNG, GIF, WebP, SVG &nbsp;·&nbsp; <strong>Max size:</strong> 5MB<br />
+                  <span style={{ color: "#94a3b8", fontSize: 11 }}>For signatures: use a PNG with a transparent background for the cleanest result on letters.</span>
+                </div>
+                {/* Upload error */}
+                {uploadError && (
+                  <div style={{ fontSize: 12, color: "#B91C1C", background: "#FEE2E2", border: "1px solid #FCA5A5", borderRadius: 8, padding: "8px 12px", marginBottom: 14 }}>
+                    ⚠ {uploadError}
+                  </div>
+                )}
+                <div style={{ display: "grid", gridTemplateColumns: cols3, gap: 14 }}>
+                  {[["photo_url","Headshot","👤"],["logo_url","Company Logo","🏢"],["signature_url","Signature","✍️"]].map(function(f) {
+                    var field = f[0], label = f[1], icon = f[2];
+                    var url = editForm[field];
+                    return (
+                      <div key={field}>
+                        <label style={labelStyle}>{label}</label>
+                        <div
+                          onClick={function() {
+                            setUploadError("");
+                            var inp = document.createElement("input");
+                            inp.type = "file";
+                            inp.accept = ".jpg,.jpeg,.png,.gif,.webp,.svg,image/jpeg,image/png,image/gif,image/webp,image/svg+xml";
+                            inp.onchange = function(e) { if (e.target.files[0]) handlePhotoUpload(e.target.files[0], field); };
+                            inp.click();
+                          }}
+                          style={{ border: "1.5px dashed #D1D9E6", borderRadius: 10, padding: 12, cursor: "pointer", textAlign: "center", background: "#F7FAFB", minHeight: 90, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 6 }}
+                        >
+                          {photoUploading
+                            ? <><span style={{ fontSize: 20 }}>⏳</span><span style={{ fontSize: 11, color: "#94a3b8" }}>Uploading...</span></>
+                            : url
+                              ? <img src={url} alt={label} style={{ maxHeight: 70, maxWidth: "100%", objectFit: "contain", borderRadius: field === "photo_url" ? "50%" : 4, background: field === "signature_url" ? "#fff" : "transparent" }} />
+                              : <><span style={{ fontSize: 24 }}>{icon}</span><span style={{ fontSize: 11, color: "#94a3b8" }}>Click to upload</span></>
+                          }
+                        </div>
+                        {url && (
+                          <button onClick={function() { handleFieldChange(field, ""); setUploadError(""); }} style={{ fontSize: 11, color: "#ef4444", background: "none", border: "none", cursor: "pointer", padding: "3px 0", fontFamily: "inherit" }}>
+                            Remove
+                          </button>
+                        )}
                       </div>
-                      {url && (
-                        <button onClick={function() { handleFieldChange(field, ""); }} style={{ fontSize: 11, color: "#ef4444", background: "none", border: "none", cursor: "pointer", padding: "4px 0", fontFamily: "inherit" }}>
-                          Remove
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              </>
             ) : (
-              <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
-                {contact.photo_url
-                  ? <div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Headshot</div>
-                      <img src={contact.photo_url} alt="Headshot" style={{ width: 72, height: 72, objectFit: "cover", borderRadius: "50%", border: "2px solid #E8EEF4" }} />
-                    </div>
-                  : null
-                }
-                {contact.logo_url
-                  ? <div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Company Logo</div>
-                      <img src={contact.logo_url} alt="Logo" style={{ height: 72, maxWidth: 160, objectFit: "contain", borderRadius: 8, border: "1px solid #E8EEF4", padding: 6, background: "#fff" }} />
-                    </div>
-                  : null
-                }
-                {!contact.photo_url && !contact.logo_url && (
-                  <div style={{ fontSize: 13, color: "#94a3b8" }}>No photos uploaded yet. Click ✏️ Edit to add a headshot or logo.</div>
+              <div style={{ display: "flex", gap: 20, alignItems: "flex-start", flexWrap: "wrap" }}>
+                {contact.photo_url && (
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Headshot</div>
+                    <img src={contact.photo_url} alt="Headshot" style={{ width: 72, height: 72, objectFit: "cover", borderRadius: "50%", border: "2px solid #E8EEF4" }} />
+                  </div>
+                )}
+                {contact.logo_url && (
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Company Logo</div>
+                    <img src={contact.logo_url} alt="Logo" style={{ height: 72, maxWidth: 160, objectFit: "contain", borderRadius: 8, border: "1px solid #E8EEF4", padding: 6, background: "#fff" }} />
+                  </div>
+                )}
+                {contact.signature_url && (
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Signature</div>
+                    <img src={contact.signature_url} alt="Signature" style={{ height: 60, maxWidth: 200, objectFit: "contain", border: "1px solid #E8EEF4", borderRadius: 6, padding: 6, background: "#fff" }} />
+                  </div>
+                )}
+                {!contact.photo_url && !contact.logo_url && !contact.signature_url && (
+                  <div style={{ fontSize: 13, color: "#94a3b8" }}>No photos uploaded yet. Click ✏️ Edit to add a headshot, logo, or signature.</div>
                 )}
               </div>
             )}

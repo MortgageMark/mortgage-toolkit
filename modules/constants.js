@@ -559,6 +559,27 @@ const TRANSLATIONS_ES = {
   "15 Years":                       "15 Años",
   "10 Years":                       "10 Años",
 
+  // ── Scenario Dashboard ──
+  "+ New Scenario":                 "+ Nuevo Escenario",
+  "Search scenarios...":            "Buscar escenarios...",
+  "All":                            "Todos",
+  "Active Pipeline":                "Pipeline Activo",
+  "Waiting":                        "En Espera",
+  "Closing This Month":             "Cierre Este Mes",
+  "No active leads":                "Sin leads activos",
+  "Create your first scenario to get started": "Cree su primer escenario para comenzar",
+  "+ Create First Scenario":        "+ Crear Primer Escenario",
+  "My Info":                        "Mi Información",
+  "Login & Password":               "Acceso y Contraseña",
+  "Sign Out":                       "Cerrar Sesión",
+
+  // ── Sidebar ──
+  "Home Loan Toolkit":              "Kit de Préstamos",
+  "Contacts":                       "Contactos",
+  "Scenarios":                      "Escenarios",
+  "Teams & Users":                  "Equipo y Usuarios",
+  "My Profile & NMLS":              "Mi Perfil y NMLS",
+
   // ── Settings ──
   "Settings":                       "Configuración",
   "Language":                       "Idioma",

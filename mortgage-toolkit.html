@@ -32,6 +32,14 @@
       -webkit-overflow-scrolling: auto;
       /* Respect user's system font size preference (supports iOS Dynamic Type) */
       font-size: 16px;
+      /* ── Safe area: push ALL content below notch/Dynamic Island on every screen ── */
+      padding-top: constant(safe-area-inset-top);   /* iOS < 11.2 */
+      padding-top: env(safe-area-inset-top, 0px);   /* iOS 11.2+  */
+    }
+    /* Fixed/sticky elements need their own safe-area adjustment */
+    .mtk-safe-top {
+      padding-top: constant(safe-area-inset-top) !important;
+      padding-top: env(safe-area-inset-top, 0px) !important;
     }
     /* Prevent iOS Safari from zooming in when tapping inputs (requires font-size ≥ 16px) */
     @media (max-width: 768px) {
