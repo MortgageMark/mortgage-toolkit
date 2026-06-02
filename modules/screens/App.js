@@ -971,7 +971,9 @@ function App() {
   const [loggedInUser, setLoggedInUser] = useLocalStorage("app_user", null);
   const [_appLang] = useLocalStorage("app_lang", "en");
   const t = function(str) {
-    if (_appLang !== "es") return str;
+    var lang = "en";
+    try { lang = localStorage.getItem("app_lang") || "en"; } catch(e) {}
+    if (lang !== "es") return str;
     var tr = window.TRANSLATIONS_ES;
     return (tr && tr[str]) ? tr[str] : str;
   };

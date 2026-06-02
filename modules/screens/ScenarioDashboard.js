@@ -91,9 +91,11 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
   const isTaskView = pageTitle === "Tasks: Scenarios"; // tasks view hides/adds specific columns
   const [darkMode, setDarkMode] = useLocalStorage("app_dark", false);
   const [appLang, setAppLangPref] = useLocalStorage("app_lang", "en");
-  // Translation function — reactive to appLang state
+  // Read lang directly from localStorage (bypasses JSON.parse which breaks plain strings)
   const t = function(str) {
-    if (appLang !== "es") return str;
+    var lang = "en";
+    try { lang = localStorage.getItem("app_lang") || "en"; } catch(e) {}
+    if (lang !== "es") return str;
     var tr = window.TRANSLATIONS_ES;
     return (tr && tr[str]) ? tr[str] : str;
   };
@@ -1617,7 +1619,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                 <button
                   onClick={function() {
                     var next = appLang === "es" ? "en" : "es";
-                    try { localStorage.setItem("app_lang", next); } catch(e) {}
+                    try { localStorage.setItem("app_lang", JSON.stringify(next)); } catch(e) {}
                     setTimeout(function() { window.location.reload(); }, 50);
                   }}
                   style={{

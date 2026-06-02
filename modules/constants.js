@@ -603,7 +603,7 @@ function t(str) {
 // Language change helper — updates localStorage and triggers re-render for all useLocalStorage hooks
 function setAppLang(lang) {
   try {
-    localStorage.setItem("app_lang", lang);
+    localStorage.setItem("app_lang", JSON.stringify(lang));
     window.dispatchEvent(new Event("storage"));
   } catch(e) {}
 }

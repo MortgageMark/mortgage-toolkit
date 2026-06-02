@@ -262,7 +262,7 @@ function AppHeader({
               style={dropItem}
               onClick={() => {
                 var next = appLang === "es" ? "en" : "es";
-                try { localStorage.setItem("app_lang", next); } catch(e) {}
+                try { localStorage.setItem("app_lang", JSON.stringify(next)); } catch(e) {}
                 setShowProfile(false);
                 setTimeout(function() { window.location.reload(); }, 50);
               }}
