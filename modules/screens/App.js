@@ -1260,6 +1260,8 @@ function App() {
 
   const handleLogin = (userData) => {
     setLoggedInUser(userData);
+    // Cache role in sessionStorage so storage.js can read it without a DB query
+    try { sessionStorage.setItem("mtk_user_role", (userData && userData.role) || "borrower"); } catch(e) {}
 
     // Log session activity (daily dedup, fire-and-forget)
     if (window.logUserSession && userData) window.logUserSession(userData);

@@ -212,19 +212,15 @@ async function fetchScenariosFromSupabase() {
   const { data: { user }, error: authErr } = await supabase.auth.getUser();
   if (authErr || !user) return { data: [], error: authErr || new Error("Not logged in") };
 
-  const { data: roleData } = await supabase.rpc('get_my_role');
-  const role = roleData || "borrower";
+  // Read role from sessionStorage (cached at login) — avoids DB query that triggers RLS issues
+  var role = "borrower";
+  try { role = sessionStorage.getItem("mtk_user_role") || "borrower"; } catch(e) {}
 
   const ADMIN_ROLES = ["super_admin", "admin", "branch_admin"];
-  const isAdmin = ADMIN_ROLES.includes(role);
+  const canSeeAll = ADMIN_ROLES.includes(role);
 
   let query = supabase.from("scenarios").select("*").order("updated_at", { ascending: false });
-
-  // Non-admins see only their own scenarios
-  // Team expansion handled by RLS once supabase-visibility-rls-migration.sql is deployed
-  if (!isAdmin) {
-    query = query.eq("user_id", user.id);
-  }
+  if (!canSeeAll) query = query.eq("user_id", user.id);
 
   const { data, error } = await query;
   if (error || !data) return { data: data || [], error };
@@ -442,20 +438,14 @@ async function fetchContactsFromSupabase() {
   const { data: { user }, error: authErr } = await supabase.auth.getUser();
   if (authErr || !user) return { data: [], error: authErr || new Error("Not logged in") };
 
-  // Get role directly from auth metadata to avoid triggering RLS-protected profile queries
-  const { data: profileData } = await supabase.rpc('get_my_role');
-  const role = profileData || "borrower";
+  var role = "borrower";
+  try { role = sessionStorage.getItem("mtk_user_role") || "borrower"; } catch(e) {}
 
   const ADMIN_ROLES = ["super_admin", "admin", "branch_admin"];
   const isAdmin = ADMIN_ROLES.includes(role);
 
   let query = supabase.from("contacts").select("*").order("updated_at", { ascending: false });
-
-  // Non-admins see only contacts they created
-  // Team expansion is handled by RLS once supabase-visibility-rls-migration.sql is deployed
-  if (!isAdmin) {
-    query = query.eq("created_by_user_id", user.id);
-  }
+  if (!isAdmin) query = query.eq("created_by_user_id", user.id);
 
   const { data, error } = await query;
   return { data: data || [], error };
