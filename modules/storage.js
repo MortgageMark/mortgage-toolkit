@@ -212,36 +212,20 @@ async function fetchScenariosFromSupabase() {
   const { data: { user }, error: authErr } = await supabase.auth.getUser();
   if (authErr || !user) return { data: [], error: authErr || new Error("Not logged in") };
 
-  const { data: profile } = await supabase
-    .from("profiles").select("role, team_lead_id").eq("id", user.id).single();
-  const role = profile && profile.role;
+  const { data: roleData } = await supabase.rpc('get_my_role');
+  const role = roleData || "borrower";
 
-  // Only true admins see everything
   const ADMIN_ROLES = ["super_admin", "admin", "branch_admin"];
   const isAdmin = ADMIN_ROLES.includes(role);
 
-  let allowedUserIds = null; // null = no filter (admin sees all)
+  let query = supabase.from("scenarios").select("*").order("updated_at", { ascending: false });
 
+  // Non-admins see only their own scenarios
+  // Team expansion handled by RLS once supabase-visibility-rls-migration.sql is deployed
   if (!isAdmin) {
-    // Build team: own id + anyone who shares team_lead_id with me + my direct reports
-    let teamIds = [user.id];
-    const myTeamLeadId = profile && profile.team_lead_id;
-    if (myTeamLeadId) {
-      // Get teammates (same team lead) + the team lead themselves
-      const { data: teammates } = await supabase.from("profiles")
-        .select("id").eq("team_lead_id", myTeamLeadId);
-      if (teammates) teammates.forEach(t => teamIds.push(t.id));
-      teamIds.push(myTeamLeadId);
-    }
-    // Also include people who report directly to me
-    const { data: reports } = await supabase.from("profiles")
-      .select("id").eq("team_lead_id", user.id);
-    if (reports) reports.forEach(r => teamIds.push(r.id));
-    allowedUserIds = [...new Set(teamIds)];
+    query = query.eq("user_id", user.id);
   }
 
-  let query = supabase.from("scenarios").select("*").order("updated_at", { ascending: false });
-  if (allowedUserIds) query = query.in("user_id", allowedUserIds);
   const { data, error } = await query;
   if (error || !data) return { data: data || [], error };
 
@@ -458,30 +442,19 @@ async function fetchContactsFromSupabase() {
   const { data: { user }, error: authErr } = await supabase.auth.getUser();
   if (authErr || !user) return { data: [], error: authErr || new Error("Not logged in") };
 
-  const { data: profile } = await supabase
-    .from("profiles").select("role, team_lead_id").eq("id", user.id).single();
-  const role = profile && profile.role;
+  // Get role directly from auth metadata to avoid triggering RLS-protected profile queries
+  const { data: profileData } = await supabase.rpc('get_my_role');
+  const role = profileData || "borrower";
 
   const ADMIN_ROLES = ["super_admin", "admin", "branch_admin"];
   const isAdmin = ADMIN_ROLES.includes(role);
 
   let query = supabase.from("contacts").select("*").order("updated_at", { ascending: false });
 
+  // Non-admins see only contacts they created
+  // Team expansion is handled by RLS once supabase-visibility-rls-migration.sql is deployed
   if (!isAdmin) {
-    // Build team user ids (same logic as scenarios)
-    let teamIds = [user.id];
-    const myTeamLeadId = profile && profile.team_lead_id;
-    if (myTeamLeadId) {
-      const { data: teammates } = await supabase.from("profiles")
-        .select("id").eq("team_lead_id", myTeamLeadId);
-      if (teammates) teammates.forEach(t => teamIds.push(t.id));
-      teamIds.push(myTeamLeadId);
-    }
-    const { data: reports } = await supabase.from("profiles")
-      .select("id").eq("team_lead_id", user.id);
-    if (reports) reports.forEach(r => teamIds.push(r.id));
-    const allowedUserIds = [...new Set(teamIds)];
-    query = query.in("created_by_user_id", allowedUserIds);
+    query = query.eq("created_by_user_id", user.id);
   }
 
   const { data, error } = await query;

@@ -397,13 +397,16 @@ function UsersPanel({ user, onBack, onLogout }) {
   const isAdmin      = user && ["super_admin", "admin"].includes(user.role);
   const isSuperAdmin = user && user.role === "super_admin";
 
-  // â"€â"€ Load all Supabase profiles â"€â"€â"€â"€
+  // â"€â"€ Load profiles â"€â"€â"€â"€
+  // Admins see all; non-admins see only themselves
   useEffect(function() {
     if (!supabase) { setProfilesLoading(false); return; }
-    supabase
+    var query = supabase
       .from("profiles")
       .select("id, display_name, email, email_display, role, nmls, phone, cell_phone, company, brokerage, title, address, city, state, zip, branch_nmls, company_nmls, website, team_lead_id, team_share_scenarios, branch_id")
-      .order("display_name", { ascending: true })
+      .order("display_name", { ascending: true });
+    if (!isAdmin) query = query.eq("id", user.id);
+    query
       .then(function(res) {
         // If a column doesn't exist yet, retry with minimal safe set
         if (res.error && res.error.message && (res.error.message.includes("email_display") || res.error.message.includes("team_lead_id") || res.error.message.includes("team_share_scenarios") || res.error.message.includes("branch_id"))) {
@@ -430,16 +433,16 @@ function UsersPanel({ user, onBack, onLogout }) {
       });
   }, []);
 
-  // â"€â"€ Load branches on mount (count needed for tab badge) â"€â"€â"€â"€
+  // â"€â"€ Load branches on mount (admin only) â"€â"€â"€â"€
   useEffect(function() {
-    if (branchesLoaded || !supabase) return;
+    if (branchesLoaded || !supabase || !isAdmin) return;
     setBranchesLoading(true);
     supabase.from("branches").select("*").order("name").then(function(res) {
       setBranchesLoading(false);
       setBranchesLoaded(true);
       if (!res.error) setBranches(res.data || []);
     });
-  }, [branchesLoaded]);
+  }, [branchesLoaded, isAdmin]);
 
   // â"€â"€ Lazy-load activity sessions when Activity tab opens â"€â"€â"€â"€
   useEffect(function() {
