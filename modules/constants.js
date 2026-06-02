@@ -457,3 +457,136 @@ const WARNING_RULES = [
   },
 ];
 window.WARNING_RULES = WARNING_RULES;
+
+// ── Language / Translation System ────────────────────────────────────────────
+// Usage: t("English text") → returns Spanish if app_lang === "es", else English
+// Add new strings to TRANSLATIONS_ES as screens are translated.
+
+const TRANSLATIONS_ES = {
+  // ── Auth / Login ──
+  "Sign In":                        "Iniciar Sesión",
+  "Sign Up":                        "Registrarse",
+  "✨ Sign Up":                     "✨ Registrarse",
+  "Guest":                          "Invitado",
+  "Email":                          "Correo electrónico",
+  "Password":                       "Contraseña",
+  "Sign in":                        "Iniciar sesión",
+  "Signing in...":                  "Iniciando sesión...",
+  "Forgot password?":               "¿Olvidó su contraseña?",
+  "Send Reset Link":                "Enviar enlace",
+  "Sending…":                       "Enviando…",
+  "Back to Sign In":                "Volver a Iniciar Sesión",
+  "Reset Password":                 "Restablecer contraseña",
+  "Enter your email and we'll send you a reset link.": "Ingrese su correo y le enviaremos un enlace para restablecer su contraseña.",
+  "Check your email for a reset link.": "Revise su correo para el enlace de restablecimiento.",
+  "FIRST NAME":                     "NOMBRE",
+  "LAST NAME":                      "APELLIDO",
+  "EMAIL":                          "CORREO ELECTRÓNICO",
+  "PHONE":                          "TELÉFONO",
+  "NMLS #":                         "NMLS #",
+  "Your NMLS number is used to generate your unique referral link.": "Su número NMLS se utiliza para generar su enlace de referido único.",
+  "PASSWORD":                       "CONTRASEÑA",
+  "CONFIRM PASSWORD":               "CONFIRMAR CONTRASEÑA",
+  "I AM A":                         "SOY UN/UNA",
+  "Client / Borrower":              "Cliente / Prestatario",
+  "Realtor":                        "Agente de Bienes Raíces",
+  "Builder":                        "Constructor",
+  "Loan Officer":                   "Oficial de Préstamos",
+  "Create Account":                 "Crear Cuenta",
+  "Creating account...":            "Creando cuenta...",
+  "Already have an account? Sign in.": "¿Ya tiene una cuenta? Inicie sesión.",
+  "Don't have an account? Sign up.":   "¿No tiene cuenta? Regístrese.",
+  "Please enter your first name.":  "Por favor ingrese su nombre.",
+  "Please enter your last name.":   "Por favor ingrese su apellido.",
+  "Please enter your email.":       "Por favor ingrese su correo.",
+  "Please enter a valid 10-digit phone number.": "Por favor ingrese un número de teléfono de 10 dígitos.",
+  "Password must be at least 6 characters.": "La contraseña debe tener al menos 6 caracteres.",
+  "Passwords do not match.":        "Las contraseñas no coinciden.",
+  "Check your email! Click the confirmation link, then come back and sign in.": "¡Revise su correo! Haga clic en el enlace de confirmación y vuelva a iniciar sesión.",
+  "You're signing up with":         "Se está registrando con",
+  "You're signing up through":      "Se está registrando a través de",
+  "At least 6 characters":         "Al menos 6 caracteres",
+  "Re-enter password":             "Vuelva a ingresar la contraseña",
+
+  // ── Sidebar / Navigation ──
+  "Home Loan Toolkit":              "Kit de Préstamos para el Hogar",
+  "Contacts":                       "Contactos",
+  "Scenarios":                      "Escenarios",
+  "Teams & Users":                  "Equipo y Usuarios",
+  "Dashboard":                      "Panel",
+  "Team":                           "Equipo",
+  "Toolkit":                        "Herramientas",
+
+  // ── Scenario Dashboard ──
+  "+ New Scenario":                 "+ Nuevo Escenario",
+  "Search scenarios...":            "Buscar escenarios...",
+  "All":                            "Todos",
+  "Active Pipeline":                "Pipeline Activo",
+  "Waiting":                        "En Espera",
+  "Closing This Month":             "Cierre Este Mes",
+  "No active leads":                "Sin leads activos",
+  "Create your first scenario to get started": "Cree su primer escenario para comenzar",
+  "+ Create First Scenario":        "+ Crear Primer Escenario",
+  "0 active leads":                 "0 leads activos",
+  "Cloud":                          "Nube",
+  "My Info":                        "Mi Información",
+  "Login & Password":               "Acceso y Contraseña",
+  "Sign Out":                       "Cerrar Sesión",
+
+  // ── Payment Calculator ──
+  "Payment Calculator":             "Calculadora de Pagos",
+  "Purchase Price":                 "Precio de Compra",
+  "Down Payment":                   "Pago Inicial",
+  "Interest Rate":                  "Tasa de Interés",
+  "Loan Amount":                    "Monto del Préstamo",
+  "Loan Term":                      "Plazo del Préstamo",
+  "Loan Program":                   "Programa de Préstamo",
+  "Occupancy":                      "Ocupación",
+  "Owner Occupied":                 "Residencia Principal",
+  "Vacation Home":                  "Casa de Vacaciones",
+  "Investment Property":            "Propiedad de Inversión",
+  "Conventional":                   "Convencional",
+  "Property Tax":                   "Impuesto a la Propiedad",
+  "Home Insurance":                 "Seguro de Hogar",
+  "Total Monthly Payment":          "Pago Mensual Total",
+  "Principal & Interest":           "Capital e Intereses",
+  "Property Tax ":                  "Impuesto a la Propiedad",
+  "Home Insurance ":                "Seguro de Hogar",
+  "PMI":                            "PMI",
+  "HOA":                            "HOA",
+  "30 Years":                       "30 Años",
+  "20 Years":                       "20 Años",
+  "15 Years":                       "15 Años",
+  "10 Years":                       "10 Años",
+
+  // ── Settings ──
+  "Settings":                       "Configuración",
+  "Language":                       "Idioma",
+  "English":                        "Inglés",
+  "Spanish":                        "Español",
+  "Dark Mode":                      "Modo Oscuro",
+  "Save":                           "Guardar",
+  "Cancel":                         "Cancelar",
+  "Close":                          "Cerrar",
+};
+
+// Translation function — call t("English text") in any component
+function t(str) {
+  try {
+    var lang = localStorage.getItem("app_lang") || "en";
+    if (lang === "es" && TRANSLATIONS_ES[str]) return TRANSLATIONS_ES[str];
+  } catch(e) {}
+  return str;
+}
+
+// Language change helper — updates localStorage and triggers re-render for all useLocalStorage hooks
+function setAppLang(lang) {
+  try {
+    localStorage.setItem("app_lang", lang);
+    window.dispatchEvent(new Event("storage"));
+  } catch(e) {}
+}
+
+window.TRANSLATIONS_ES = TRANSLATIONS_ES;
+window.t               = t;
+window.setAppLang      = setAppLang;

@@ -507,6 +507,12 @@ function ScenarioContactPanel({ contactId, scenarioId, scenario, darkMode, color
 function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, onOpenContact, onOpenProfile, onContactInfo, onLoginSettings, onTeam }) {
   const [activeModule, setActiveModule] = useLocalStorage("app_mod", "payment");
   const [userRole, setUserRole] = useLocalStorage("app_role", "admin");
+  // Reset cached view role if user is no longer admin
+  React.useEffect(function() {
+    if (user && user.role !== "admin" && userRole === "admin") {
+      setUserRole("lo");
+    }
+  }, [user && user.role]);
   const [darkMode, setDarkMode] = useLocalStorage("app_dark", false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState(null);
@@ -524,7 +530,11 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
   const [headerContact, setHeaderContact] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [navCollapsed, setNavCollapsed] = useLocalStorage("app_nav_collapsed", false);
-  const [showLenderPanel, setShowLenderPanel] = useState(false);
+  const [showLenderPanel,  setShowLenderPanel]  = useState(false);
+  const [notesOpen,        setNotesOpen]        = useState(false);
+  const [sidebarNotes,     setSidebarNotes]     = useState([]);
+  const [sidebarNoteText,  setSidebarNoteText]  = useState("");
+  const [sidebarNoteSaving,setSidebarNoteSaving]= useState(false);
   const [showLivePanel,   setShowLivePanel]   = useState(false);
   const [livePanelPos,    setLivePanelPos]    = useState(null);
   const liveBtnRef   = useRef(null);
@@ -856,6 +866,15 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [user, activeScenario]);
+
+  // Load notes for the active scenario's contact
+  useEffect(function() {
+    var contactId = activeScenario && activeScenario.contact_id;
+    if (!contactId || !fetchContactNotesFromSupabase) { setSidebarNotes([]); return; }
+    fetchContactNotesFromSupabase(contactId).then(function(res) {
+      if (res && !res.error) setSidebarNotes(res.data || []);
+    });
+  }, [activeScenario && activeScenario.contact_id]);
 
   // Auto-select first visible tab if current is hidden
   // Skip for "contact_tab" and "__modules__" — special tabs not in MODULES
@@ -1303,6 +1322,81 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
               );
             })()}
             </div>{/* end scrollable nav */}
+
+            {/* ── Quick Notes — pinned above Live Session ── */}
+            {activeScenario && activeScenario.contact_id && isInternal && (
+              <div style={{ flexShrink: 0, borderTop: "1px solid rgba(255,255,255,0.10)" }}>
+                <button
+                  onClick={function() { setNotesOpen(function(o) { return !o; }); }}
+                  style={{
+                    display: "flex", alignItems: "center", width: "100%",
+                    padding: navCollapsed ? "10px 0" : "9px 18px 9px 15px",
+                    background: notesOpen ? "rgba(255,255,255,0.10)" : "transparent",
+                    color: notesOpen ? "#fff" : "rgba(255,255,255,0.65)",
+                    border: "none", cursor: "pointer",
+                    fontSize: 13, fontWeight: 600, fontFamily: font,
+                    justifyContent: navCollapsed ? "center" : "flex-start",
+                    gap: 8, transition: "all 0.15s",
+                  }}
+                >
+                  <span style={{ fontSize: navCollapsed ? 17 : 15, lineHeight: 1 }}>📝</span>
+                  {!navCollapsed && (
+                    <span style={{ flex: 1, textAlign: "left" }}>Notes</span>
+                  )}
+                  {!navCollapsed && sidebarNotes.length > 0 && (
+                    <span style={{ fontSize: 10, background: "rgba(255,255,255,0.2)", borderRadius: 10, padding: "1px 7px", fontWeight: 700 }}>
+                      {sidebarNotes.length}
+                    </span>
+                  )}
+                </button>
+
+                {notesOpen && !navCollapsed && (
+                  <div style={{ padding: "0 12px 12px" }}>
+                    {/* Existing notes */}
+                    {sidebarNotes.length > 0 && (
+                      <div style={{ maxHeight: 180, overflowY: "auto", marginBottom: 8 }}>
+                        {sidebarNotes.slice().reverse().map(function(n) {
+                          var d = n.created_at ? new Date(n.created_at).toLocaleDateString("en-US", { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
+                          return (
+                            <div key={n.id} style={{ background: "rgba(255,255,255,0.08)", borderRadius: 6, padding: "7px 10px", marginBottom: 6 }}>
+                              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.9)", lineHeight: 1.5 }}>{n.body}</div>
+                              {d && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>{d}</div>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {sidebarNotes.length === 0 && (
+                      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginBottom: 8, fontStyle: "italic" }}>No notes yet.</div>
+                    )}
+                    {/* Add note */}
+                    <textarea
+                      value={sidebarNoteText}
+                      onChange={function(e) { setSidebarNoteText(e.target.value); }}
+                      placeholder="Add a note…"
+                      rows={3}
+                      style={{ width: "100%", padding: "7px 10px", background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 6, fontSize: 12, color: "#fff", fontFamily: font, resize: "none", outline: "none", boxSizing: "border-box" }}
+                    />
+                    <button
+                      disabled={!sidebarNoteText.trim() || sidebarNoteSaving}
+                      onClick={async function() {
+                        if (!sidebarNoteText.trim() || sidebarNoteSaving) return;
+                        setSidebarNoteSaving(true);
+                        var res = await addContactNoteToSupabase({ contactId: activeScenario.contact_id, body: sidebarNoteText.trim() });
+                        if (!res || !res.error) {
+                          setSidebarNotes(function(prev) { return prev.concat([{ id: Date.now(), body: sidebarNoteText.trim(), created_at: new Date().toISOString() }]); });
+                          setSidebarNoteText("");
+                        }
+                        setSidebarNoteSaving(false);
+                      }}
+                      style={{ marginTop: 6, width: "100%", padding: "7px 0", background: sidebarNoteSaving ? "rgba(255,255,255,0.1)" : "#1B8A5A", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 700, color: "#fff", cursor: (!sidebarNoteText.trim() || sidebarNoteSaving) ? "not-allowed" : "pointer", opacity: (!sidebarNoteText.trim() || sidebarNoteSaving) ? 0.5 : 1, fontFamily: font }}
+                    >
+                      {sidebarNoteSaving ? "Saving…" : "Save Note"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* ── Live Session — compact button pinned above profile ── */}
             {LiveSessionBar && syncScenarioId && (() => {

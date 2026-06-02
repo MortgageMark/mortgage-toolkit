@@ -140,7 +140,11 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
   const [cloudLoading, setCloudLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [cloudError, setCloudError] = useState(null);
-  const [openMenuId, setOpenMenuId] = useState(null);   // three-dot menu
+  const [openMenuId,       setOpenMenuId]       = useState(null);
+  const [noteModalScenario, setNoteModalScenario] = useState(null); // scenario for quick-note modal
+  const [noteText,          setNoteText]          = useState("");
+  const [noteSaving,        setNoteSaving]        = useState(false);
+  const [noteSaved,         setNoteSaved]         = useState(false);
   useEffect(function() {
     if (!openMenuId) return;
     function handleClick() { setOpenMenuId(null); }
@@ -151,6 +155,8 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
   const [auditLogOpen, setAuditLogOpen] = useState(null);
   const [auditLogData, setAuditLogData] = useState([]);
   const [auditLogLoading, setAuditLogLoading] = useState(false);
+  const [pendingPartnerInvites, setPendingPartnerInvites] = useState([]);
+  const [partnerResponding,    setPartnerResponding]    = useState(null); // id being acted on
   const [claimable, setClaimable] = useState([]);
   const [claiming, setClaiming] = useState(false);
   const [coborrowerScenarios, setCoborrowerScenarios] = useState([]);
@@ -269,6 +275,16 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
       });
     return function() { cancelled = true; };
   }, []);
+
+  // ── Partner invite fetch (Realtor / Builder) ──────────────────────────
+  useEffect(function() {
+    if (!isCloudUser || (user.role !== "realtor" && user.role !== "builder")) return;
+    var fn = window.fetchPendingPartnershipInvites;
+    if (!fn) return;
+    fn().then(function(res) {
+      if (!res.error) setPendingPartnerInvites(res.data || []);
+    });
+  }, [isCloudUser, user.role]);
 
   // ── Borrower claimable fetch ───────────────────────────────────────────
   useEffect(function() {
@@ -1880,6 +1896,52 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
           </div>
         )}
 
+        {/* ── Realtor/Builder: Pending Partnership Invites ──────────── */}
+        {isCloudUser && pendingPartnerInvites.length > 0 && (
+          <div style={{ marginBottom: 20, background: "rgba(12,65,96,0.06)", border: "1px solid rgba(12,65,96,0.25)", borderRadius: 12, padding: "16px 20px" }}>
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12, color: "#0C4160" }}>
+              🤝 Partnership Invite{pendingPartnerInvites.length > 1 ? "s" : ""} ({pendingPartnerInvites.length})
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {pendingPartnerInvites.map(function(inv) {
+                var loName = (inv.lo && inv.lo.display_name) || "A Loan Officer";
+                return (
+                  <div key={inv.id} style={{ background: "#fff", borderRadius: 8, padding: "12px 14px", border: "1px solid #E8EEF4", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: "#0C4160" }}>{loName} has invited you to partner.</div>
+                      <div style={{ fontSize: 12, color: "#6B7D8A", marginTop: 2 }}>As partners, your referral link will route new clients to {loName} by default.</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        disabled={partnerResponding === inv.id}
+                        onClick={async function() {
+                          setPartnerResponding(inv.id);
+                          var fn = window.respondToPartnership;
+                          if (fn) await fn({ partnershipId: inv.id, accept: true });
+                          setPendingPartnerInvites(function(prev) { return prev.filter(function(p) { return p.id !== inv.id; }); });
+                          setPartnerResponding(null);
+                        }}
+                        style={{ background: "#0C4160", color: "#fff", border: "none", borderRadius: 7, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                      >Accept</button>
+                      <button
+                        disabled={partnerResponding === inv.id}
+                        onClick={async function() {
+                          setPartnerResponding(inv.id);
+                          var fn = window.respondToPartnership;
+                          if (fn) await fn({ partnershipId: inv.id, accept: false });
+                          setPendingPartnerInvites(function(prev) { return prev.filter(function(p) { return p.id !== inv.id; }); });
+                          setPartnerResponding(null);
+                        }}
+                        style={{ background: "#F0F4F8", color: "#6B7D8A", border: "1px solid #D1D9E6", borderRadius: 7, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                      >Decline</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* ── Borrower: Scenarios Prepared For You ────────────────── */}
         {isCloudUser && user.role === "borrower" && claimable.length > 0 && (
           <div style={{
@@ -2549,6 +2611,8 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                                       }, label);
                                     };
                                     const items = [];
+                                    if (isCloudUser && scenario.contact_id)
+                                      items.push(menuItem("📝  Add Note", function() { setNoteModalScenario(scenario); setNoteText(""); setNoteSaved(false); }));
                                     if (isCloudUser)
                                       items.push(menuItem("📜  Activity Log", function() { toggleAuditLog(scenario.id); }));
                                     if (isCloudUser && user.isInternal)
@@ -3432,6 +3496,54 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Quick Note Modal ── */}
+      {noteModalScenario && ReactDOM.createPortal(
+        <div
+          onClick={function() { if (!noteSaving) { setNoteModalScenario(null); setNoteText(""); } }}
+          style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+        >
+          <div
+            onClick={function(e) { e.stopPropagation(); }}
+            style={{ background: "#fff", borderRadius: 14, padding: 24, width: "100%", maxWidth: 460, boxShadow: "0 8px 40px rgba(0,0,0,0.25)" }}
+          >
+            <div style={{ fontSize: 15, fontWeight: 700, color: "#0C4160", marginBottom: 4 }}>📝 Add Note</div>
+            <div style={{ fontSize: 12, color: "#6B7D8A", marginBottom: 14 }}>
+              {noteModalScenario.clientName || noteModalScenario.name || "Scenario"}
+            </div>
+            <textarea
+              autoFocus
+              value={noteText}
+              onChange={function(e) { setNoteText(e.target.value); setNoteSaved(false); }}
+              placeholder="Type your note here…"
+              rows={5}
+              style={{ width: "100%", padding: "10px 12px", border: "1.5px solid #E0E8E8", borderRadius: 8, fontSize: 14, fontFamily: "inherit", resize: "vertical", outline: "none", boxSizing: "border-box", color: "#0C4160" }}
+            />
+            <div style={{ display: "flex", gap: 10, marginTop: 14, justifyContent: "flex-end" }}>
+              <button
+                onClick={function() { setNoteModalScenario(null); setNoteText(""); }}
+                style={{ padding: "8px 18px", background: "#F0F4F8", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", color: "#6B7D8A" }}
+              >Cancel</button>
+              <button
+                disabled={!noteText.trim() || noteSaving}
+                onClick={async function() {
+                  if (!noteText.trim() || noteSaving) return;
+                  setNoteSaving(true);
+                  const addNote = window.addContactNoteToSupabase;
+                  if (addNote) await addNote({ contactId: noteModalScenario.contact_id, body: noteText.trim() });
+                  setNoteSaving(false);
+                  setNoteSaved(true);
+                  setTimeout(function() { setNoteModalScenario(null); setNoteText(""); setNoteSaved(false); }, 800);
+                }}
+                style={{ padding: "8px 20px", background: noteSaved ? "#1B8A5A" : "#0C4160", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: (!noteText.trim() || noteSaving) ? "not-allowed" : "pointer", color: "#fff", opacity: (!noteText.trim() || noteSaving) ? 0.5 : 1 }}
+              >
+                {noteSaved ? "✓ Saved!" : noteSaving ? "Saving…" : "Save Note"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
     </div>

@@ -19,7 +19,7 @@ const ROLE_COLORS = {
   builder:      { bg: "#FFF7ED", text: "#C2410C", border: "#FB923C" },
   borrower:     { bg: "#F3F4F6", text: "#4B5563", border: "#D1D5DB" },
 };
-const ROLE_LABELS = { super_admin: "Super Admin", admin: "Admin", branch_admin: "Branch Admin", internal: "Internal", realtor: "Realtor", builder: "Builder", borrower: "Borrower" };
+const ROLE_LABELS = { super_admin: "Super Admin", admin: "Admin", branch_admin: "Branch Admin", internal: "Loan Officer", realtor: "Realtor", builder: "Builder", borrower: "Borrower" };
 
 function RoleBadge({ role }) {
   const rc = ROLE_COLORS[role] || ROLE_COLORS.borrower;
@@ -272,7 +272,8 @@ function UsersPanel({ user, onBack, onLogout }) {
   const [bulkResult,      setBulkResult]      = useState(null);  // "deleted" | "role_saved"
   const [confirmBulkDel,  setConfirmBulkDel]  = useState(false);
 
-  const [copiedLinkId, setCopiedLinkId] = useState(null); // profile id whose link was just copied
+  const [copiedLinkId,  setCopiedLinkId]  = useState(null);
+  const [accessSearch,  setAccessSearch]  = useState("");
 
   // â"€â"€ Directory bulk selection + three-dot menu â"€â"€â"€â"€
   const [selectedDirIds,   setSelectedDirIds]   = useState([]);
@@ -978,29 +979,39 @@ function UsersPanel({ user, onBack, onLogout }) {
             <div style={{ fontSize: 13, color: "#6B7D8A", marginBottom: 16, fontFamily: UP_FONT, lineHeight: 1.6 }}>
               Manage login roles for all users. Role controls what each person can access in the app.
               Profile info (NMLS, display email, team assignments) is managed in their Contact record.
+              <span style={{ display: "block", marginTop: 6, padding: "6px 10px", background: "#F0F4F8", borderRadius: 6, fontSize: 12 }}>
+                💡 <strong>To change a user's login email:</strong> go to <strong>supabase.com → Authentication → Users</strong>, find the person, and edit their email there. Users can change their own email via their profile → <em>Login & Password → Change Email</em>.
+              </span>
+            </div>
+            {/* Search box */}
+            <div style={{ marginBottom: 14 }}>
+              <input
+                type="text"
+                placeholder="Search by name or email…"
+                value={accessSearch || ""}
+                onChange={function(e) { setAccessSearch(e.target.value); }}
+                style={{ width: "100%", padding: "9px 14px", border: "1.5px solid #E0E8E8", borderRadius: 8, fontSize: 14, fontFamily: UP_FONT, color: "#0C4160", background: "#F7FAFB", outline: "none", boxSizing: "border-box" }}
+              />
             </div>
             {/* Your own referral link */}
             {(function() {
               var me = allProfiles.find(function(p) { return p.id === user.id; });
               if (!me || !me.nmls) return null;
               var myLink = window.location.origin + window.location.pathname + "?lo=" + encodeURIComponent(me.nmls);
+              var myLinkEs = myLink + "&lang=es";
               return (
-                <div style={{ background: "linear-gradient(90deg, #0C4160, #1A5E8A)", borderRadius: 10, padding: "12px 16px", marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.7)", fontFamily: UP_FONT, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 3 }}>Your Referral Link</div>
-                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.85)", fontFamily: UP_FONT, wordBreak: "break-all" }}>{myLink}</div>
+                <div style={{ background: "linear-gradient(90deg, #0C4160, #1A5E8A)", borderRadius: 10, padding: "12px 16px", marginBottom: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.7)", fontFamily: UP_FONT, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>Your Referral Links</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button
+                      onClick={function() { navigator.clipboard.writeText(myLink).then(function() { setCopiedLinkId("self-en"); setTimeout(function() { setCopiedLinkId(null); }, 2000); }); }}
+                      style={{ background: copiedLinkId === "self-en" ? "#1B8A5A" : "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.35)", color: "#fff", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: UP_FONT }}
+                    >{copiedLinkId === "self-en" ? "✓ Copied!" : "📋 Copy (English)"}</button>
+                    <button
+                      onClick={function() { navigator.clipboard.writeText(myLinkEs).then(function() { setCopiedLinkId("self-es"); setTimeout(function() { setCopiedLinkId(null); }, 2000); }); }}
+                      style={{ background: copiedLinkId === "self-es" ? "#1B8A5A" : "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.35)", color: "#fff", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: UP_FONT }}
+                    >{copiedLinkId === "self-es" ? "✓ Copied!" : "🇲🇽 Copy (Español)"}</button>
                   </div>
-                  <button
-                    onClick={function() {
-                      navigator.clipboard.writeText(myLink).then(function() {
-                        setCopiedLinkId("self");
-                        setTimeout(function() { setCopiedLinkId(null); }, 2000);
-                      });
-                    }}
-                    style={{ background: copiedLinkId === "self" ? "#1B8A5A" : "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.35)", color: "#fff", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: UP_FONT, whiteSpace: "nowrap" }}
-                  >
-                    {copiedLinkId === "self" ? "✓ Copied!" : "📋 Copy Link"}
-                  </button>
                 </div>
               );
             })()}
@@ -1016,7 +1027,13 @@ function UsersPanel({ user, onBack, onLogout }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {allProfiles.filter(function(p) { return p.id !== user.id; }).map(function(p, idx) {
+                  {allProfiles.filter(function(p) {
+                    if (p.id === user.id) return false;
+                    if (!accessSearch.trim()) return true;
+                    var q = accessSearch.trim().toLowerCase();
+                    var name = ((p.display_name || "") + " " + (p.email || "")).toLowerCase();
+                    return name.includes(q);
+                  }).map(function(p, idx) {
                     var selRole = editRoles[p.id] || p.role || "borrower";
                     var hasChanged = selRole !== (p.role || "borrower");
                     var isInternal = ["admin","internal","branch_admin","super_admin"].includes(p.role);
@@ -1038,7 +1055,7 @@ function UsersPanel({ user, onBack, onLogout }) {
                               <option value="borrower">Borrower</option>
                               <option value="realtor">Realtor</option>
                               <option value="builder">Builder</option>
-                              <option value="internal">Internal</option>
+                              <option value="internal">Loan Officer</option>
                               <option value="branch_admin">Branch Admin</option>
                               <option value="admin">Admin</option>
                               {isSuperAdmin && <option value="super_admin">Super Admin</option>}

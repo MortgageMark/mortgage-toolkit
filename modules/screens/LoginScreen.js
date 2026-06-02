@@ -1,8 +1,11 @@
 // modules/screens/LoginScreen.js
 const { useState, useEffect } = React;
 const useThemeColors = window.useThemeColors;
+const useLocalStorage = window.useLocalStorage;
 const supabase = window._supabaseClient;
 const resolvePendingSharesForUser = window.resolvePendingSharesForUser;
+const t = window.t || function(s) { return s; };
+const setAppLang = window.setAppLang || function() {};
 
 function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
   const c = useThemeColors();
@@ -78,6 +81,15 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
   const [suPassword2, setSuPassword2] = useState("");
   const [suRole, setSuRole] = useState("borrower");
   const [suNmls, setSuNmls] = useState("");
+  const [appLang, setLang] = useLocalStorage("app_lang", "en");
+  // Read ?lang= from URL on mount
+  useEffect(function() {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var urlLang = params.get("lang");
+      if (urlLang === "es" || urlLang === "en") { setAppLang(urlLang); }
+    } catch(e) {}
+  }, []);
 
   // Forgot password
   const [forgotMode, setForgotMode] = useState(false);
@@ -784,7 +796,17 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
           onClick: handleSignUp,
           disabled: loading,
           style: Object.assign({}, btnPrimary, loading ? { opacity: 0.6, cursor: "wait" } : {})
-        }, loading ? "Creating account..." : "Create Account")
+        }, loading ? t("Creating account...") : t("Create Account")),
+
+        // Discreet language toggle
+        React.createElement("div", {
+          style: { textAlign: "center", marginTop: 16 }
+        },
+          React.createElement("button", {
+            onClick: function() { setAppLang(appLang === "es" ? "en" : "es"); },
+            style: { background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#94A3B0", fontFamily: font, opacity: 0.7 }
+          }, appLang === "es" ? "\uD83C\uDDFA\uD83C\uDDF8 English" : "\uD83C\uDDF2\uD83C\uDDFD Espa\u00F1ol")
+        )
       ),
 
       // Footer

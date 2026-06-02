@@ -976,6 +976,86 @@ window.fetchGlobalRateConfig           = fetchGlobalRateConfig;
 window.saveGlobalRateConfig            = saveGlobalRateConfig;
 window.grantLiveScenarioAccess         = grantLiveScenarioAccess;
 
+// ── Partnerships ──────────────────────────────────────────────────────────────
+
+// LO invites a Realtor/Builder to partner (from their contact card)
+async function invitePartner({ partnerContactId, partnerEmail }) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: new Error("Not logged in") };
+  // Prevent duplicate invites
+  const { data: existing } = await supabase.from("partnerships")
+    .select("id, status")
+    .eq("lo_user_id", user.id)
+    .eq("partner_email", partnerEmail.toLowerCase())
+    .maybeSingle();
+  if (existing && existing.status !== "declined")
+    return { data: existing, error: null }; // already invited
+  // Look up partner's user_id if they have an account
+  const { data: partnerProfile } = await supabase.from("profiles")
+    .select("id").eq("email", partnerEmail.toLowerCase()).maybeSingle();
+  const payload = {
+    lo_user_id:         user.id,
+    partner_contact_id: partnerContactId || null,
+    partner_email:      partnerEmail.toLowerCase(),
+    partner_user_id:    partnerProfile ? partnerProfile.id : null,
+    status:             "pending",
+    initiated_by:       user.id,
+  };
+  const { data, error } = await supabase.from("partnerships").insert(payload).select().single();
+  return { data, error };
+}
+
+// Realtor/Builder accepts or declines an invite
+async function respondToPartnership({ partnershipId, accept }) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: new Error("Not logged in") };
+  // Stamp partner_user_id when accepting so LO can see who confirmed
+  const updates = { status: accept ? "active" : "declined", updated_at: new Date().toISOString() };
+  if (accept) updates.partner_user_id = user.id;
+  const { data, error } = await supabase.from("partnerships")
+    .update(updates).eq("id", partnershipId).select().single();
+  return { data, error };
+}
+
+// Fetch all partnerships for the current user (LO sees theirs; partner sees theirs)
+async function fetchMyPartnerships() {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { data: [], error: null };
+  const email = user.email ? user.email.toLowerCase() : "";
+  // Fetch where I'm the LO
+  const { data: asLO } = await supabase.from("partnerships")
+    .select("*").eq("lo_user_id", user.id).neq("status", "declined");
+  // Fetch where I'm the partner
+  const { data: asPartner } = await supabase.from("partnerships")
+    .select("*").or(`partner_user_id.eq.${user.id},partner_email.eq.${email}`)
+    .neq("status", "declined");
+  return { data: [...(asLO || []), ...(asPartner || [])], error: null };
+}
+
+// Fetch pending invites for the current Realtor/Builder
+async function fetchPendingPartnershipInvites() {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { data: [], error: null };
+  const email = user.email ? user.email.toLowerCase() : "";
+  const { data, error } = await supabase.from("partnerships")
+    .select("*, lo:lo_user_id(display_name, email, nmls)")
+    .or(`partner_user_id.eq.${user.id},partner_email.eq.${email}`)
+    .eq("status", "pending");
+  return { data: data || [], error };
+}
+
+// Remove a partnership (either side can unlink)
+async function removePartnership(partnershipId) {
+  const { error } = await supabase.from("partnerships").delete().eq("id", partnershipId);
+  return { error };
+}
+
+window.invitePartner                  = invitePartner;
+window.respondToPartnership           = respondToPartnership;
+window.fetchMyPartnerships            = fetchMyPartnerships;
+window.fetchPendingPartnershipInvites = fetchPendingPartnershipInvites;
+window.removePartnership              = removePartnership;
+
 // ── Custom Warning Rules ─────────────────────────────────────────────────────
 
 async function fetchWarningRules() {

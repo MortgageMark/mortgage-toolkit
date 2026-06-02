@@ -15,6 +15,7 @@ const deleteWarningRuleSP             = window.deleteWarningRule;
 
 function SettingsPanel({ open, onClose, darkMode, allModules, openTab }) {
   const c = useThemeColors();
+  const [appLang, setLangPref] = useLocalStorage("app_lang", "en");
   const [brandName, setBrandName] = useLocalStorage("brand_name", "Home Loan Toolkit");
   const [brandSub, setBrandSub] = useLocalStorage("brand_sub", "MORTGAGE MARK · CMG HOME LOANS · NMLS #729612");
   const [brandLogo, setBrandLogo] = useLocalStorage("brand_logo", "");
@@ -244,6 +245,7 @@ function SettingsPanel({ open, onClose, darkMode, allModules, openTab }) {
             <button onClick={() => setSettingsTab("sharing")} style={tabStyle(settingsTab === "sharing")}>Share Tabs</button>
             <button onClick={() => setSettingsTab("portal")} style={tabStyle(settingsTab === "portal")}>Client Portal</button>
             {_spIsInternal && <button onClick={() => setSettingsTab("warnings")} style={tabStyle(settingsTab === "warnings")}>Warnings</button>}
+            <button onClick={() => setSettingsTab("language")} style={tabStyle(settingsTab === "language")}>🌐 Language</button>
           </div>
         </div>
         <div style={{ padding: "20px 24px" }}>
@@ -503,6 +505,32 @@ function SettingsPanel({ open, onClose, darkMode, allModules, openTab }) {
               </div>
             </div>
           )}
+          {settingsTab === "language" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, fontFamily: font }}>Choose your preferred language for the app.</div>
+              <div style={{ display: "flex", gap: 12 }}>
+                {[["en","🇺🇸 English"],["es","🇲🇽 Español"]].map(function(opt) {
+                  var isActive = appLang === opt[0];
+                  return React.createElement("button", {
+                    key: opt[0],
+                    onClick: function() { setLangPref(opt[0]); if (window.setAppLang) window.setAppLang(opt[0]); },
+                    style: {
+                      flex: 1, padding: "14px 10px", borderRadius: 10, cursor: "pointer", fontFamily: font,
+                      fontSize: 15, fontWeight: 700,
+                      background: isActive ? COLORS.navy : inputBg,
+                      color: isActive ? "#fff" : fg,
+                      border: "2px solid " + (isActive ? COLORS.navy : border),
+                      transition: "all 0.15s",
+                    }
+                  }, opt[1]);
+                })}
+              </div>
+              <div style={{ fontSize: 12, color: darkMode ? "#6B7D8A" : "#94A3B0", fontFamily: font, lineHeight: 1.6 }}>
+                Language affects all screens for the current user. Spanish translations are being expanded — some labels may still appear in English.
+              </div>
+            </div>
+          )}
+
           {settingsTab === "warnings" && _spIsInternal && (() => {
             const selStyle  = { padding: "6px 8px", borderRadius: 6, border: `1px solid ${border}`, background: inputBg, color: fg, fontSize: 12, fontFamily: font, cursor: "pointer" };
             const btnSm     = (extra) => ({ padding: "5px 12px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: font, ...extra });

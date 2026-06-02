@@ -328,7 +328,25 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
   // Portal account creation
   const [showPerson2,    setShowPerson2]    = useState(!!(contact.first_name2 || contact.last_name2 || contact.nickname2));
   const [photoUploading, setPhotoUploading] = useState(false);
-  const [copiedRefLink,  setCopiedRefLink]  = useState(false);
+  const [copiedRefLink,    setCopiedRefLink]    = useState(false);
+  const [partnerStatus,    setPartnerStatus]    = useState(null); // null | 'pending' | 'active'
+  const [partnershipId,    setPartnershipId]    = useState(null);
+  const [partnerSaving,    setPartnerSaving]    = useState(false);
+
+  // Load existing partnership status for this contact
+  React.useEffect(function() {
+    if (!supabaseCD || !isBusiness || !contact.email_personal) return;
+    var fn = window.fetchMyPartnerships;
+    if (!fn) return;
+    fn().then(function(res) {
+      if (res.error || !res.data) return;
+      var match = res.data.find(function(p) {
+        return p.partner_contact_id === contact.id ||
+               (p.partner_email && p.partner_email.toLowerCase() === (contact.email_personal || "").toLowerCase());
+      });
+      if (match) { setPartnerStatus(match.status); setPartnershipId(match.id); }
+    });
+  }, [contact.id]);
 
   async function handlePhotoUpload(file, field) {
     if (!file || !supabaseCD) return;
@@ -1220,22 +1238,74 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                   }
                   return <InfoRow label="Creator" value={creatorName} />;
                 })()}
-                {/* Referral link for Realtor / Builder business contacts */}
+                {/* Referral link + Partner invite for Realtor / Builder business contacts */}
                 {isBusiness && (contact.contact_category === "Realtor" || contact.contact_category === "Builder") && (
-                  <div>
-                    <div style={{ fontSize: "11px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "6px" }}>Referral Link</div>
-                    <button
-                      onClick={function() {
-                        var link = window.location.origin + window.location.pathname + "?from=" + encodeURIComponent(contact.id);
-                        navigator.clipboard.writeText(link).then(function() {
-                          setCopiedRefLink(true);
-                          setTimeout(function() { setCopiedRefLink(false); }, 2000);
-                        });
-                      }}
-                      style={{ background: copiedRefLink ? "#E6F9F0" : "#F0F4F8", color: copiedRefLink ? "#1B8A5A" : "#0C4160", border: "1px solid " + (copiedRefLink ? "#1B8A5A" : "#D1D9E6"), borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
-                    >
-                      {copiedRefLink ? "✓ Copied!" : "📋 Copy Referral Link"}
-                    </button>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div>
+                      <div style={{ fontSize: "11px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "6px" }}>Referral Link</div>
+                      <button
+                        onClick={function() {
+                          var link = window.location.origin + window.location.pathname + "?from=" + encodeURIComponent(contact.id);
+                          navigator.clipboard.writeText(link).then(function() {
+                            setCopiedRefLink(true);
+                            setTimeout(function() { setCopiedRefLink(false); }, 2000);
+                          });
+                        }}
+                        style={{ background: copiedRefLink ? "#E6F9F0" : "#F0F4F8", color: copiedRefLink ? "#1B8A5A" : "#0C4160", border: "1px solid " + (copiedRefLink ? "#1B8A5A" : "#D1D9E6"), borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                      >
+                        {copiedRefLink ? "✓ Copied!" : "📋 Copy Referral Link"}
+                      </button>
+                    </div>
+                    {/* Partner status */}
+                    {isAdmin && (
+                      <div>
+                        <div style={{ fontSize: "11px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "6px" }}>Partnership</div>
+                        {partnerStatus === "active" && (
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: "#1B8A5A", background: "#E6F9F0", borderRadius: 6, padding: "5px 10px" }}>✓ Active Partner</span>
+                            <button onClick={async function() {
+                              if (!window.removePartnership || !partnershipId) return;
+                              setPartnerSaving(true);
+                              await window.removePartnership(partnershipId);
+                              setPartnerStatus(null); setPartnershipId(null); setPartnerSaving(false);
+                            }} style={{ fontSize: 11, color: "#94a3b8", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+                              Unlink
+                            </button>
+                          </div>
+                        )}
+                        {partnerStatus === "pending" && (
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: "#b45309", background: "#fffbeb", borderRadius: 6, padding: "5px 10px" }}>⏳ Invite Pending</span>
+                            <button onClick={async function() {
+                              if (!window.removePartnership || !partnershipId) return;
+                              setPartnerSaving(true);
+                              await window.removePartnership(partnershipId);
+                              setPartnerStatus(null); setPartnershipId(null); setPartnerSaving(false);
+                            }} style={{ fontSize: 11, color: "#94a3b8", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+                              Cancel Invite
+                            </button>
+                          </div>
+                        )}
+                        {!partnerStatus && (
+                          <button
+                            disabled={partnerSaving || !contact.email_personal}
+                            onClick={async function() {
+                              if (!window.invitePartner || partnerSaving) return;
+                              setPartnerSaving(true);
+                              var res = await window.invitePartner({ partnerContactId: contact.id, partnerEmail: contact.email_personal });
+                              if (!res.error) { setPartnerStatus("pending"); setPartnershipId(res.data && res.data.id); }
+                              setPartnerSaving(false);
+                            }}
+                            style={{ background: "#0C4160", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: partnerSaving ? "wait" : "pointer", opacity: (!contact.email_personal || partnerSaving) ? 0.5 : 1, fontFamily: "inherit" }}
+                          >
+                            {partnerSaving ? "Sending…" : "🤝 Invite to Partner"}
+                          </button>
+                        )}
+                        {!contact.email_personal && !partnerStatus && (
+                          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>Add an email to this contact to invite them.</div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
