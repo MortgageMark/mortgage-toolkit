@@ -35,6 +35,10 @@ function InterestRates() {
   const [vaFloor,  setVaFloor]  = useLocalStorage("ir_va_floor",  "");
   const [vaSteps,  setVaSteps]  = useLocalStorage("ir_va_steps",  {});
 
+  // ── USDA + Non-QM (market rate only — no detailed grid) ───────────────────
+  const [usdaMarket,  setUsdaMarket]  = useLocalStorage("ir_usda_market",  "");
+  const [nonqmMarket, setNonqmMarket] = useLocalStorage("ir_nonqm_market", "");
+
   // ── Active loan type tab ───────────────────────────────────────────────────
   const [loanType, setLoanType] = useState("conv"); // "conv" | "fha" | "va"
 
@@ -79,6 +83,10 @@ function InterestRates() {
         if (vaCfg.market)  setVaMarket(vaCfg.market);
         if (vaCfg.floor)   setVaFloor(vaCfg.floor);
         if (vaCfg.steps)   setVaSteps(vaCfg.steps);
+        var usdaCfg  = raw._usda  || {};
+        var nonqmCfg = raw._nonqm || {};
+        if (usdaCfg.market)  setUsdaMarket(usdaCfg.market);
+        if (nonqmCfg.market) setNonqmMarket(nonqmCfg.market);
       }
       setTimeout(function() { initialLoad.current = false; }, 400);
     });
@@ -88,7 +96,7 @@ function InterestRates() {
   useEffect(() => {
     if (initialLoad.current) return;
     setIsDirty(true);
-  }, [marketStr, floorStr, rateDate, stepCosts, fhaMarket, fhaFloor, fhaSteps, vaMarket, vaFloor, vaSteps]);
+  }, [marketStr, floorStr, rateDate, stepCosts, fhaMarket, fhaFloor, fhaSteps, vaMarket, vaFloor, vaSteps, usdaMarket, nonqmMarket]);
 
   async function handleSyncMND() {
     const supabase = window._supabaseClient;
@@ -131,8 +139,10 @@ function InterestRates() {
     setIsDirty(false);
     // Bundle FHA/VA into step_costs as reserved _fha/_va keys
     var bundledSteps = Object.assign({}, stepCosts, {
-      _fha: { market: fhaMarket, floor: fhaFloor, steps: fhaSteps },
-      _va:  { market: vaMarket,  floor: vaFloor,  steps: vaSteps  },
+      _fha:   { market: fhaMarket,  floor: fhaFloor, steps: fhaSteps },
+      _va:    { market: vaMarket,   floor: vaFloor,  steps: vaSteps  },
+      _usda:  { market: usdaMarket  },
+      _nonqm: { market: nonqmMarket },
     });
     saveGlobalRateConfig({ market: marketStr, floor: floorStr, rateDate, stepCosts: bundledSteps })
       .then(function({ error }) {
@@ -287,6 +297,44 @@ function InterestRates() {
           >
             {saveStatus === "saving" ? "Saving…" : isDirty ? "Save Rates" : "Saved"}
           </button>
+        </div>
+      </div>
+
+      {/* ── Quick Rate Entry ───────────────────────────────────────────────── */}
+      <div style={{ background: c.bg || "#fff", border: "1px solid " + border, borderRadius: 10, padding: "16px 20px", marginBottom: 24 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: c.textSecondary || "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 14 }}>
+          Current Rates — Quick Entry
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 260 }}>
+          {[
+            { label: "Conventional",           value: marketStr,   set: setMarketStr,  color: navy },
+            { label: "FHA",                    value: fhaMarket,   set: setFhaMarket,  color: "#1A6B5A" },
+            { label: "USDA",                   value: usdaMarket,  set: setUsdaMarket, color: "#2d7a22" },
+            { label: "VA",                     value: vaMarket,    set: setVaMarket,   color: "#7B3F00" },
+            { label: "Non-QM / Non-Traditional", value: nonqmMarket, set: setNonqmMarket, color: "#5b21b6" },
+          ].map(function(prog) {
+            return (
+              <div key={prog.label} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: prog.color, width: 160, flexShrink: 0 }}>
+                  {prog.label}
+                </label>
+                <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.125"
+                    min="0"
+                    max="20"
+                    value={prog.value}
+                    onChange={function(e) { prog.set(e.target.value); }}
+                    placeholder="0.000"
+                    style={{ ...bigInp, width: 90, borderColor: prog.value ? prog.color : border, paddingRight: 26 }}
+                  />
+                  <span style={{ position: "absolute", right: 8, fontSize: 13, fontWeight: 600, color: c.textSecondary || "#94a3b8", pointerEvents: "none" }}>%</span>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 

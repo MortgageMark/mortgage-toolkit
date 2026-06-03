@@ -639,6 +639,9 @@ function DTICalculator() {
           </span>
         </div>
 
+        {/* Scrollable table — horizontal scroll on narrow screens */}
+        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+
         {/* Column headers */}
         {income.length > 0 && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
@@ -788,6 +791,8 @@ function DTICalculator() {
             <div style={{ width: COL_REM, flexShrink: 0 }} />
           </div>
         )}
+
+        </div>{/* end scroll wrapper */}
       </SectionCard>
 
       {/* ══════════════ MONTHLY DEBT OBLIGATIONS ══════════════ */}
@@ -809,6 +814,9 @@ function DTICalculator() {
               — those are <em>not</em> counted in DTI.
             </span>
           </div>
+
+          {/* Scrollable table — horizontal scroll on narrow screens */}
+          <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
 
           {/* Column headers — left-aligned, aligned with income section */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
@@ -1074,6 +1082,8 @@ function DTICalculator() {
                 <div style={{ width: COL_BAL + COL_STATUS + COL_REM + 16, flexShrink: 0 }} />
               </div>
             )}
+
+          </div>{/* end scroll wrapper */}
           </div>
         </SectionCard>
       </div>

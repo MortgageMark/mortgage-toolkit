@@ -58,14 +58,14 @@ const ThemeContext = window.ThemeContext;
 // MODULES array with component refs — built here since all components are loaded
 const MODULES = [
   // ── Primary tabs (visible to all roles in order) ──
-  { id: "contactlender",   label: "Contact Lender",      icon: "\uD83D\uDCEC", component: ContactLenderTab },
+  // { id: "contactlender", label: "Vendor Contacts", icon: "\uD83D\uDCEC", component: ContactLenderTab }, // hidden \u2014 restore to re-enable
   { id: "refi",         label: "Refi: Existing Loan",    icon: "\uD83D\uDD04", component: RefinanceAnalyzer },
   { id: "payment",      label: "Payment Calculator",     icon: "\uD83D\uDD22", component: PaymentCalculator },
   { id: "refi-analysis",label: "Refi: Analysis",         icon: "\uD83D\uDCCA", component: RefinanceAnalysis },
   { id: "amort",        label: "Amortization",           icon: "\uD83D\uDCC5", component: AmortizationSchedule },
   { id: "recast",       label: "Loan Recast",            icon: "\uD83D\uDCB8", component: RecastCalculator },
   { id: "dti",          label: "DTI Calculator",         icon: "\uD83D\uDCD0", component: DTICalculator },
-  { id: "fees",         label: "Fee Sheet",              icon: "\uD83E\uDDFE", component: FeeSheetGenerator },
+  { id: "fees",         label: "Fee Sheet",              icon: React.createElement("span", { style: { filter: "sepia(1) saturate(4) hue-rotate(90deg) brightness(1.2)" } }, "\uD83D\uDCB2"), component: FeeSheetGenerator },
   { id: "compare",      label: "Compare Loans",          icon: "\u2696\uFE0F", component: MortgageComparison },
   { id: "prequal",      label: "Pre-Qual Letter",        icon: "\u2705",       component: PreQualLetter },
   { id: "sellernet",    label: "Seller Net Sheet",       icon: "\uD83D\uDCB0", component: SellerNetSheet },
@@ -104,6 +104,21 @@ const INTERNAL_MODULE_IDS = ["builder", "buydowns", "permbuyd", "targetpmt", "bb
 // All tabs that a borrower could potentially see (base set + grantable extras).
 // Used by the "Client sees" strip so the LO can tell at a glance what's shared.
 const CLIENT_TAB_IDS = ["payment", "fees", "breakeven", "amort", "recast", "dti", "prequal", "sellernet", "rentvsbuy", "refi", "refi-analysis", "compare", "contactlender"];
+
+// Primary tabs shown to clients even when locked (so they can discover & request access)
+const CLIENT_PRIMARY_TABS = ["payment", "amort", "recast", "dti", "fees", "compare", "prequal", "sellernet"];
+
+// Descriptions shown on the locked placeholder screen
+const LOCKED_TAB_DESCRIPTIONS = {
+  payment:    { title: "Payment Calculator",   desc: "See your estimated monthly payment broken down by principal & interest, taxes, insurance, and PMI. The cornerstone of any loan scenario." },
+  amort:      { title: "Amortization Schedule", desc: "See exactly how each payment reduces your loan balance over time, plus charts showing when you'll build significant equity." },
+  recast:     { title: "Loan Recast",          desc: "Find out how making a large lump-sum payment and recasting your loan could lower your monthly payment without refinancing." },
+  dti:        { title: "DTI Calculator",       desc: "Calculate your Debt-to-Income ratio to understand how your income and debts affect how much home you can qualify for." },
+  fees:       { title: "Fee Sheet",            desc: "A detailed breakdown of all estimated closing costs, lender fees, and prepaid items for your loan." },
+  compare:    { title: "Compare Loans",        desc: "Side-by-side comparison of up to three different loan scenarios — different rates, terms, or programs — so you can make the best decision." },
+  prequal:    { title: "Pre-Qual Letter",      desc: "Generate a pre-qualification letter to share with your realtor when making an offer on a home." },
+  sellernet:  { title: "Seller Net Sheet",     desc: "If you're also selling a home, this shows your estimated net proceeds after paying off your mortgage, commissions, and closing costs." },
+};
 
 // These tabs are grouped under the "Internal" section header in the left sidebar.
 const INTERNAL_SIDEBAR_IDS = ["interestrates", "titleendorsements"];
@@ -504,6 +519,131 @@ function ScenarioContactPanel({ contactId, scenarioId, scenario, darkMode, color
   );
 }
 
+// ── ClientVendorBanner ────────────────────────────────────────────────────────
+// Shown to the LO when a client has added vendor contacts to their scenario.
+function ClientVendorBanner({ scenarioId, vendors, vendorCats, darkMode, colors, font }) {
+  const DISMISSED_KEY = "vnd_cli_" + scenarioId + "_dismissed";
+
+  // Per-vendor saved/dismissed state stored in localStorage
+  function isDismissed(vKey) {
+    try {
+      var raw = localStorage.getItem(DISMISSED_KEY);
+      var obj = raw ? JSON.parse(raw) : {};
+      return !!obj[vKey];
+    } catch(e) { return false; }
+  }
+  function markDismissed(vKey) {
+    try {
+      var raw = localStorage.getItem(DISMISSED_KEY);
+      var obj = raw ? JSON.parse(raw) : {};
+      obj[vKey] = true;
+      localStorage.setItem(DISMISSED_KEY, JSON.stringify(obj));
+    } catch(e) {}
+  }
+
+  const [dismissed, setDismissed] = useState(function() {
+    var obj = {};
+    vendors.forEach(function(v) { obj[v.key] = isDismissed(v.key); });
+    return obj;
+  });
+  const [saving, setSaving]   = useState({});
+  const [saved, setSaved]     = useState({});
+  const [errors, setErrors]   = useState({});
+
+  var visible = vendors.filter(function(v) { return !dismissed[v.key]; });
+  if (!visible.length) return null;
+
+  async function handleSave(v) {
+    setSaving(function(s) { var n = Object.assign({}, s); n[v.key] = true; return n; });
+    setErrors(function(e) { var n = Object.assign({}, e); delete n[v.key]; return n; });
+    try {
+      // Duplicate check by email
+      if (v.email) {
+        var contacts = await window.fetchContactsFromSupabase();
+        var existing = (contacts.data || []).find(function(c) {
+          return (c.email_work || c.email_personal || "").toLowerCase() === v.email.toLowerCase();
+        });
+        if (existing) {
+          setErrors(function(e) { var n = Object.assign({}, e); n[v.key] = "A contact with this email already exists (" + (existing.first_name || "") + " " + (existing.last_name || "") + ")."; return n; });
+          setSaving(function(s) { var n = Object.assign({}, s); n[v.key] = false; return n; });
+          return;
+        }
+      }
+      // Parse name into first/last
+      var parts    = (v.name || "").trim().split(/\s+/);
+      var lastName = parts.length > 1 ? parts.pop() : "";
+      var firstName= parts.join(" ") || v.name || "";
+      var result = await saveContactToSupabase({
+        first_name:       firstName,
+        last_name:        lastName,
+        company:          v.company || null,
+        phone_cell:       v.phone   || null,
+        email_work:       v.email   || null,
+        contact_type:     "business",
+        contact_category: vendorCats[v.key] || "Other",
+        status:           "active",
+      });
+      if (result.error) throw result.error;
+      setSaved(function(s) { var n = Object.assign({}, s); n[v.key] = true; return n; });
+      markDismissed(v.key);
+      setTimeout(function() {
+        setDismissed(function(d) { var n = Object.assign({}, d); n[v.key] = true; return n; });
+      }, 1800);
+    } catch(err) {
+      setErrors(function(e) { var n = Object.assign({}, e); n[v.key] = err.message || "Error saving contact."; return n; });
+    }
+    setSaving(function(s) { var n = Object.assign({}, s); n[v.key] = false; return n; });
+  }
+
+  function handleDismiss(vKey) {
+    markDismissed(vKey);
+    setDismissed(function(d) { var n = Object.assign({}, d); n[vKey] = true; return n; });
+  }
+
+  var bg     = darkMode ? "#1A2E1A" : "#F0FDF4";
+  var border = darkMode ? "#166534" : "#86EFAC";
+  var hdr    = darkMode ? "#4ADE80" : "#15803D";
+  var txt    = darkMode ? "#D1FAE5" : "#14532D";
+  var subtle = darkMode ? "#166534" : "#DCFCE7";
+
+  return React.createElement("div", {
+    style: { background: bg, border: "1.5px solid " + border, borderRadius: 10, marginBottom: 16, overflow: "hidden", fontFamily: font }
+  },
+    React.createElement("div", { style: { padding: "10px 16px 8px", display: "flex", alignItems: "center", gap: 8, borderBottom: "1px solid " + border } },
+      React.createElement("span", { style: { fontSize: 18 } }, "📥"),
+      React.createElement("span", { style: { fontSize: 13, fontWeight: 700, color: hdr } }, "Your client added vendor contacts to this scenario")
+    ),
+    visible.map(function(v) {
+      return React.createElement("div", { key: v.key, style: { padding: "12px 16px", borderBottom: "1px solid " + border + "66" } },
+        React.createElement("div", { style: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" } },
+          React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: hdr, marginBottom: 2 } }, v.label),
+            React.createElement("div", { style: { fontSize: 14, fontWeight: 600, color: txt } }, v.name || "(no name)"),
+            v.company && React.createElement("div", { style: { fontSize: 12, color: txt, opacity: 0.75 } }, v.company),
+            v.phone   && React.createElement("div", { style: { fontSize: 12, color: txt, opacity: 0.75 } }, "📞 " + v.phone),
+            v.email   && React.createElement("div", { style: { fontSize: 12, color: txt, opacity: 0.75 } }, "✉️ " + v.email)
+          ),
+          React.createElement("div", { style: { display: "flex", gap: 8, alignItems: "center", flexShrink: 0, paddingTop: 2 } },
+            saved[v.key]
+              ? React.createElement("span", { style: { fontSize: 12, fontWeight: 700, color: "#22c55e" } }, "✓ Saved!")
+              : React.createElement("button", {
+                  disabled: saving[v.key],
+                  onClick: function() { handleSave(v); },
+                  style: { padding: "6px 14px", background: saving[v.key] ? "#86efac" : "#22c55e", color: "#fff", fontWeight: 700, fontSize: 12, fontFamily: font, border: "none", borderRadius: 6, cursor: saving[v.key] ? "default" : "pointer", whiteSpace: "nowrap" }
+                }, saving[v.key] ? "Saving…" : "Save to Contacts"),
+            !saved[v.key] && React.createElement("button", {
+              onClick: function() { handleDismiss(v.key); },
+              style: { background: "none", border: "none", cursor: "pointer", fontSize: 16, color: txt, opacity: 0.5, padding: "4px 6px", lineHeight: 1 },
+              title: "Dismiss"
+            }, "✕")
+          )
+        ),
+        errors[v.key] && React.createElement("div", { style: { marginTop: 6, fontSize: 12, color: "#ef4444", fontFamily: font } }, "⚠️ " + errors[v.key])
+      );
+    })
+  );
+}
+
 function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, onOpenContact, onOpenProfile, onContactInfo, onLoginSettings, onTeam }) {
   const t = function(str) {
     var lang = "en";
@@ -531,7 +671,13 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
 
   // Internal person: which modules to show to borrower
   const allModuleIds = MODULES.map(m => m.id);
-  const [enabledModules, setEnabledModules] = useLocalStorage("app_enabled_mods", allModuleIds);
+  const [enabledModulesLS, setEnabledModules] = useLocalStorage("app_enabled_mods", allModuleIds);
+  // For clients: read directly from the scenario object so we bypass localStorage timing entirely.
+  // The LO's saved list travels with the scenario in calculatorData._enabled_mods.
+  // For LOs: use their own localStorage setting as normal.
+  const enabledModules = (!isInternal && activeScenario && activeScenario.calculatorData && Array.isArray(activeScenario.calculatorData._enabled_mods))
+    ? activeScenario.calculatorData._enabled_mods
+    : enabledModulesLS;
   const [pcProgram] = useLocalStorage("pc_prog", "conventional");
   const [pcPurpose] = useLocalStorage("pc_purpose", "purchase");
   const [headerContact, setHeaderContact] = useState(null);
@@ -605,10 +751,15 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
 
   const toggleModule = (id) => {
     setEnabledModules(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    setTimeout(() => window.dispatchEvent(new Event("mtk_save_scenario")), 100);
   };
-  const toggleAll = (on) => { setEnabledModules(on ? allModuleIds : []); };
+  const toggleAll = (on) => {
+    setEnabledModules(on ? allModuleIds : []);
+    setTimeout(() => window.dispatchEvent(new Event("mtk_save_scenario")), 100);
+  };
   const toggleSection = (ids, on) => {
     setEnabledModules(prev => on ? [...new Set([...prev, ...ids])] : prev.filter(id => !ids.includes(id)));
+    setTimeout(() => window.dispatchEvent(new Event("mtk_save_scenario")), 100);
   };
 
   // ── Shared Value Propagation ──────────────────────────────────────
@@ -718,6 +869,15 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
     propagateSharedValues();
   }, [activeModule, propagateSharedValues]);
 
+  // When LO opens a scenario, immediately save so _enabled_mods is written into
+  // calculation_data — this ensures the client always gets the current tab settings.
+  useEffect(() => {
+    if (isInternal && activeScenario && activeScenario.id) {
+      const t = setTimeout(() => window.dispatchEvent(new Event("mtk_save_scenario")), 3000);
+      return () => clearTimeout(t);
+    }
+  }, []);
+
   // Scroll content to top whenever the active tab changes
   useEffect(() => {
     if (contentRef.current) contentRef.current.scrollTop = 0;
@@ -746,7 +906,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
     // Internal users see all tabs + module selector; non-internal see only enabled tabs
     let mods = MODULES;
     if (!isInternal) {
-      mods = mods.filter(m => enabledModules.includes(m.id));
+      // Borrowers see all tabs — disabled ones show a "request access" placeholder
     }
     // Admin-only tabs only visible when admin is in Admin View (not simulating other roles)
     if (!showAdminTabs) {
@@ -794,7 +954,8 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
           ? ["payment", "fees", "breakeven", "amort", "recast", "prequal", "sellernet", "contactlender"]
           : ["payment", "fees", "breakeven", "amort", "contactlender"];
         const extra = Array.isArray(user.borrowerPermissions) ? user.borrowerPermissions : [];
-        return base.concat(extra).includes(m.id);
+        // Also include primary tabs so they show as locked (discoverable)
+        return base.concat(extra).includes(m.id) || CLIENT_PRIMARY_TABS.includes(m.id);
       }
       if (user && user.role === "realtor") {
         const isOwnScenario = activeScenario && user.supabaseUser && activeScenario.createdBy === user.supabaseUser.id;
@@ -809,6 +970,8 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
     });
   }, [user, userRole, isSharedView, urlTabs, isInternal, enabledModules, isAdmin, activeScenario, showAdminTabs, pcProgram, pcPurpose]);
 
+  // A tab is "locked" for a borrower if it's NOT in enabledModules
+  const isTabLocked = !isInternal && !enabledModules.includes(activeModule);
   const ActiveComponent = MODULES.find(m => m.id === activeModule)?.component || (filteredModules[0]?.component || PaymentCalculator);
 
   useEffect(() => {
@@ -1245,25 +1408,51 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                 <button onClick={() => setSidebarOpen(false)} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 7, padding: "6px 12px", color: "#fff", fontSize: 16, cursor: "pointer" }}>&#10005;</button>
               </div>
             )}
-            {/* Desktop: collapse/expand toggle */}
+            {/* Desktop: profile row + collapse/expand toggle */}
             {!isMobile && (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: navCollapsed ? "center" : "space-between", padding: "12px 10px 4px" }}>
-                {!navCollapsed && (
-                  <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", color: "rgba(255,255,255,0.55)", textTransform: "uppercase", paddingLeft: 4, whiteSpace: "nowrap" }}>
-                    Home Loan Toolkit
-                  </span>
-                )}
-                <button
-                  onClick={() => setNavCollapsed(!navCollapsed)}
-                  title={navCollapsed ? "Expand menu" : "Collapse menu"}
-                  style={{ background: "rgba(255,255,255,0.1)", border: "none", borderRadius: 6, padding: "5px 7px", color: "rgba(255,255,255,0.75)", cursor: "pointer", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="0.75" y="0.75" width="14.5" height="14.5" rx="2" stroke="currentColor" strokeWidth="1.5"/>
-                    <line x1="5" y1="0.75" x2="5" y2="15.25" stroke="currentColor" strokeWidth="1.5"/>
-                  </svg>
-                </button>
-              </div>
+              <React.Fragment>
+                {/* Profile circle row — always visible, mirrors Dashboard sidebar */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: navCollapsed ? "center" : "space-between", padding: navCollapsed ? "10px 0" : "14px 14px 12px", borderBottom: "1px solid rgba(255,255,255,0.12)", flexShrink: 0, gap: 10 }}>
+                  {!navCollapsed && (
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: font }}>
+                        {user && (user.name || user.email) || ""}
+                      </div>
+                      {user && user.role && (
+                        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: font, textTransform: "capitalize" }}>
+                          {user.role}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {window.AppHeader && React.createElement(window.AppHeader, {
+                    user: user, darkMode: darkMode, setDarkMode: setDarkMode,
+                    userRole: userRole, setUserRole: isInternal ? setUserRole : null,
+                    onLogout: onLogout, isInternal: isInternal,
+                    isAdmin: !!(user && user.role === "admin"),
+                    onContactInfo: onContactInfo,
+                    onLoginSettings: onLoginSettings,
+                  })}
+                </div>
+                {/* Collapse/expand toggle */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: navCollapsed ? "center" : "space-between", padding: "12px 10px 4px" }}>
+                  {!navCollapsed && (
+                    <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", color: "rgba(255,255,255,0.55)", textTransform: "uppercase", paddingLeft: 4, whiteSpace: "nowrap" }}>
+                      Home Loan Toolkit
+                    </span>
+                  )}
+                  <button
+                    onClick={() => setNavCollapsed(!navCollapsed)}
+                    title={navCollapsed ? "Expand menu" : "Collapse menu"}
+                    style={{ background: "rgba(255,255,255,0.1)", border: "none", borderRadius: 6, padding: "5px 7px", color: "rgba(255,255,255,0.75)", cursor: "pointer", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <rect x="0.75" y="0.75" width="14.5" height="14.5" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+                      <line x1="5" y1="0.75" x2="5" y2="15.25" stroke="currentColor" strokeWidth="1.5"/>
+                    </svg>
+                  </button>
+                </div>
+              </React.Fragment>
             )}
             {/* ── Sidebar nav content (scrollable) ── */}
             <div style={{ flex: 1, overflowY: "auto", paddingBottom: 8 }}>
@@ -1272,57 +1461,57 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
               const regularMods  = sidebarMods.filter(m => !INTERNAL_SIDEBAR_IDS.includes(m.id) && !BUILDER_SIDEBAR_IDS.includes(m.id) && m.id !== "contactlender");
               const builderMods  = sidebarMods.filter(m => BUILDER_SIDEBAR_IDS.includes(m.id));
               const internalMods = sidebarMods.filter(m => INTERNAL_SIDEBAR_IDS.includes(m.id));
-              const navBtn = (isActive, onClick, icon, label, isClientVisible) => (
+              const navBtn = (isActive, onClick, icon, label, isClientVisible, modId) => {
+                var locked = !isInternal && modId && CLIENT_PRIMARY_TABS.includes(modId) && !enabledModules.includes(modId);
+                return (
                 <button onClick={onClick} style={{
                   display: "flex", alignItems: "center", width: "100%",
                   padding: navCollapsed ? "10px 0" : "10px 18px 10px 15px",
                   justifyContent: navCollapsed ? "center" : "flex-start",
                   background: isActive ? "rgba(255,255,255,0.18)" : "transparent",
-                  color: isActive ? "#fff" : "rgba(255,255,255,0.6)",
+                  color: isActive ? "#fff" : (locked ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.6)"),
                   border: "none",
                   borderLeft: navCollapsed ? "none" : (isActive ? "3px solid rgba(255,255,255,0.9)" : "3px solid transparent"),
                   cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: font,
                   transition: "all 0.15s", whiteSpace: "nowrap", overflow: "hidden",
                 }}>
-                  <span style={{ fontSize: navCollapsed ? 17 : 14, marginRight: navCollapsed ? 0 : 8, lineHeight: 1, flexShrink: 0 }}>{icon}</span>
+                  <span style={{ fontSize: navCollapsed ? 17 : 14, marginRight: navCollapsed ? 0 : 8, lineHeight: 1, flexShrink: 0, opacity: locked ? 0.4 : 1 }}>{icon}</span>
                   {!navCollapsed && label}
-                  {!navCollapsed && userRole === "lo" && isClientVisible === false && (
-                    <span title="Hidden from client" style={{ width: 7, height: 7, borderRadius: "50%", background: "#F87171", display: "inline-block", flexShrink: 0, marginLeft: "auto", alignSelf: "center" }} />
+                  {!navCollapsed && locked && (
+                    <span style={{ fontSize: 11, marginLeft: "auto", opacity: 0.5, flexShrink: 0 }}>🔒</span>
+                  )}
+                  {!navCollapsed && !locked && isInternal && isClientVisible === false && (
+                    <span title="Hidden from client" style={{ fontSize: 13, fontWeight: 900, color: "#F87171", marginLeft: "auto", flexShrink: 0, lineHeight: 1 }}>*</span>
                   )}
                 </button>
-              );
-              const sectionHead = (label) => navCollapsed ? null : (
-                <div style={{ padding: "14px 15px 4px", fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)", fontFamily: font }}>{label}</div>
-              );
+                );
+              };
+              const sectionHead = (label) => navCollapsed
+                ? <div style={{ margin: "6px 10px", borderTop: "1px solid rgba(255,255,255,0.15)" }} />
+                : <div style={{ padding: "14px 15px 4px", fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)", fontFamily: font }}>{label}</div>;
               return (
                 <React.Fragment>
                   {!navCollapsed && <div style={{ height: 6 }} />}
                   {/* ── Contacts + Scenarios shortcuts ── */}
-                  {effectiveIsInternal && onOpenContact && navBtn(false, () => { onOpenContact(null); setSidebarOpen(false); }, <span style={{filter:"grayscale(1) invert(1) opacity(0.7)"}}>👥</span>, "Contacts")}
-                  {!effectiveIsInternal && navBtn(activeModule === "contactlender", () => { setActiveModule("contactlender"); setSidebarOpen(false); }, "📬", "Contact Lender")}
+                  {effectiveIsInternal && onOpenContact && navBtn(false, () => { onOpenContact(null); setSidebarOpen(false); }, <span style={{filter:"grayscale(1) invert(1) opacity(0.7)"}}>👥</span>, "People")}
+                  {/* Vendor Contacts tab hidden — uncomment to restore: */}
+                  {/* {!effectiveIsInternal && navBtn(activeModule === "contactlender", () => { setActiveModule("contactlender"); setSidebarOpen(false); }, "📬", "Vendor Contacts")} */}
                   {onBackToScenarios && navBtn(false, () => { onBackToScenarios(); setSidebarOpen(false); }, "🗂️", "Scenarios")}
+                  {isInternal && activeScenario && activeScenario.contact_id && onOpenContact && navBtn(false, () => { onOpenContact(activeScenario.contact_id); setSidebarOpen(false); }, React.createElement("span", { style: { filter: "grayscale(1) invert(1) opacity(0.7)" } }, "👤"), "Contact")}
+                  {isInternal && activeScenario && activeScenario.contact_id && navBtn(false, () => { setNotesOpen(true); setSidebarOpen(false); }, "📝", "Notes")}
                   {(!isInternal || onOpenContact || onBackToScenarios) && !navCollapsed && (
                     <div style={{ margin: "6px 15px 2px", borderBottom: "1px solid rgba(255,255,255,0.12)" }} />
                   )}
                   {sectionHead(t("Toolkit"))}
                   {regularMods.map(m =>
-                    navBtn(activeModule === m.id, () => { setActiveModule(m.id); setSidebarOpen(false); }, m.icon, t(m.label), CLIENT_TAB_IDS.includes(m.id) ? enabledModules.includes(m.id) : undefined)
-                  )}
-                  {builderMods.length > 0 && (
-                    <React.Fragment>
-                      {!navCollapsed && <div style={{ height: 4 }} />}
-                      {sectionHead(t("Builder"))}
-                      {builderMods.map(m =>
-                        navBtn(activeModule === m.id, () => { setActiveModule(m.id); setSidebarOpen(false); }, m.icon, t(m.label), CLIENT_TAB_IDS.includes(m.id) ? enabledModules.includes(m.id) : undefined)
-                      )}
-                    </React.Fragment>
+                    navBtn(activeModule === m.id, () => { setActiveModule(m.id); setSidebarOpen(false); }, m.icon, t(m.label), enabledModules.includes(m.id), m.id)
                   )}
                   {internalMods.length > 0 && (
                     <React.Fragment>
                       {!navCollapsed && <div style={{ height: 4 }} />}
                       {sectionHead(t("Internal"))}
                       {internalMods.map(m =>
-                        navBtn(activeModule === m.id, () => { setActiveModule(m.id); setSidebarOpen(false); }, m.icon, t(m.label), CLIENT_TAB_IDS.includes(m.id) ? enabledModules.includes(m.id) : undefined)
+                        navBtn(activeModule === m.id, () => { setActiveModule(m.id); setSidebarOpen(false); }, m.icon, t(m.label), enabledModules.includes(m.id), m.id)
                       )}
                     </React.Fragment>
                   )}
@@ -1331,80 +1520,6 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
             })()}
             </div>{/* end scrollable nav */}
 
-            {/* ── Quick Notes — pinned above Live Session ── */}
-            {activeScenario && activeScenario.contact_id && isInternal && (
-              <div style={{ flexShrink: 0, borderTop: "1px solid rgba(255,255,255,0.10)" }}>
-                <button
-                  onClick={function() { setNotesOpen(function(o) { return !o; }); }}
-                  style={{
-                    display: "flex", alignItems: "center", width: "100%",
-                    padding: navCollapsed ? "10px 0" : "9px 18px 9px 15px",
-                    background: notesOpen ? "rgba(255,255,255,0.10)" : "transparent",
-                    color: notesOpen ? "#fff" : "rgba(255,255,255,0.65)",
-                    border: "none", cursor: "pointer",
-                    fontSize: 13, fontWeight: 600, fontFamily: font,
-                    justifyContent: navCollapsed ? "center" : "flex-start",
-                    gap: 8, transition: "all 0.15s",
-                  }}
-                >
-                  <span style={{ fontSize: navCollapsed ? 17 : 15, lineHeight: 1 }}>📝</span>
-                  {!navCollapsed && (
-                    <span style={{ flex: 1, textAlign: "left" }}>Notes</span>
-                  )}
-                  {!navCollapsed && sidebarNotes.length > 0 && (
-                    <span style={{ fontSize: 10, background: "rgba(255,255,255,0.2)", borderRadius: 10, padding: "1px 7px", fontWeight: 700 }}>
-                      {sidebarNotes.length}
-                    </span>
-                  )}
-                </button>
-
-                {notesOpen && !navCollapsed && (
-                  <div style={{ padding: "0 12px 12px" }}>
-                    {/* Existing notes */}
-                    {sidebarNotes.length > 0 && (
-                      <div style={{ maxHeight: 180, overflowY: "auto", marginBottom: 8 }}>
-                        {sidebarNotes.slice().reverse().map(function(n) {
-                          var d = n.created_at ? new Date(n.created_at).toLocaleDateString("en-US", { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
-                          return (
-                            <div key={n.id} style={{ background: "rgba(255,255,255,0.08)", borderRadius: 6, padding: "7px 10px", marginBottom: 6 }}>
-                              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.9)", lineHeight: 1.5 }}>{n.body}</div>
-                              {d && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>{d}</div>}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                    {sidebarNotes.length === 0 && (
-                      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginBottom: 8, fontStyle: "italic" }}>No notes yet.</div>
-                    )}
-                    {/* Add note */}
-                    <textarea
-                      value={sidebarNoteText}
-                      onChange={function(e) { setSidebarNoteText(e.target.value); }}
-                      placeholder="Add a note…"
-                      rows={3}
-                      style={{ width: "100%", padding: "7px 10px", background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 6, fontSize: 12, color: "#fff", fontFamily: font, resize: "none", outline: "none", boxSizing: "border-box" }}
-                    />
-                    <button
-                      disabled={!sidebarNoteText.trim() || sidebarNoteSaving}
-                      onClick={async function() {
-                        if (!sidebarNoteText.trim() || sidebarNoteSaving) return;
-                        setSidebarNoteSaving(true);
-                        var res = await addContactNoteToSupabase({ contactId: activeScenario.contact_id, body: sidebarNoteText.trim() });
-                        if (!res || !res.error) {
-                          setSidebarNotes(function(prev) { return prev.concat([{ id: Date.now(), body: sidebarNoteText.trim(), created_at: new Date().toISOString() }]); });
-                          setSidebarNoteText("");
-                        }
-                        setSidebarNoteSaving(false);
-                      }}
-                      style={{ marginTop: 6, width: "100%", padding: "7px 0", background: sidebarNoteSaving ? "rgba(255,255,255,0.1)" : "#1B8A5A", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 700, color: "#fff", cursor: (!sidebarNoteText.trim() || sidebarNoteSaving) ? "not-allowed" : "pointer", opacity: (!sidebarNoteText.trim() || sidebarNoteSaving) ? 0.5 : 1, fontFamily: font }}
-                    >
-                      {sidebarNoteSaving ? "Saving…" : "Save Note"}
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* ── Live Session — compact button pinned above profile ── */}
             {LiveSessionBar && syncScenarioId && (() => {
@@ -1485,7 +1600,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
         )}
 
         {/* ── Content ── */}
-        <div ref={contentRef} style={{ flex: 1, minWidth: 0, padding: isMobile ? "12px 12px 0" : "20px 20px 0", paddingBottom: isMobile ? "max(100px, calc(env(safe-area-inset-bottom, 0px) + 80px))" : 40, overflowY: "auto", overflowX: "hidden" }}>
+        <div ref={contentRef} style={{ flex: 1, minWidth: 0, padding: isMobile ? "12px 12px 0" : "20px 20px 0", paddingBottom: isMobile ? "max(160px, calc(env(safe-area-inset-bottom, 0px) + 140px))" : 40, overflowY: "auto", overflowX: "hidden", display: "flex", flexDirection: "column" }}>
         {isSharedView && (
           <div style={{ padding: "8px 14px", background: darkMode ? "#1A3040" : "#E8F4FD", borderRadius: 8, marginBottom: 16, fontSize: 12, color: COLORS.blue, fontWeight: 600, fontFamily: font, border: `1px solid ${COLORS.blue}33` }}>
             {"\uD83D\uDCCE"} Shared View — Showing {filteredModules.length} selected tool{filteredModules.length !== 1 ? "s" : ""}. <a href={window.location.href.split("?")[0]} style={{ color: COLORS.blue, textDecoration: "underline" }}>{"View full toolkit \u2192"}</a>
@@ -1512,6 +1627,17 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
             🔒 <span>Numbers are locked. Your LO will guide any changes from here.</span>
           </div>
         )}
+        {/* Client-added vendor notification banner (LO only) */}
+        {isInternal && activeScenario && (function() {
+          var sid = activeScenario.id;
+          var vendors = window.getClientVendorData ? window.getClientVendorData(sid) : [];
+          if (!vendors.length) return null;
+          var VENDOR_CATS = { bld: "Home Builder", rea: "Realtor", ins: "Financial Partner", ttl: "Financial Partner" };
+          return React.createElement(ClientVendorBanner, {
+            key: "cvb_" + sid, scenarioId: sid, vendors: vendors,
+            vendorCats: VENDOR_CATS, darkMode: darkMode, colors: colors, font: font
+          });
+        })()}
         {activeModule === "__modules__" && isInternal ? (
           <div key="__modules__" className="mtk-fade-in" style={{ maxWidth: 320 }}>
 
@@ -1599,8 +1725,47 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
           </div>
         ) : activeModule === "contact_tab" && isInternal && activeScenario && activeScenario.contact_id
           ? <ScenarioContactPanel key={activeScenario.contact_id} contactId={activeScenario.contact_id} scenarioId={activeScenario.id} scenario={activeScenario} darkMode={darkMode} colors={colors} onOpenContact={onOpenContact} />
-          : <div key={activeModule} className="mtk-fade-in" style={syncReadOnly ? { pointerEvents: "none", userSelect: "none", opacity: 0.93 } : {}}>
-              <ActiveComponent isInternal={effectiveIsInternal} user={user} scenario={activeScenario} contact={headerContact} />
+          : <div key={activeModule} className="mtk-fade-in" style={Object.assign({ flex: 1 }, syncReadOnly ? { pointerEvents: "none", userSelect: "none", opacity: 0.93 } : {})}>
+              {isTabLocked ? (function() {
+                var info = LOCKED_TAB_DESCRIPTIONS[activeModule] || { title: "This Tool", desc: "This tool is available with your loan officer's approval." };
+                var loName  = (user && user.loName) || "";
+                var loPhone = "";
+                var loEmail = "";
+                try { loPhone = JSON.parse(localStorage.getItem("mtk_pq_loph")  || "null") || ""; } catch(e) {}
+                try { if (!loPhone) loPhone = JSON.parse(localStorage.getItem("mtk_pq_locell") || "null") || ""; } catch(e) {}
+                try { loEmail = JSON.parse(localStorage.getItem("mtk_pq_loem")  || "null") || ""; } catch(e) {}
+                var contactEmail = loEmail || "Admin@HomeLoanToolkit.com";
+                var displayName  = loName  || (loEmail ? loEmail : "your Loan Officer");
+                var subject = encodeURIComponent("Home Loan Toolkit: Access Request");
+                var body    = encodeURIComponent("Hi" + (loName ? " " + loName : "") + ",\n\nI'd like to request access to the " + info.title + " tool in my Home Loan Toolkit. Could you please enable it for my account?\n\nThank you!");
+                var mailtoHref = "mailto:" + contactEmail + "?subject=" + subject + "&body=" + body;
+                return (
+                  <div style={{ maxWidth: 420, margin: "48px auto", padding: "0 24px", fontFamily: font, textAlign: "center" }}>
+                    <div style={{ fontSize: 44, marginBottom: 14 }}>🔒</div>
+                    <div style={{ fontSize: 21, fontWeight: 700, color: colors.navy, marginBottom: 14 }}>{info.title}</div>
+                    <div style={{ fontSize: 14, color: colors.gray, lineHeight: 1.65, marginBottom: 28, background: colors.bg, borderRadius: 12, padding: "16px 20px", border: "1px solid " + colors.border }}>
+                      {info.desc}
+                    </div>
+                    <div style={{ fontSize: 13, color: colors.gray, marginBottom: 20, lineHeight: 1.5 }}>
+                      This tool isn't enabled for your account yet. Reach out to your Loan Officer to request access.
+                    </div>
+                    {/* LO contact card */}
+                    <div style={{ background: colors.bg, border: "1px solid " + colors.border, borderRadius: 12, padding: "18px 20px", textAlign: "left" }}>
+                      {loName && (
+                        <div style={{ fontSize: 15, fontWeight: 700, color: colors.navy, marginBottom: 10 }}>{loName}</div>
+                      )}
+                      {loPhone && (
+                        <a href={"tel:" + loPhone.replace(/\D/g, "")} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: colors.navy, textDecoration: "none", marginBottom: 8 }}>
+                          <span>📞</span><span>{loPhone}</span>
+                        </a>
+                      )}
+                      <a href={mailtoHref} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: colors.blue || COLORS.blue, textDecoration: "none", wordBreak: "break-all" }}>
+                        <span>✉️</span><span>{contactEmail}</span>
+                      </a>
+                    </div>
+                  </div>
+                );
+              })() : <ActiveComponent isInternal={effectiveIsInternal} user={user} scenario={activeScenario} contact={headerContact} />}
             </div>
         }
 
@@ -1701,6 +1866,70 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
     {/* ── Settings Panel ── */}
     <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} darkMode={darkMode} allModules={MODULES} openTab={settingsInitialTab} />
 
+    {/* ── Contact Notes Modal ── */}
+    {notesOpen && activeScenario && activeScenario.contact_id && (
+      <div
+        onClick={function(e) { if (e.target === e.currentTarget) setNotesOpen(false); }}
+        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 9000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+      >
+        <div style={{ background: colors.bg, borderRadius: 14, width: "100%", maxWidth: 520, maxHeight: "80vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 40px rgba(0,0,0,0.25)", fontFamily: font, overflow: "hidden" }}>
+
+          {/* Header */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid " + colors.border, flexShrink: 0 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: colors.navy }}>📝 Internal Notes</div>
+            <button onClick={function() { setNotesOpen(false); }} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: colors.gray, lineHeight: 1, padding: "0 4px" }}>✕</button>
+          </div>
+
+          {/* Notes list */}
+          <div style={{ flex: 1, overflowY: "auto", padding: "14px 20px" }}>
+            {sidebarNotes.length === 0 && (
+              <div style={{ fontSize: 13, color: colors.gray, fontStyle: "italic", textAlign: "center", paddingTop: 20 }}>No notes yet.</div>
+            )}
+            {sidebarNotes.slice().reverse().map(function(n) {
+              var author = (n.profiles && n.profiles.display_name) || "Unknown";
+              var d = n.created_at ? new Date(n.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "";
+              return (
+                <div key={n.id} style={{ background: darkMode ? "rgba(255,255,255,0.05)" : "#F8F9FA", borderRadius: 8, padding: "10px 14px", marginBottom: 10, border: "1px solid " + colors.border }}>
+                  <div style={{ fontSize: 13, color: colors.text, lineHeight: 1.6 }}>{n.body}</div>
+                  <div style={{ fontSize: 11, color: colors.gray, marginTop: 6, display: "flex", gap: 6 }}>
+                    <span style={{ fontWeight: 600 }}>{author}</span>
+                    {d && <span>· {d}</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Add note */}
+          <div style={{ padding: "12px 20px 16px", borderTop: "1px solid " + colors.border, flexShrink: 0 }}>
+            <textarea
+              value={sidebarNoteText}
+              onChange={function(e) { setSidebarNoteText(e.target.value); }}
+              placeholder="Add a note…"
+              rows={3}
+              style={{ width: "100%", padding: "9px 12px", border: "1.5px solid " + colors.border, borderRadius: 8, fontSize: 13, color: colors.text, background: colors.bg, fontFamily: font, resize: "none", outline: "none", boxSizing: "border-box" }}
+            />
+            <button
+              disabled={!sidebarNoteText.trim() || sidebarNoteSaving}
+              onClick={async function() {
+                if (!sidebarNoteText.trim() || sidebarNoteSaving) return;
+                setSidebarNoteSaving(true);
+                var res = await addContactNoteToSupabase({ contactId: activeScenario.contact_id, body: sidebarNoteText.trim() });
+                if (!res || !res.error) {
+                  setSidebarNotes(function(prev) { return [{ id: Date.now(), body: sidebarNoteText.trim(), created_at: new Date().toISOString() }, ...prev]; });
+                  setSidebarNoteText("");
+                }
+                setSidebarNoteSaving(false);
+              }}
+              style={{ marginTop: 8, width: "100%", padding: "9px 0", background: (!sidebarNoteText.trim() || sidebarNoteSaving) ? colors.border : COLORS.green, border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, color: "#fff", cursor: (!sidebarNoteText.trim() || sidebarNoteSaving) ? "not-allowed" : "pointer", fontFamily: font }}
+            >
+              {sidebarNoteSaving ? "Saving…" : "Save Note"}
+            </button>
+          </div>
+
+        </div>
+      </div>
+    )}
 
     </ThemeContext.Provider>
   );

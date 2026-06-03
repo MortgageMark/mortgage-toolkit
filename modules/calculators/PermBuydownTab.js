@@ -23,6 +23,21 @@ function PermBuydownTab({ isInternal }) {
   const [pcHP]   = useLocalStorage("pc_hp",   "");
   const [pcDP]   = useLocalStorage("pc_dp",   "");
   const [pcProg] = useLocalStorage("pc_prog", "conventional");
+
+  // Interest Rates tab — use program-specific market rate as the current rate
+  const [irConvRate]  = useLocalStorage("ir_market",       "");
+  const [irFhaRate]   = useLocalStorage("ir_fha_market",   "");
+  const [irVaRate]    = useLocalStorage("ir_va_market",    "");
+  const [irUsdaRate]  = useLocalStorage("ir_usda_market",  "");
+  const [irNonqmRate] = useLocalStorage("ir_nonqm_market", "");
+  const prog = (pcProg || "conventional").toLowerCase();
+  const irRate = prog === "fha"   ? irFhaRate
+               : prog === "usda"  ? (irUsdaRate  || irFhaRate)
+               : prog === "va"    ? irVaRate
+               : prog === "nonqm" ? (irNonqmRate || irConvRate)
+               : irConvRate; // conventional, jumbo, everything else
+  // Use IR tab rate when available; fall back to Payment Calculator rate
+  const currentRate = (irRate && parseFloat(irRate) > 0) ? irRate : pcRate;
   const [pcOcc]  = useLocalStorage("pc_occ",  "primary");
   const [dtiTax] = useLocalStorage("dti_tax", "0");
   const [dtiIns] = useLocalStorage("dti_ins", "0");
@@ -31,7 +46,7 @@ function PermBuydownTab({ isInternal }) {
   // Adjustable: how many discount points per 0.25% rate reduction
   const [ptsPerQtr, setPtsPerQtr] = useState("0.5");
 
-  const noteRate     = parseFloat(pcRate) || 0;
+  const noteRate     = parseFloat(currentRate) || 0;
   const la           = parseFloat(pcLA)   || 0;
   const term         = parseInt(pcTerm)   || 30;
   const hp           = parseFloat(pcHP)   || 0;

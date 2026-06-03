@@ -59,6 +59,8 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
   const [loFax, setLoFax] = useLocalStorage("pq_lofax", "");
   const [loWebsite, setLoWebsite] = useLocalStorage("pq_loweb", "");
   const [loAddrCity, setLoAddrCity] = useLocalStorage("pq_loaddr2", "");
+  const [companyLogo, setCompanyLogo] = useLocalStorage("pq_company_logo", ""); // upper-left: company logo
+  const [teamLogo,    setTeamLogo]    = useLocalStorage("pq_team_logo",    ""); // upper-right: LO team logo
   const [showLetter, setShowLetter] = React.useState(false);
   const [loSigCollapsed, setLoSigCollapsed] = React.useState(true);
   const [letterHistory, setLetterHistory] = React.useState([]);
@@ -275,6 +277,8 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
     loWebsite:       loWebsite,
     loNMLS:          loNMLS,
     branchNMLS:      branchNMLS,
+    companyLogo:     companyLogo,
+    teamLogo:        teamLogo,
   };
 
   const sectionLabel = { fontSize: "10px", textTransform: "uppercase", letterSpacing: "1.4px", color: "#999", marginBottom: "3px", fontWeight: 600 };
@@ -292,14 +296,17 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
   // ── Letter Content — parameterized; accepts live or frozen data object ──
   const letterContent = (d) => React.createElement("div", {
     className: "mtk-prequal-letter",
-    style: { maxWidth: "750px", margin: "0 auto", background: "#fff", borderRadius: "8px", padding: "24px 32px", fontFamily: font, color: "#333", fontSize: "13px", lineHeight: "1.6", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }
+    // LETTER PADDING — DO NOT CHANGE: 20px sides ≈ 0.21" at 760px canvas width
+    // Combined with PDF margin of 0.25", total visible margin ≈ 0.46" — standard letter feel
+    style: { maxWidth: "750px", margin: "0 auto", background: "#fff", borderRadius: "8px", padding: "24px 20px", fontFamily: font, color: "#333", fontSize: "13px", lineHeight: "1.6", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }
   },
-    React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" } },
-      React.createElement("div", null,
-        React.createElement("div", { style: { fontSize: "28px", fontWeight: 800, color: "#1B8A5A", letterSpacing: "-0.5px", lineHeight: "1" } }, "CMG"),
-        React.createElement("div", { style: { fontSize: "9px", color: "#1B8A5A", textTransform: "uppercase", letterSpacing: "3.5px", fontWeight: 700, lineHeight: "1.2", marginTop: "2px" } }, "Home Loans")
-      ),
-      React.createElement("img", { src: "modules/images/mortgage-mark-logo.png", alt: "MortgageMark.com", style: { height: "71px", objectFit: "contain" } })
+    (d.companyLogo || d.teamLogo) && React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" } },
+      d.companyLogo
+        ? React.createElement("img", { src: d.companyLogo, alt: d.company || "Company", style: { maxHeight: "60px", maxWidth: "200px", objectFit: "contain" } })
+        : React.createElement("div", null),
+      d.teamLogo
+        ? React.createElement("img", { src: d.teamLogo, alt: "Team", style: { maxHeight: "60px", maxWidth: "160px", objectFit: "contain" } })
+        : React.createElement("div", null)
     ),
     React.createElement("h1", { style: { fontSize: "20px", fontWeight: 700, color: COLORS.navy, margin: "0 0 8px 0", letterSpacing: "-0.3px", textAlign: "center" } }, "Conditional Pre-Qualification Letter"),
     React.createElement("div", { style: { height: "2px", background: "linear-gradient(to right, #1B8A5A, #1a5fa8)", marginBottom: "14px" } }),
@@ -406,7 +413,9 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
     if (!hasFunds && !hasConting && !hasHeartburn) return null;
     return React.createElement("div", {
       className: "mtk-prequal-letter",
-      style: { maxWidth: "750px", margin: "0 auto", background: "#fff", borderRadius: "8px", padding: "24px 32px", fontFamily: font, color: "#333", fontSize: "13px", lineHeight: "1.6", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }
+      // LETTER PADDING — DO NOT CHANGE: 20px sides ≈ 0.21" at 760px canvas width
+    // Combined with PDF margin of 0.25", total visible margin ≈ 0.46" — standard letter feel
+    style: { maxWidth: "750px", margin: "0 auto", background: "#fff", borderRadius: "8px", padding: "24px 20px", fontFamily: font, color: "#333", fontSize: "13px", lineHeight: "1.6", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }
     },
       // Header (same as page 1)
       React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" } },
@@ -599,11 +608,6 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
       React.createElement(Toggle, { label: "OTHER", checked: cOther, onChange: setCOther }),
       cOther ? React.createElement(LabeledInput, { label: "Other contingency (specify)", value: cOtherText, onChange: setCOtherText, type: "text" }) : null
     ),
-    // Print / Download PQ buttons — under Contingencies card
-    !isInternal ? null : React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "flex-end", marginTop: "-4px", marginBottom: "8px" } },
-      React.createElement(Button, { label: "🖨️ Print PQ Letter", small: true, onClick: () => printLetter() }),
-      React.createElement(Button, { label: pdfLoading ? "Generating..." : "⬇️ Download PQ PDF", small: true, primary: true, onClick: downloadPDF, disabled: pdfLoading })
-    ),
     // LO Heartburn — renders as "Notable Mentions" on the letter
     !isInternal ? null : React.createElement(SectionCard, { title: "LO Heartburn (Internal)" },
       React.createElement("div", { style: { fontSize: 12, color: "#6B7280", marginBottom: 12, lineHeight: 1.5 } },
@@ -634,10 +638,12 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
         );
       })
     ),
-    // Heartburn print buttons — under LO Heartburn section
-    !isInternal ? null : React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "flex-end", marginTop: "-4px", marginBottom: "8px" } },
-      React.createElement(Button, { label: "🖨️ Print Heartburn Letter", small: true, onClick: () => printHeartburnLetter() }),
-      React.createElement(Button, { label: "⬇️ Heartburn PDF", small: true, onClick: () => downloadHeartburnPDF() })
+    // All letter buttons in one row: PQ first, then Heartburn
+    !isInternal ? null : React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end", marginTop: "4px", marginBottom: "8px" } },
+      React.createElement(Button, { label: "🖨️ Print PQ", small: true, onClick: () => printLetter() }),
+      React.createElement(Button, { label: pdfLoading ? "Generating…" : "⬇️ Download PQ PDF", small: true, primary: true, onClick: downloadPDF, disabled: pdfLoading }),
+      React.createElement(Button, { label: "🖨️ Print Heartburn", small: true, onClick: () => printHeartburnLetter() }),
+      React.createElement(Button, { label: "⬇️ Download Heartburn PDF", small: true, onClick: () => downloadHeartburnPDF() })
     ),
     // LOSelector + LO Signature — full width, internal only
     !isInternal ? null : React.createElement(React.Fragment, null,
@@ -660,35 +666,14 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
         )
       )
     ),
-    React.createElement("div", { style: { display: "flex", gap: "12px", justifyContent: "space-between", alignItems: "center" } },
-      paramsReady
-        ? React.createElement("div", {
-            style: { fontSize: 12, color: "#166534", background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: 8, padding: "9px 14px", flex: 1, lineHeight: 1.5, fontFamily: font }
-          },
-            React.createElement("span", { style: { fontWeight: 700 } }, "✓ Ready to go. "),
-            "You can customize any fields above, or generate the letter as-is."
-          )
-        : React.createElement("div", null),
-      React.createElement("div", { style: { display: "flex", gap: 8, alignItems: "center" } },
+    // Auto-generate snapshot on mount / when params change (replaces manual Generate button)
+    React.createElement(React.Fragment, null,
+      React.createElement("div", { style: { display: "none" } },
       React.createElement(Button, { onClick: () => {
         const missing = [];
-        if (!purchasePrice) missing.push("Max Purchase Price (PQ Parameters)");
-        if (!loanAmount)    missing.push("Max Loan Amount (PQ Parameters)");
-        if (!loName)        missing.push("LO Name");
-        if (!loTitle)       missing.push("Title / Role");
-        if (!loNMLS)        missing.push("LO NMLS #");
-        if (!company)       missing.push("Company");
-        if (!companyNMLS)   missing.push("Company NMLS #");
-        if (!branchNMLS)    missing.push("Branch NMLS #");
-        if (!loAddress)     missing.push("Street Address");
-        if (!loAddrCity)    missing.push("City, State, Zip");
-        if (!loPhone)       missing.push("Office Phone");
-        if (!loCell)        missing.push("Cell Phone");
-        if (!loEmail)       missing.push("Display Email");
-        if (missing.length > 0) {
-          alert("Cannot generate letter. Please fill in the following required fields:\n\n• " + missing.join("\n• "));
-          return;
-        }
+        if (!purchasePrice) missing.push("Max Purchase Price");
+        if (!loanAmount)    missing.push("Max Loan Amount");
+        if (missing.length > 0) { return; }
         const seq = letterHistory.length + 1;
         const id = buildLetterId(seq);
         const now = new Date();
@@ -736,6 +721,8 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
           loFax:           loFax,
           loWebsite:       loWebsite,
           branchNMLS:      branchNMLS,
+          companyLogo:     companyLogo,
+          teamLogo:        teamLogo,
         };
         setDisplaySnap(snap);
         setShowLetter(true);
@@ -746,11 +733,9 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
             console.warn("PQ snapshot save failed:", error);
           }
         }).catch(err => console.warn("PQ snapshot save error:", err));
-        // Immediately save scenario calc data so client sees LO's params right away
         window.dispatchEvent(new Event("mtk_save_scenario"));
       }, label: "Generate", primary: true })
-      )  // close button group
-    )
+      ))  // hidden generate button kept for snapshot logic
   );
 
   // ── Letter History section ──
@@ -1028,64 +1013,73 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
 
   const [pdfLoading, setPdfLoading] = React.useState(false);
 
-  const downloadPDF = async () => {
-    const page1El = document.getElementById("pq-letter-page1");
-    if (!page1El || !window.html2canvas || !window.jspdf) return;
-    setPdfLoading(true);
+  // ── PDF DOWNLOAD ─────────────────────────────────────────────────────────────
+  // Strategy: mutate the live element directly before capture, restore after.
+  // This bypasses onclone entirely — what you set IS what gets captured.
+  // PDF page: 8.5"×11" letter | margins: 0.25" all sides | content: 8.0"×10.5"
+  // Canvas: element forced to exactly 760px wide before capture → no ambiguity.
+  // ─────────────────────────────────────────────────────────────────────────────
+  async function captureToPDF(elementId, fileName) {
+    const wrapper = document.getElementById(elementId);
+    if (!wrapper || !window.html2canvas || !window.jspdf) return;
+    const el = wrapper.querySelector(".mtk-prequal-letter") || wrapper;
+
+    // Save original inline styles
+    const savedStyle = el.getAttribute("style") || "";
+
+    // Force exact dimensions and clean appearance
+    el.style.cssText = [
+      savedStyle,
+      "width:760px !important",
+      "max-width:760px !important",
+      "min-width:760px !important",
+      "margin:0 !important",
+      "box-shadow:none !important",
+      "border-radius:0 !important",
+      "zoom:1 !important",
+      "transform:none !important",
+      "padding:24px 20px !important",
+    ].join(";");
+
     try {
       const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF({ orientation: "portrait", unit: "in", format: "letter" });
-      const margin = 0.25;
-      const contentW = 8.5 - margin * 2;
-      const maxH = 11 - margin * 2;
-      const canvas = await window.html2canvas(page1El, {
-        scale: 2, useCORS: true, backgroundColor: "#ffffff", width: 760, windowWidth: 760,
-        onclone: function(doc) {
-          const letter = doc.querySelector(".mtk-prequal-letter");
-          if (letter) { letter.style.boxShadow = "none"; letter.style.borderRadius = "0"; }
-        }
+      const pdf     = new jsPDF({ orientation: "portrait", unit: "in", format: "letter" });
+      const margin  = 0.25;
+      const pageW   = 8.5;
+      const pageH   = 11;
+      const printW  = pageW - margin * 2;  // 8.0"
+      const maxH    = pageH - margin * 2;  // 10.5"
+
+      const canvas  = await window.html2canvas(el, {
+        scale: 2, useCORS: true, backgroundColor: "#ffffff",
+        logging: false,
       });
-      const imgData = canvas.toDataURL("image/png");
-      const naturalH = (canvas.height / canvas.width) * contentW;
-      const fitW = naturalH <= maxH ? contentW : contentW * (maxH / naturalH);
-      const fitH = naturalH <= maxH ? naturalH : maxH;
-      const xOffset = margin + (contentW - fitW) / 2;
-      pdf.addImage(imgData, "PNG", xOffset, margin, fitW, fitH);
-      const borrowerName = activeData.applicantLine || "PreQual";
-      pdf.save(borrowerName.replace(/\s+/g, "-") + "-PQ-Letter.pdf");
+
+      const ratio   = canvas.height / canvas.width;
+      const imgH    = Math.min(printW * ratio, maxH);
+      const imgW    = imgH < maxH ? printW : maxH / ratio;
+
+      pdf.addImage(canvas.toDataURL("image/png"), "PNG", margin, margin, imgW, imgH);
+      pdf.save(fileName + ".pdf");
     } catch(e) {
-      console.error("PDF download error:", e);
+      console.error("PDF error:", e);
     }
+
+    // Restore original styles
+    if (savedStyle) el.setAttribute("style", savedStyle);
+    else el.removeAttribute("style");
+  }
+
+  const downloadPDF = async () => {
+    setPdfLoading(true);
+    const name = (activeData.applicantLine || "PreQual").replace(/\s+/g, "-");
+    await captureToPDF("pq-letter-page1", name + "-PQ-Letter");
     setPdfLoading(false);
   };
 
   const downloadHeartburnPDF = async () => {
-    const el = document.getElementById("pq-letter-page2");
-    if (!el || !window.html2canvas || !window.jspdf) return;
-    try {
-      const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF({ orientation: "portrait", unit: "in", format: "letter" });
-      const margin = 0.25;
-      const contentW = 8.5 - margin * 2;
-      const maxH = 11 - margin * 2;
-      const canvas = await window.html2canvas(el, {
-        scale: 2, useCORS: true, backgroundColor: "#ffffff", width: 760, windowWidth: 760,
-        onclone: function(doc) {
-          const letter = doc.querySelector(".mtk-prequal-letter");
-          if (letter) { letter.style.boxShadow = "none"; letter.style.borderRadius = "0"; }
-        }
-      });
-      const imgData = canvas.toDataURL("image/png");
-      const naturalH = (canvas.height / canvas.width) * contentW;
-      const fitW = naturalH <= maxH ? contentW : contentW * (maxH / naturalH);
-      const fitH = naturalH <= maxH ? naturalH : maxH;
-      const xOffset = margin + (contentW - fitW) / 2;
-      pdf.addImage(imgData, "PNG", xOffset, margin, fitW, fitH);
-      const borrowerName = activeData.applicantLine || "Concerns";
-      pdf.save(borrowerName.replace(/\s+/g, "-") + "-Heartburn-Letter.pdf");
-    } catch(e) {
-      console.error("Heartburn PDF error:", e);
-    }
+    const name = (activeData.applicantLine || "Concerns").replace(/\s+/g, "-");
+    await captureToPDF("pq-letter-page2", name + "-Heartburn-Letter");
   };
 
   const printLetter = () => {
@@ -1154,22 +1148,16 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
       // ── RIGHT column: always-visible letter preview
       React.createElement("div", { style: { position: "sticky", top: 16 } },
 
-        // Action button bar — only shown after Generate
-        showLetter
-          ? React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 6 } },
-              displaySnap
-                ? React.createElement("div", { style: { fontSize: 12, color: "#888", fontStyle: "italic", fontFamily: font } },
-                    "Archived: " + (displaySnap.letterId || "")
-                  )
-                : React.createElement("div", null),
-              React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } },
-                !isInternal && React.createElement(Button, { label: pdfLoading ? "Generating..." : "⬇️ Download PDF", small: true, primary: true, onClick: downloadPDF, disabled: pdfLoading }),
-                displaySnap && React.createElement(Button, { label: "Back to Live", small: true, onClick: () => { setDisplaySnap(null); } })
-              )
-            )
-          : React.createElement("div", { style: { fontSize: 12, color: COLORS.grayLight, fontFamily: font, fontStyle: "italic", marginBottom: 6, textAlign: "right" } },
-              "Live preview — click Generate to produce the official letter"
-            ),
+        // Action bar — client download + archived letter navigation
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 6 } },
+          displaySnap
+            ? React.createElement("div", { style: { fontSize: 12, color: "#888", fontStyle: "italic", fontFamily: font } }, "Archived: " + (displaySnap.letterId || ""))
+            : React.createElement("div", null),
+          React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } },
+            !isInternal && React.createElement(Button, { label: pdfLoading ? "Generating..." : "⬇️ Download PDF", small: true, primary: true, onClick: downloadPDF, disabled: pdfLoading }),
+            displaySnap && React.createElement(Button, { label: "Back to Live", small: true, onClick: () => { setDisplaySnap(null); } })
+          )
+        ),
 
         // Letter preview + SAMPLE watermark
         React.createElement("div", { style: { position: "relative" } },

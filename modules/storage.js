@@ -42,6 +42,11 @@ function snapshotCalculatorData() {
     const loSel = localStorage.getItem("mtk_lo_selected");
     if (loSel !== null) data["lo_selected"] = JSON.parse(loSel);
   } catch {}
+  // Include enabled modules so the LO's tab visibility choices travel with the scenario
+  try {
+    const mods = localStorage.getItem("mtk_app_enabled_mods");
+    if (mods !== null) data["_enabled_mods"] = JSON.parse(mods);
+  } catch {}
   return data;
 }
 
@@ -77,7 +82,7 @@ const BLANK_SCENARIO_FIELDS = [
   // default values ("Conventional", "30 Year") and must persist for first-render letter generation.
   "pq_dti","pq_co","pq_lo","pq_bpts","pq_bcd",
   // Seller Net Sheet
-  "sns_price","sns_mort1","sns_comm",
+  "sns_price","sns_mort1",
   // Budget Planner
   "bud_income","bud_mort","bud_tax","bud_ins","bud_util","bud_car",
   "bud_carins","bud_groc","bud_child","bud_student","bud_cc","bud_subs","bud_ent","bud_save","bud_other",
@@ -112,6 +117,10 @@ function restoreCalculatorData(data) {
     if (data["lo_selected"] !== undefined) {
       try { localStorage.setItem("mtk_lo_selected", JSON.stringify(data["lo_selected"])); } catch {}
     }
+    // Restore enabled modules so clients see exactly the tabs the LO enabled
+    if (data["_enabled_mods"] !== undefined) {
+      try { localStorage.setItem("mtk_app_enabled_mods", JSON.stringify(data["_enabled_mods"])); } catch {}
+    }
   } else {
     // New / blank scenario — preserve uid if present; blank all financial fields
     if (data && data.uid) {
@@ -133,6 +142,7 @@ function restoreCalculatorData(data) {
       "pc_2nd_term":    "",
       "pc_2nd_amt":     "",
       "pc_2nd_mode":    "pct",
+      "sns_comm":       "6",    // Realtor commission defaults to 6%
     };
     Object.keys(NEW_SCENARIO_DEFAULTS).forEach(function(k) {
       try { localStorage.setItem("mtk_" + k, JSON.stringify(NEW_SCENARIO_DEFAULTS[k])); } catch {}
@@ -471,7 +481,7 @@ async function fetchContactsFromSupabase() {
 // --- saveContactToSupabase ---
 async function saveContactToSupabase({
   contactId, prefix, first_name, last_name, nickname,
-  company, team_name, photo_url, logo_url, signature_url,
+  company, team_name, photo_url, logo_url, team_logo_url, signature_url,
   contact_type, contact_category, referred_by_contact_id,
   // phone
   phone_cell, phone_work, phone_home, phone_best,
@@ -508,6 +518,7 @@ async function saveContactToSupabase({
     team_name:  team_name  || null,
     photo_url:     photo_url     || null,
     logo_url:      logo_url      || null,
+    team_logo_url: team_logo_url || null,
     signature_url: signature_url || null,
     contact_type:           contact_type           || "client",
     contact_category:       contact_category       || null,
@@ -625,7 +636,7 @@ async function fetchContactNotesFromSupabase(contactId) {
   if (!contactId) return { data: [], error: null };
   const { data, error } = await supabase
     .from("contact_notes")
-    .select("id, body, created_at, user_id")
+    .select("id, body, created_at, user_id, profiles(display_name)")
     .eq("contact_id", contactId)
     .order("created_at", { ascending: false })
     .limit(100);

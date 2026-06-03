@@ -1551,7 +1551,7 @@ function PaymentCalculator({ isInternal, user }) {
                 <div style={{ fontSize: 12, color: c.gray, fontFamily: font, marginTop: 4 }}>Interest-only during draw period, then fully amortizing during repayment.</div>
               </div>
             )}
-            <LabeledInput label="Interest Rate" value={rate} onChange={(v) => { if (!/^(\d*\.?\d*)$/.test(String(v))) return; setRate(v); }} onBlur={handleRateBlur} suffix="%" type="number" step="0.125" infoTip="Your annual mortgage interest rate — not to be confused with APR, which includes fees. Even a 0.125% difference in rate can meaningfully change your monthly payment and total interest paid over the life of the loan." />
+            <LabeledInput label="Interest Rate" value={rate} onChange={(v) => { if (!/^(\d*\.?\d*)$/.test(String(v))) return; setRate(v); }} onBlur={handleRateBlur} suffix="%" type="text" inputMode="decimal" infoTip="Your annual mortgage interest rate — not to be confused with APR, which includes fees. Even a 0.125% difference in rate can meaningfully change your monthly payment and total interest paid over the life of the loan." />
             {calc.apr > 0 && calc.apr !== (parseFloat(rate) || 0) && (
               <div style={{ fontSize: 12, color: c.gray, fontFamily: font, marginTop: -4, marginBottom: 6, paddingLeft: 2 }}>
                 APR {calc.apr.toFixed((() => { const s = String(rate || "").trim(); const d = s.indexOf("."); return d === -1 ? 2 : Math.max(2, s.length - d - 1); })())}%
@@ -1728,6 +1728,196 @@ function PaymentCalculator({ isInternal, user }) {
               </div>
             )}
           </div>
+
+          {/* ═══ PROPERTY TAX ═══ */}
+          <SectionCard title={taxOverridden ? "PROPERTY TAX" : "PROPERTY TAX · Default"} accent={c.blue} style={{ maxWidth: 640 }} infoTip="Annual property taxes as a percentage of home value, included in your monthly PITI payment when escrowed. Texas rates typically range 1.5–2.5% depending on county and school district. Enter the monthly dollar amount OR the annual rate — both fields stay in sync.">
+            {(() => {
+              const hp = parseFloat(homePrice) || 0;
+              const basis = homesteadExemption ? hp * 0.70 : hp;
+              const rate = parseFloat(propertyTaxRate) || 0;
+              const monthlyRaw = basis > 0 ? basis * rate / 100 / 12 : 0;
+              const monthly = monthlyRaw > 0 ? (taxOverridden ? Math.round(monthlyRaw) : Math.round(monthlyRaw / 50) * 50) : 0;
+              const defaultBorderColor = taxOverridden ? c.border : `${c.blue}66`;
+              const inputStyle = { flex: 1, border: "none", outline: "none", background: "transparent", padding: "10px 12px", fontSize: 15, fontWeight: 500, color: c.text || c.navy, fontFamily: font, width: "100%", minWidth: 0 };
+              const wrapStyle = { display: "flex", alignItems: "center", background: taxOverridden ? c.bg : `${c.blue}08`, border: `1.5px solid ${defaultBorderColor}`, borderRadius: 8, overflow: "hidden", flex: 1 };
+              const displayDollar = taxDollarStored ? taxDollarStored : (monthly > 0 ? String(Math.round(monthly)) : "");
+              return (
+                <>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
+                    <div style={wrapStyle}>
+                      <span style={{ padding: "10px 0 10px 12px", color: c.navy, fontWeight: 600, fontSize: 15, fontFamily: font }}>$</span>
+                      <input type="text" inputMode="numeric"
+                        key={"tax-dollar-" + (taxDollarStored || Math.round(monthly / 50))}
+                        defaultValue={displayDollar}
+                        onFocus={function(e) { e.target.select(); }}
+                        onBlur={function(e) {
+                          const v = stripCommasLocal(e.target.value);
+                          if (String(v).trimStart().startsWith('-')) return;
+                          const mo = parseFloat(v) || 0;
+                          setTaxDollarStored(mo > 0 ? String(mo) : "");
+                          const basis2 = homesteadExemption ? hp * 0.70 : hp;
+                          if (basis2 > 0) setPropertyTaxRate(String(parseFloat((mo * 12 / basis2 * 100).toFixed(3))));
+                          setTaxMode("rate");
+                          if (mo > 0) setTaxOverridden(true);
+                        }}
+                        style={inputStyle} />
+                      <span style={{ padding: "10px 12px 10px 0", color: c.gray, fontSize: 13, fontWeight: 500, fontFamily: font }}>/mo</span>
+                    </div>
+                    <div style={wrapStyle}>
+                      <input type="number" inputMode="decimal" onFocus={(e) => e.target.select()} min="0" max="3.5" step="0.001"
+                        value={propertyTaxRate}
+                        onChange={function(e) {
+                          const v = e.target.value;
+                          if (String(v).trimStart().startsWith('-') || parseFloat(v) > 3.5) return;
+                          setPropertyTaxRate(v);
+                          setTaxDollarStored("");
+                          setTaxMode("rate");
+                          setTaxOverridden(true);
+                        }}
+                        style={inputStyle} />
+                      <span style={{ padding: "10px 12px 10px 0", color: c.gray, fontSize: 13, fontWeight: 500, fontFamily: font }}>% / yr</span>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                    {(taxDollarStored || monthly > 0) ? (
+                      <div style={{ fontSize: 12, color: c.grayLight || c.gray, fontFamily: font }}>
+                        {fmt(Math.round((parseFloat(taxDollarStored) || monthly) * 12))} / year
+                      </div>
+                    ) : <div />}
+                    {taxOverridden && (
+                      <button
+                        onClick={function() {
+                          const stateDefault = STATE_TAX_RATES[pcState] != null ? String(STATE_TAX_RATES[pcState]) : "2.3";
+                          setPropertyTaxRate(pcState === "TX" ? "2.3" : stateDefault);
+                          setPropertyTax("");
+                          setTaxDollarStored("");
+                          setTaxMode("rate");
+                          setTaxOverridden(false);
+                        }}
+                        style={{ fontSize: 11, color: c.blue, background: "none", border: "none", cursor: "pointer", fontFamily: font, padding: 0, textDecoration: "underline" }}
+                      >
+                        × Reset to default
+                      </button>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
+            {!taxOverridden && STATE_TAX_RATES[pcState] != null && (
+              <div style={{ fontSize: 12, color: c.grayLight || c.gray, fontFamily: font, marginBottom: 6, lineHeight: 1.5, fontStyle: "italic", padding: "6px 10px", background: c.bgAlt || "#f8f8f8", borderRadius: 6 }}>
+                {(window.STATE_LIST||[]).find(s=>s.value===pcState)?.label || pcState} state average ≈ {STATE_TAX_RATES[pcState]}%. Actual rates vary by county — enter your own value to override.
+              </div>
+            )}
+            {!taxOverridden && pcState === "TX" && (
+              <div style={{ fontSize: 12, color: c.navy, fontFamily: font, marginBottom: 6, lineHeight: 1.5, padding: "6px 10px", background: `${c.blue}12`, border: `1px solid ${c.blue}33`, borderRadius: 6 }}>
+                North Texas default: <strong style={{ color: c.navy }}>2.3%</strong>. Verify with the county appraisal district for the specific property.
+              </div>
+            )}
+            {homesteadExemption && (
+              <div style={{ fontSize: 12, color: taxOverridden ? c.gray : c.navy, fontFamily: font, lineHeight: 1.5, padding: "6px 10px", background: taxOverridden ? (c.bgAlt || "#f8f8f8") : `${c.green}12`, border: `1px solid ${taxOverridden ? c.border : c.green + "44"}`, borderRadius: 6 }}>
+                {(() => {
+                  const hp = parseFloat(homePrice) || 0;
+                  const rate = parseFloat(propertyTaxRate) || 0;
+                  const withEx    = hp > 0 && rate > 0 ? fmt2(Math.round(hp * 0.70 * rate / 100 / 12 / 50) * 50) : null;
+                  const withoutEx = hp > 0 && rate > 0 ? fmt2(Math.round(hp * rate / 100 / 12 / 50) * 50) : null;
+                  return taxOverridden
+                    ? <span>✓ TX homestead exemption applied — using 70% of value as tax basis.</span>
+                    : <>
+                        ✓ <strong>TX Homestead exemption applied</strong> — tax basis = {fmt(Math.round((parseFloat(homePrice)||0) * 0.70))} (70% of value).
+                        {withEx && withoutEx && <span> Saves <strong style={{ color: c.green }}>{fmt2(Math.round(hp * rate / 100 / 12 / 50) * 50 - Math.round(hp * 0.70 * rate / 100 / 12 / 50) * 50)}/mo</strong> vs. no exemption.</span>}
+                      </>;
+                })()}
+              </div>
+            )}
+          </SectionCard>
+
+          {/* ═══ HOME INSURANCE ═══ */}
+          <SectionCard title="HOME INSURANCE" accent={c.blue} style={{ maxWidth: 640 }} infoTip="Annual homeowners insurance as a percentage of home value, included in your PITI payment when escrowed. A common estimate is 0.5–1.0% annually depending on location, coverage level, and provider. Always get an actual quote — rates vary significantly by property and insurer.">
+            {(() => {
+              const hp = parseFloat(homePrice) || 0;
+              const rate = Math.max(0, parseFloat(homeInsuranceRate) || 0);
+              const monthlyRaw = hp > 0 ? hp * rate / 100 / 12 : 0;
+              const monthly = monthlyRaw > 0 ? (insOverridden ? Math.round(monthlyRaw) : Math.round(monthlyRaw / 50) * 50) : 0;
+              const inputStyle = { flex: 1, border: "none", outline: "none", background: "transparent", padding: "10px 12px", fontSize: 15, fontWeight: 500, color: c.text || c.navy, fontFamily: font, width: "100%", minWidth: 0 };
+              const wrapStyle = { display: "flex", alignItems: "center", background: c.bg, border: `1.5px solid ${c.border}`, borderRadius: 8, overflow: "hidden", flex: 1 };
+              const displayInsDollar = insDollarStored ? insDollarStored : (monthly > 0 ? String(Math.round(monthly)) : "");
+              return (
+                <>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
+                    <div style={wrapStyle}>
+                      <span style={{ padding: "10px 0 10px 12px", color: c.navy, fontWeight: 600, fontSize: 15, fontFamily: font }}>$</span>
+                      <input type="text" inputMode="numeric"
+                        key={"ins-dollar-" + (insDollarStored || Math.round(monthly / 50))}
+                        defaultValue={displayInsDollar}
+                        onFocus={function(e) { e.target.select(); }}
+                        onBlur={function(e) {
+                          const v = stripCommasLocal(e.target.value);
+                          if (String(v).trimStart().startsWith('-')) return;
+                          const mo = parseFloat(v) || 0;
+                          setInsDollarStored(mo > 0 ? String(mo) : "");
+                          if (hp > 0) setHomeInsuranceRate(String(parseFloat((mo * 12 / hp * 100).toFixed(3))));
+                          setInsMode("rate");
+                          if (mo > 0) setInsOverridden(true);
+                        }}
+                        style={inputStyle} />
+                      <span style={{ padding: "10px 12px 10px 0", color: c.gray, fontSize: 13, fontWeight: 500, fontFamily: font }}>/mo</span>
+                    </div>
+                    <div style={wrapStyle}>
+                      <input type="number" inputMode="decimal" onFocus={(e) => e.target.select()} min="0" max="2.5" step="0.001" value={homeInsuranceRate}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (String(v).trimStart().startsWith('-') || parseFloat(v) > 2.5) return;
+                          setHomeInsuranceRate(v);
+                          setInsDollarStored("");
+                          setInsMode("rate");
+                          setInsOverridden(true);
+                        }}
+                        onBlur={() => { const n = parseFloat(homeInsuranceRate) || 0; if (n > 0 && n < 0.25) setHomeInsuranceRate("0.25"); }}
+                        style={inputStyle} />
+                      <span style={{ padding: "10px 12px 10px 0", color: c.gray, fontSize: 13, fontWeight: 500, fontFamily: font }}>% / yr</span>
+                    </div>
+                  </div>
+                  {(insDollarStored || monthly > 0) && (
+                    <div style={{ fontSize: 12, color: c.grayLight || c.gray, fontFamily: font, marginBottom: 10, textAlign: "right" }}>
+                      {fmt(Math.round((parseFloat(insDollarStored) || monthly) * 12))} / year
+                    </div>
+                  )}
+                  {rate > 0 && rate < 0.25 && (
+                    <div style={{ marginBottom: 8, fontSize: 12, color: "#b45309", fontFamily: font, lineHeight: 1.4, background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 5, padding: "6px 10px" }}>
+                      Homeowners insurance is required on all mortgage loans. Minimum floored at <strong>0.25%</strong> of home value.
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+            {STATE_INS_RATES[pcState] != null && (
+              <div style={{ fontSize: 12, color: c.grayLight || c.gray, fontFamily: font, marginTop: 6, lineHeight: 1.5, fontStyle: "italic", padding: "6px 10px", background: c.bgAlt || "#f8f8f8", borderRadius: 6 }}>
+                {(window.STATE_LIST||[]).find(s=>s.value===pcState)?.label || pcState} avg ≈ {STATE_INS_RATES[pcState]}%{
+                  (() => {
+                    const propMult = INS_PROP_MULTIPLIERS[propType] || 1.00;
+                    const occMult = INS_OCC_MULTIPLIERS[occupancy] || 1.00;
+                    const combined = propMult * occMult;
+                    if (combined === 1.00) return null;
+                    const adj = parseFloat((STATE_INS_RATES[pcState] * combined).toFixed(2));
+                    const notes = [];
+                    if (propType === "condo") notes.push("condo");
+                    else if (propType === "townhome") notes.push("townhome");
+                    else if (propType === "duplex") notes.push("duplex");
+                    else if (propType === "3plex") notes.push("3-plex");
+                    else if (propType === "4plex") notes.push("4-plex");
+                    if (occupancy === "investment") notes.push("investment property");
+                    else if (occupancy === "vacation") notes.push("vacation home");
+                    return `, adjusted to ${adj}% (${notes.join(", ")})`;
+                  })()
+                }; rates vary by home age, carrier, and coverage level. Override as needed.
+              </div>
+            )}
+            {pcState === "TX" && (
+              <div style={{ fontSize: 12, color: c.navy, fontFamily: font, marginTop: 6, lineHeight: 1.5, padding: "6px 10px", background: `${c.blue}12`, border: `1px solid ${c.blue}33`, borderRadius: 6 }}>
+                Our recommendation for North Texas: <strong style={{ color: c.navy }}>0.7%</strong> for existing homes. New construction may qualify for lower rates; verify with the insurance carrier.
+              </div>
+            )}
+          </SectionCard>
 
           {/* ── CREDIT PROFILE ── */}
           <SectionCard title="CREDIT PROFILE" accent={c.navy}>
@@ -2194,206 +2384,6 @@ function PaymentCalculator({ isInternal, user }) {
           })()}
 
       </div>
-
-      {/* ═══ PROPERTY TAX ═══ */}
-      <SectionCard title={taxOverridden ? "PROPERTY TAX" : "PROPERTY TAX · Default"} accent={c.blue} style={{ maxWidth: 640 }} infoTip="Annual property taxes as a percentage of home value, included in your monthly PITI payment when escrowed. Texas rates typically range 1.5–2.5% depending on county and school district. Enter the monthly dollar amount OR the annual rate — both fields stay in sync.">
-        {(() => {
-          const hp = parseFloat(homePrice) || 0;
-          const basis = homesteadExemption ? hp * 0.70 : hp;
-          const rate = parseFloat(propertyTaxRate) || 0;
-          const monthlyRaw = basis > 0 ? basis * rate / 100 / 12 : 0;
-          // Round to $50 only for system default; once user has touched anything, round to $1
-          const monthly = monthlyRaw > 0 ? (taxOverridden ? Math.round(monthlyRaw) : Math.round(monthlyRaw / 50) * 50) : 0;
-          const defaultBorderColor = taxOverridden ? c.border : `${c.blue}66`;
-          const inputStyle = { flex: 1, border: "none", outline: "none", background: "transparent", padding: "10px 12px", fontSize: 15, fontWeight: 500, color: c.text || c.navy, fontFamily: font, width: "100%", minWidth: 0 };
-          const wrapStyle = { display: "flex", alignItems: "center", background: taxOverridden ? c.bg : `${c.blue}08`, border: `1.5px solid ${defaultBorderColor}`, borderRadius: 8, overflow: "hidden", flex: 1 };
-
-          // Display value: exact user-entered $ if set, otherwise rounded system default
-          const displayDollar = taxDollarStored ? taxDollarStored : (monthly > 0 ? String(Math.round(monthly)) : "");
-
-          return (
-            <>
-              <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
-                <div style={wrapStyle}>
-                  <span style={{ padding: "10px 0 10px 12px", color: c.navy, fontWeight: 600, fontSize: 15, fontFamily: font }}>$</span>
-                  <input type="text" inputMode="numeric"
-                    key={"tax-dollar-" + (taxDollarStored || Math.round(monthly / 50))}
-                    defaultValue={displayDollar}
-                    onFocus={function(e) { e.target.select(); }}
-                    onBlur={function(e) {
-                      const v = stripCommasLocal(e.target.value);
-                      if (String(v).trimStart().startsWith('-')) return;
-                      const mo = parseFloat(v) || 0;
-                      setTaxDollarStored(mo > 0 ? String(mo) : "");
-                      const basis2 = homesteadExemption ? hp * 0.70 : hp;
-                      if (basis2 > 0) setPropertyTaxRate(String(parseFloat((mo * 12 / basis2 * 100).toFixed(3))));
-                      setTaxMode("rate");
-                      if (mo > 0) setTaxOverridden(true);
-                    }}
-                    style={inputStyle} />
-                  <span style={{ padding: "10px 12px 10px 0", color: c.gray, fontSize: 13, fontWeight: 500, fontFamily: font }}>/mo</span>
-                </div>
-                <div style={wrapStyle}>
-                  <input type="number" inputMode="decimal" onFocus={(e) => e.target.select()} min="0" max="3.5" step="0.001"
-                    value={propertyTaxRate}
-                    onChange={function(e) {
-                      const v = e.target.value;
-                      if (String(v).trimStart().startsWith('-') || parseFloat(v) > 3.5) return;
-                      setPropertyTaxRate(v);
-                      setTaxDollarStored(""); // % change clears the stored $ so it recomputes
-                      setTaxMode("rate");
-                      setTaxOverridden(true);
-                    }}
-                    style={inputStyle} />
-                  <span style={{ padding: "10px 12px 10px 0", color: c.gray, fontSize: 13, fontWeight: 500, fontFamily: font }}>% / yr</span>
-                </div>
-              </div>
-
-              {/* Annual summary + reset link */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                {(taxDollarStored || monthly > 0) ? (
-                  <div style={{ fontSize: 12, color: c.grayLight || c.gray, fontFamily: font }}>
-                    {fmt(Math.round((parseFloat(taxDollarStored) || monthly) * 12))} / year
-                  </div>
-                ) : <div />}
-                {taxOverridden && (
-                  <button
-                    onClick={function() {
-                      const stateDefault = STATE_TAX_RATES[pcState] != null ? String(STATE_TAX_RATES[pcState]) : "2.3";
-                      setPropertyTaxRate(pcState === "TX" ? "2.3" : stateDefault);
-                      setPropertyTax("");
-                      setTaxDollarStored("");
-                      setTaxMode("rate");
-                      setTaxOverridden(false);
-                    }}
-                    style={{ fontSize: 11, color: c.blue, background: "none", border: "none", cursor: "pointer", fontFamily: font, padding: 0, textDecoration: "underline" }}
-                  >
-                    × Reset to default
-                  </button>
-                )}
-              </div>
-            </>
-          );
-        })()}
-
-        {/* Default-state info strips — hidden once user overrides */}
-        {!taxOverridden && STATE_TAX_RATES[pcState] != null && (
-          <div style={{ fontSize: 12, color: c.grayLight || c.gray, fontFamily: font, marginBottom: 6, lineHeight: 1.5, fontStyle: "italic", padding: "6px 10px", background: c.bgAlt || "#f8f8f8", borderRadius: 6 }}>
-            {(window.STATE_LIST||[]).find(s=>s.value===pcState)?.label || pcState} state average ≈ {STATE_TAX_RATES[pcState]}%. Actual rates vary by county — enter your own value to override.
-          </div>
-        )}
-        {!taxOverridden && pcState === "TX" && (
-          <div style={{ fontSize: 12, color: c.navy, fontFamily: font, marginBottom: 6, lineHeight: 1.5, padding: "6px 10px", background: `${c.blue}12`, border: `1px solid ${c.blue}33`, borderRadius: 6 }}>
-            North Texas default: <strong style={{ color: c.navy }}>2.3%</strong>. Verify with the county appraisal district for the specific property.
-          </div>
-        )}
-
-        {/* Homestead notice — always visible when applicable, compact when overridden */}
-        {homesteadExemption && (
-          <div style={{ fontSize: 12, color: taxOverridden ? c.gray : c.navy, fontFamily: font, lineHeight: 1.5, padding: "6px 10px", background: taxOverridden ? (c.bgAlt || "#f8f8f8") : `${c.green}12`, border: `1px solid ${taxOverridden ? c.border : c.green + "44"}`, borderRadius: 6 }}>
-            {(() => {
-              const hp = parseFloat(homePrice) || 0;
-              const rate = parseFloat(propertyTaxRate) || 0;
-              const withEx    = hp > 0 && rate > 0 ? fmt2(Math.round(hp * 0.70 * rate / 100 / 12 / 50) * 50) : null;
-              const withoutEx = hp > 0 && rate > 0 ? fmt2(Math.round(hp * rate / 100 / 12 / 50) * 50) : null;
-              return taxOverridden
-                ? <span>✓ TX homestead exemption applied — using 70% of value as tax basis.</span>
-                : <>
-                    ✓ <strong>TX Homestead exemption applied</strong> — tax basis = {fmt(Math.round((parseFloat(homePrice)||0) * 0.70))} (70% of value).
-                    {withEx && withoutEx && <span> Saves <strong style={{ color: c.green }}>{fmt2(Math.round(hp * rate / 100 / 12 / 50) * 50 - Math.round(hp * 0.70 * rate / 100 / 12 / 50) * 50)}/mo</strong> vs. no exemption.</span>}
-                  </>;
-            })()}
-          </div>
-        )}
-      </SectionCard>
-
-      {/* ═══ HOME INSURANCE ═══ */}
-      <SectionCard title="HOME INSURANCE" accent={c.blue} style={{ maxWidth: 640 }} infoTip="Annual homeowners insurance as a percentage of home value, included in your PITI payment when escrowed. A common estimate is 0.5–1.0% annually depending on location, coverage level, and provider. Always get an actual quote — rates vary significantly by property and insurer.">
-        {(() => {
-          const hp = parseFloat(homePrice) || 0;
-          const rate = Math.max(0, parseFloat(homeInsuranceRate) || 0);
-          const monthlyRaw = hp > 0 ? hp * rate / 100 / 12 : 0;
-          const monthly = monthlyRaw > 0 ? (insOverridden ? Math.round(monthlyRaw) : Math.round(monthlyRaw / 50) * 50) : 0;
-          const inputStyle = { flex: 1, border: "none", outline: "none", background: "transparent", padding: "10px 12px", fontSize: 15, fontWeight: 500, color: c.text || c.navy, fontFamily: font, width: "100%", minWidth: 0 };
-          const wrapStyle = { display: "flex", alignItems: "center", background: c.bg, border: `1.5px solid ${c.border}`, borderRadius: 8, overflow: "hidden", flex: 1 };
-          const displayInsDollar = insDollarStored ? insDollarStored : (monthly > 0 ? String(Math.round(monthly)) : "");
-          return (
-            <>
-              <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
-                <div style={wrapStyle}>
-                  <span style={{ padding: "10px 0 10px 12px", color: c.navy, fontWeight: 600, fontSize: 15, fontFamily: font }}>$</span>
-                  <input type="text" inputMode="numeric"
-                    key={"ins-dollar-" + (insDollarStored || Math.round(monthly / 50))}
-                    defaultValue={displayInsDollar}
-                    onFocus={function(e) { e.target.select(); }}
-                    onBlur={function(e) {
-                      const v = stripCommasLocal(e.target.value);
-                      if (String(v).trimStart().startsWith('-')) return;
-                      const mo = parseFloat(v) || 0;
-                      setInsDollarStored(mo > 0 ? String(mo) : "");
-                      if (hp > 0) setHomeInsuranceRate(String(parseFloat((mo * 12 / hp * 100).toFixed(3))));
-                      setInsMode("rate");
-                      if (mo > 0) setInsOverridden(true);
-                    }}
-                    style={inputStyle} />
-                  <span style={{ padding: "10px 12px 10px 0", color: c.gray, fontSize: 13, fontWeight: 500, fontFamily: font }}>/mo</span>
-                </div>
-                <div style={wrapStyle}>
-                  <input type="number" inputMode="decimal" onFocus={(e) => e.target.select()} min="0" max="2.5" step="0.001" value={homeInsuranceRate}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      if (String(v).trimStart().startsWith('-') || parseFloat(v) > 2.5) return;
-                      setHomeInsuranceRate(v);
-                      setInsDollarStored(""); // % change clears stored $ so it recomputes
-                      setInsMode("rate");
-                      setInsOverridden(true);
-                    }}
-                    onBlur={() => { const n = parseFloat(homeInsuranceRate) || 0; if (n > 0 && n < 0.25) setHomeInsuranceRate("0.25"); }}
-                    style={inputStyle} />
-                  <span style={{ padding: "10px 12px 10px 0", color: c.gray, fontSize: 13, fontWeight: 500, fontFamily: font }}>% / yr</span>
-                </div>
-              </div>
-              {(insDollarStored || monthly > 0) && (
-                <div style={{ fontSize: 12, color: c.grayLight || c.gray, fontFamily: font, marginBottom: 10, textAlign: "right" }}>
-                  {fmt(Math.round((parseFloat(insDollarStored) || monthly) * 12))} / year
-                </div>
-              )}
-              {rate > 0 && rate < 0.25 && (
-                <div style={{ marginBottom: 8, fontSize: 12, color: "#b45309", fontFamily: font, lineHeight: 1.4, background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 5, padding: "6px 10px" }}>
-                  Homeowners insurance is required on all mortgage loans. Minimum floored at <strong>0.25%</strong> of home value.
-                </div>
-              )}
-            </>
-          );
-        })()}
-        {STATE_INS_RATES[pcState] != null && (
-          <div style={{ fontSize: 12, color: c.grayLight || c.gray, fontFamily: font, marginTop: 6, lineHeight: 1.5, fontStyle: "italic", padding: "6px 10px", background: c.bgAlt || "#f8f8f8", borderRadius: 6 }}>
-            {(window.STATE_LIST||[]).find(s=>s.value===pcState)?.label || pcState} avg ≈ {STATE_INS_RATES[pcState]}%{
-              (() => {
-                const propMult = INS_PROP_MULTIPLIERS[propType] || 1.00;
-                const occMult = INS_OCC_MULTIPLIERS[occupancy] || 1.00;
-                const combined = propMult * occMult;
-                if (combined === 1.00) return null;
-                const adj = parseFloat((STATE_INS_RATES[pcState] * combined).toFixed(2));
-                const notes = [];
-                if (propType === "condo") notes.push("condo");
-                else if (propType === "townhome") notes.push("townhome");
-                else if (propType === "duplex") notes.push("duplex");
-                else if (propType === "3plex") notes.push("3-plex");
-                else if (propType === "4plex") notes.push("4-plex");
-                if (occupancy === "investment") notes.push("investment property");
-                else if (occupancy === "vacation") notes.push("vacation home");
-                return `, adjusted to ${adj}% (${notes.join(", ")})`;
-              })()
-            }; rates vary by home age, carrier, and coverage level. Override as needed.
-          </div>
-        )}
-        {pcState === "TX" && (
-          <div style={{ fontSize: 12, color: c.navy, fontFamily: font, marginTop: 6, lineHeight: 1.5, padding: "6px 10px", background: `${c.blue}12`, border: `1px solid ${c.blue}33`, borderRadius: 6 }}>
-            Our recommendation for North Texas: <strong style={{ color: c.navy }}>0.7%</strong> for existing homes. New construction may qualify for lower rates; verify with the insurance carrier.
-          </div>
-        )}
-      </SectionCard>
 
       {/* ═══ PAYMENT SUMMARY (RESULTS) — full-width ═══ */}
       <SectionCard title="" accent={c.navy} style={{ marginTop: 16, maxWidth: 640 }}>

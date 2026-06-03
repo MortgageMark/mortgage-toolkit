@@ -355,12 +355,9 @@ function SellerNetSheet({ isInternal = false, user = null, contact = null, scena
           </SectionCard>
 
           {/* MORTGAGE PAYOFFS */}
-          <SectionCard title="MORTGAGE PAYOFFS" accent={COLORS.red} infoTip="Enter the current outstanding balance(s) on the seller's mortgages. Call the servicer for an exact payoff quote good through the expected closing date — the payoff changes daily as interest accrues. If there's a second mortgage or HELOC, enter it separately in the 2nd Mortgage field.">
+          <SectionCard title="MORTGAGE PAYOFFS" accent={COLORS.red} infoTip="Enter the current outstanding balance(s) on the seller's mortgages. If there's a second mortgage or HELOC, enter it separately in the 2nd Mortgage field. Note: your payoff is not the same as your balance — it includes remaining principal + accrued daily interest through the closing date + lender payoff processing fees ($150–$175). If you don't have the exact number, add $1,500–$2,000 to your current balance as a buffer. It's better to overestimate here than come up short at closing.">
             <LabeledInput label="1st Mortgage Payoff" prefix="$" value={mort1} onChange={setMort1} useCommas />
             <LabeledInput label="2nd Mortgage Payoff" prefix="$" value={mort2} onChange={setMort2} useCommas />
-            <div style={{ margin: "2px 0 10px", padding: "9px 12px", borderRadius: 7, background: "#FFF8E7", border: "1px solid #F0D080", borderLeft: "3px solid #E6A817", fontSize: 12, color: "#7A5800", fontFamily: font, lineHeight: 1.6 }}>
-              <span style={{ fontWeight: 700 }}>Your payoff is not the same as your balance.</span> Your payoff includes your remaining principal + accrued daily interest through the closing date + lender payoff processing fees ($150–$175). If you don't have the exact number, add $1,500–$2,000 to your current balance as a buffer — it's better to overestimate here than come up short at closing.
-            </div>
             <LabeledInput label="Current Escrow Balance (add-back)" prefix="$" value={escrowBal} onChange={setEscrowBal} useCommas
               hint="Returned to seller at closing"
               infoTip="This applies if the current mortgage has an escrow account — where the lender collects a portion of taxes and insurance each month. The balance built up in that account belongs to the seller and is returned at closing as an add-back. Check the most recent mortgage statement for this balance. Keep in mind: if another payment is made before closing, that balance will go up." />

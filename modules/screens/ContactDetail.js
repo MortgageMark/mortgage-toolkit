@@ -181,6 +181,464 @@ function HdrCell({ label, value, width }) {
   );
 }
 
+// ── TransactionTeamTab ────────────────────────────────────────────────────────
+// Three flows:
+//   Flow 1 — Client enters their own vendor info (simple form, stored as client_data)
+//   Flow 2 — LO links an existing contact card to this role (stored with source="lo")
+//   Flow 3 — Partner links their own contact card (stored with source="partner")
+// All entries stored in network_links JSONB as an array; multiple per role allowed.
+
+const TEAM_ROLES = [
+  { key: "builder",   label: "Builder",   icon: "🏠", color: "#f97316" },
+  { key: "realtor",   label: "Realtor",   icon: "🏡", color: "#7c3aed" },
+  { key: "lender",    label: "Lender",    icon: "🏦", color: "#0C4160" },
+  { key: "insurance", label: "Insurance", icon: "🛡️", color: "#0891b2" },
+  { key: "title",     label: "Title",     icon: "📄", color: "#16a34a" },
+];
+
+function TransactionTeamTab({ contact, contacts, loProfiles, isInternal, isPartner, user, onSelectContact, onNetworkPatched }) {
+  const f = "'Inter', system-ui, sans-serif";
+  const patchContact        = window.patchContactInSupabase;
+  const saveContactFn       = window.saveContactToSupabase;
+
+  // Resolve assigned LO profile → use as auto-lender if no explicit lender entry exists
+  var assignedLoProfile = null;
+  if (contact.assigned_lo_id && loProfiles && loProfiles.length) {
+    assignedLoProfile = loProfiles.find(function(p) { return p.id === contact.assigned_lo_id; }) || null;
+  }
+  // Try to find the LO's contact card by email match (for phone number)
+  var assignedLoContact = null;
+  if (assignedLoProfile && assignedLoProfile.email && contacts && contacts.length) {
+    var loEmailLower = assignedLoProfile.email.toLowerCase();
+    assignedLoContact = contacts.find(function(c) {
+      return (c.email_work || c.email_personal || "").toLowerCase() === loEmailLower;
+    }) || null;
+  }
+
+  // Resolve creator profile → use as auto-builder if creator role is "builder"
+  var creatorBuilderProfile = null;
+  if (contact.created_by_user_id && loProfiles && loProfiles.length) {
+    var creatorProfile = loProfiles.find(function(p) { return p.id === contact.created_by_user_id; }) || null;
+    if (creatorProfile && creatorProfile.role === "builder") creatorBuilderProfile = creatorProfile;
+  }
+  // Try to find the builder's contact card by email match (for phone number)
+  var creatorBuilderContact = null;
+  if (creatorBuilderProfile && creatorBuilderProfile.email && contacts && contacts.length) {
+    var builderEmailLower = creatorBuilderProfile.email.toLowerCase();
+    creatorBuilderContact = contacts.find(function(c) {
+      return (c.email_work || c.email_personal || "").toLowerCase() === builderEmailLower;
+    }) || null;
+  }
+
+  // Parse network_links — normalise old format ({role,contact_id}) to new format
+  function parseLinks(raw) {
+    try {
+      var arr = Array.isArray(raw) ? raw : (raw ? JSON.parse(raw) : []);
+      return arr.map(function(e) {
+        // legacy format: {role, contact_id} → convert
+        if (e.contact_id && !e.source) return { role: e.role, contact_id: e.contact_id, source: "lo" };
+        return e;
+      });
+    } catch(ex) { return []; }
+  }
+
+  const [entries,    setEntries]    = React.useState(function() { return parseLinks(contact.network_links); });
+  const [picking,    setPicking]    = React.useState(null);   // {role, source} being picked
+  const [search,     setSearch]     = React.useState("");
+  const [clientForm, setClientForm] = React.useState({});     // {role: {name,company,phone,email}}
+  const [clientEdit, setClientEdit] = React.useState(null);   // role key currently editing
+  const [saving,     setSaving]     = React.useState(false);
+  const [saved,      setSaved]      = React.useState(false);
+  const [importing,  setImporting]  = React.useState(null);   // role key being imported
+
+  // Contact lookup map
+  var contactMap = {};
+  (contacts || []).forEach(function(c) { contactMap[c.id] = c; });
+
+  // Auto-link assigned LO as lender and creator builder on mount (if contact card found + not already linked)
+  React.useEffect(function() {
+    var current = parseLinks(contact.network_links);
+    var changed = false;
+    var updated = current.slice();
+    var hasLender  = current.some(function(e) { return e.role === "lender"  && e.source === "lo"; });
+    var hasBuilder = current.some(function(e) { return e.role === "builder" && e.source === "lo"; });
+    if (!hasLender && assignedLoContact) {
+      updated.push({ role: "lender", contact_id: assignedLoContact.id, source: "lo", source_name: assignedLoProfile ? (assignedLoProfile.display_name || assignedLoProfile.email) : "" });
+      changed = true;
+    }
+    if (!hasBuilder && creatorBuilderContact) {
+      updated.push({ role: "builder", contact_id: creatorBuilderContact.id, source: "lo", source_name: creatorBuilderProfile ? (creatorBuilderProfile.display_name || creatorBuilderProfile.email) : "" });
+      changed = true;
+    }
+    if (changed && patchContact && contact.id) {
+      setEntries(updated);
+      patchContact(contact.id, { network_links: updated }).then(function(res) {
+        if (!res || !res.error) { if (onNetworkPatched) onNetworkPatched(updated); }
+      });
+    }
+  }, [contact.id]);
+
+  function fullName(c) {
+    if (!c) return "";
+    return [c.first_name, c.last_name].filter(Boolean).join(" ") || c.company || c.email_work || c.email_personal || "(No name)";
+  }
+  function fmtPhone(raw) {
+    var d = (raw || "").replace(/\D/g, "");
+    if (d.length < 4) return raw || "";
+    if (d.length < 7) return "(" + d.slice(0,3) + ") " + d.slice(3);
+    return "(" + d.slice(0,3) + ") " + d.slice(3,6) + "-" + d.slice(6,10);
+  }
+
+  function persist(newEntries) {
+    setEntries(newEntries);
+    setSaving(true);
+    if (patchContact && contact.id) {
+      patchContact(contact.id, { network_links: newEntries }).then(function(res) {
+        setSaving(false);
+        if (res && res.error) {
+          alert("Could not save team link: " + (res.error.message || "Unknown error. Make sure the network_links migration has been run in Supabase."));
+          return;
+        }
+        setSaved(true);
+        setTimeout(function() { setSaved(false); }, 2000);
+        // Update parent contacts list so re-opening shows the new data
+        if (onNetworkPatched) onNetworkPatched(newEntries);
+      });
+    } else { setSaving(false); }
+  }
+
+  // LO / partner: link an existing contact card
+  function linkContact(role, contactId, source) {
+    var sourceName = user ? (user.name || user.email || "") : "";
+    var without = entries.filter(function(e) { return !(e.role === role && e.source === source); });
+    persist([...without, { role: role, contact_id: contactId, source: source, source_name: sourceName }]);
+    setPicking(null); setSearch("");
+  }
+
+  // Remove an entry by role + source
+  function removeEntry(role, source) {
+    persist(entries.filter(function(e) { return !(e.role === role && e.source === source); }));
+  }
+
+  // Client: save their own vendor info
+  function saveClientEntry(role) {
+    var fd = clientForm[role] || {};
+    if (!fd.name && !fd.phone && !fd.email) { setClientEdit(null); return; }
+    var without = entries.filter(function(e) { return !(e.role === role && e.source === "client"); });
+    persist([...without, { role: role, source: "client", contact_id: null, client_data: fd }]);
+    setClientEdit(null);
+  }
+
+  // LO: import client-entered data as a new contact card
+  async function importClientEntry(role, clientData) {
+    if (!saveContactFn) return;
+    setImporting(role);
+    var parts = (clientData.name || "").trim().split(/\s+/);
+    var result = await saveContactFn({
+      first_name:       parts[0] || "",
+      last_name:        parts.slice(1).join(" ") || "",
+      company:          clientData.company || null,
+      phone_cell:       clientData.phone   || null,
+      email_work:       clientData.email   || null,
+      contact_type:     "business",
+      contact_category: role.charAt(0).toUpperCase() + role.slice(1),
+      status:           "active",
+    });
+    setImporting(null);
+    if (result.error || !result.data) { alert("Import failed: " + (result.error && result.error.message)); return; }
+    var newContact = result.data;
+    // Replace client_data entry with a proper contact_id entry (keep source=client so we know it came from them)
+    var without = entries.filter(function(e) { return !(e.role === role && e.source === "client"); });
+    persist([...without, { role: role, source: "client", contact_id: newContact.id, imported: true }]);
+  }
+
+  // Entries by role
+  function entriesForRole(roleKey) {
+    return entries.filter(function(e) { return e.role === roleKey; });
+  }
+
+  // Contact mini-card — single column layout
+  function ContactMiniCard({ c, roleColor, sourceBadge, onOpen, onRemove, canRemove }) {
+    var name      = fullName(c);
+    var company   = c.company   || "";
+    var teamName  = c.team_name || "";
+    var addrParts = [c.address1_street, c.address1_city, c.address1_state, c.address1_zip].filter(Boolean);
+    var address   = addrParts.join(", ");
+    var workPhone = c.phone_work || "";
+    var cellPhone = c.phone_cell || "";
+    var workEmail = c.email_work || c.email_personal || "";
+    var website   = c.lo_website || "";
+    var row = function(icon, href, text) {
+      if (!text) return null;
+      return React.createElement("a", { href: href, target: href && href.startsWith("http") ? "_blank" : undefined, rel: "noopener noreferrer", style: { display: "flex", alignItems: "center", gap: 10, fontSize: 15, color: "#0C4160", textDecoration: "none", fontFamily: f, padding: "3px 0" } },
+        React.createElement("span", { style: { fontSize: 16, width: 22, textAlign: "center", flexShrink: 0 } }, icon),
+        React.createElement("span", null, text)
+      );
+    };
+    return React.createElement("div", { style: { padding: "14px 16px", borderTop: "1px solid #f1f5f9" } },
+      // Name row + badge + remove
+      React.createElement("div", { style: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 6 } },
+        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flex: 1 } },
+          React.createElement("button", {
+            onClick: onOpen || undefined,
+            disabled: !onOpen,
+            style: { fontSize: 17, fontWeight: 700, color: onOpen ? "#2563eb" : "#1e293b", fontFamily: f, cursor: onOpen ? "pointer" : "default", textDecoration: onOpen ? "underline" : "none", background: "none", border: "none", padding: 0, textAlign: "left", lineHeight: 1.3 }
+          }, name),
+          sourceBadge && React.createElement("span", { style: { fontSize: 11, fontWeight: 700, color: "#fff", background: sourceBadge.color, borderRadius: 4, padding: "2px 7px", fontFamily: f } }, sourceBadge.label)
+        ),
+        canRemove && React.createElement("button", { onClick: onRemove, style: { fontSize: 12, color: "#94a3b8", background: "none", border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 9px", cursor: "pointer", fontFamily: f, flexShrink: 0 } }, "Remove")
+      ),
+      // Single column details
+      React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 2 } },
+        company  && React.createElement("div", { style: { fontSize: 15, color: "#374151", fontFamily: f } }, company),
+        teamName && React.createElement("div", { style: { fontSize: 15, color: "#64748b", fontFamily: f } }, teamName),
+        address  && React.createElement("div", { style: { fontSize: 15, color: "#64748b", fontFamily: f } }, address),
+        (workPhone || cellPhone || workEmail || website) && React.createElement("div", { style: { height: 8 } }),
+        row("📞", workPhone ? "tel:" + workPhone.replace(/\D/g,"") : null, workPhone ? fmtPhone(workPhone) + " (work)" : ""),
+        row("📱", cellPhone ? "tel:" + cellPhone.replace(/\D/g,"") : null, cellPhone ? fmtPhone(cellPhone) + " (cell)" : ""),
+        row("✉️", workEmail ? "mailto:" + workEmail : null, workEmail),
+        row("🌐", website ? (website.startsWith("http") ? website : "https://" + website) : null, website)
+      )
+    );
+  }
+
+  // Client data mini-card (unimported)
+  function ClientDataCard({ roleKey, roleColor, data, onImport, onEdit, onRemove }) {
+    return React.createElement("div", { style: { padding: "10px 14px", borderTop: "1px solid #f1f5f9", background: "#fffbeb" } },
+      React.createElement("div", { style: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 } },
+        React.createElement("div", { style: { flex: 1 } },
+          React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6, marginBottom: 2 } },
+            React.createElement("span", { style: { fontSize: 14, fontWeight: 700, color: "#1e293b", fontFamily: f } }, data.name || "(No name)"),
+            React.createElement("span", { style: { fontSize: 10, fontWeight: 700, color: "#fff", background: "#f59e0b", borderRadius: 4, padding: "1px 6px", fontFamily: f } }, "Client Added")
+          ),
+          data.company && React.createElement("div", { style: { fontSize: 12, color: "#64748b", fontFamily: f } }, data.company),
+          React.createElement("div", { style: { display: "flex", gap: 14, marginTop: 4, flexWrap: "wrap" } },
+            data.phone && React.createElement("a", { href: "tel:" + data.phone.replace(/\D/g,""), style: { fontSize: 12, color: "#0C4160", textDecoration: "none", fontFamily: f } }, "📞 " + fmtPhone(data.phone)),
+            data.email && React.createElement("a", { href: "mailto:" + data.email, style: { fontSize: 12, color: "#0C4160", textDecoration: "none", fontFamily: f } }, "✉️ " + data.email)
+          )
+        ),
+        React.createElement("div", { style: { display: "flex", gap: 6, flexShrink: 0, flexDirection: "column", alignItems: "flex-end" } },
+          isInternal && React.createElement("button", {
+            onClick: onImport, disabled: importing === roleKey,
+            style: { fontSize: 12, fontWeight: 700, color: "#fff", background: importing === roleKey ? "#86efac" : "#16a34a", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontFamily: f, whiteSpace: "nowrap" }
+          }, importing === roleKey ? "Importing…" : "Import →"),
+          React.createElement("button", { onClick: onRemove, style: { fontSize: 11, color: "#94a3b8", background: "none", border: "1px solid #e2e8f0", borderRadius: 6, padding: "3px 7px", cursor: "pointer", fontFamily: f } }, "Remove")
+        )
+      )
+    );
+  }
+
+  // Client entry form
+  function ClientEntryForm({ roleKey, roleColor }) {
+    var fd = clientForm[roleKey] || {};
+    function upd(field, val) { setClientForm(function(prev) { var n = Object.assign({}, prev); n[roleKey] = Object.assign({}, prev[roleKey] || {}, { [field]: val }); return n; }); }
+    var inp = { width: "100%", padding: "7px 10px", border: "1px solid #cbd5e1", borderRadius: 7, fontSize: 13, fontFamily: f, boxSizing: "border-box", outline: "none", marginBottom: 8 };
+    return React.createElement("div", { style: { padding: "12px 14px", borderTop: "1px solid #f1f5f9", background: "#f8fafc" } },
+      React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10, fontFamily: f } }, "Add Your Contact"),
+      React.createElement("input", { type: "text", placeholder: "Name", value: fd.name || "", onChange: function(e) { upd("name", e.target.value); }, style: inp }),
+      React.createElement("input", { type: "text", placeholder: "Company", value: fd.company || "", onChange: function(e) { upd("company", e.target.value); }, style: inp }),
+      React.createElement("input", { type: "tel",   placeholder: "Phone", value: fd.phone || "", onChange: function(e) { upd("phone", e.target.value); }, style: Object.assign({}, inp, { marginBottom: 8 }) }),
+      React.createElement("input", { type: "email", placeholder: "Email", value: fd.email || "", onChange: function(e) { upd("email", e.target.value); }, style: Object.assign({}, inp, { marginBottom: 12 }) }),
+      React.createElement("div", { style: { display: "flex", gap: 8 } },
+        React.createElement("button", { onClick: function() { saveClientEntry(roleKey); }, style: { flex: 1, padding: "8px 0", background: roleColor, color: "#fff", border: "none", borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: f } }, "Save"),
+        React.createElement("button", { onClick: function() { setClientEdit(null); }, style: { padding: "8px 14px", background: "none", color: "#94a3b8", border: "1px solid #e2e8f0", borderRadius: 7, fontSize: 13, cursor: "pointer", fontFamily: f } }, "Cancel")
+      )
+    );
+  }
+
+  // Picker (LO + partner)
+  function ContactPicker({ roleKey, source, roleColor }) {
+    var searchLower = search.toLowerCase();
+    var filtered = (contacts || []).filter(function(c) {
+      if (!searchLower) return true;
+      return [fullName(c), c.company || "", c.email_work || "", c.email_personal || ""].join(" ").toLowerCase().includes(searchLower);
+    }).slice(0, 20);
+    return React.createElement("div", { style: { padding: "10px 14px", borderTop: "1px solid #e2e8f0", background: "#f8fafc" } },
+      React.createElement("input", {
+        autoFocus: true, type: "text", placeholder: "Search People…", value: search,
+        onChange: function(e) { setSearch(e.target.value); },
+        style: { width: "100%", padding: "7px 10px", border: "1px solid #cbd5e1", borderRadius: 7, fontSize: 13, fontFamily: f, boxSizing: "border-box", marginBottom: 8, outline: "none" }
+      }),
+      filtered.length === 0 && React.createElement("div", { style: { fontSize: 12, color: "#94a3b8", fontFamily: f, fontStyle: "italic", padding: "4px 0" } }, "No contacts found."),
+      React.createElement("div", { style: { maxHeight: 200, overflowY: "auto" } },
+        filtered.map(function(c) {
+          return React.createElement("div", {
+            key: c.id,
+            onClick: function() { linkContact(roleKey, c.id, source); },
+            style: { padding: "7px 10px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontFamily: f, color: "#1e293b" },
+            onMouseEnter: function(e) { e.currentTarget.style.background = "#e0f2fe"; },
+            onMouseLeave: function(e) { e.currentTarget.style.background = "transparent"; }
+          },
+            React.createElement("div", { style: { fontWeight: 600 } }, fullName(c)),
+            (c.company || c.contact_category) && React.createElement("div", { style: { fontSize: 11, color: "#64748b" } }, [c.company, c.contact_category].filter(Boolean).join(" · "))
+          );
+        })
+      )
+    );
+  }
+
+  var mySource = isInternal ? "lo" : isPartner ? "partner" : "client";
+
+  return React.createElement("div", { style: { padding: "4px 0" } },
+    // Header
+    React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 } },
+      React.createElement("div", { style: { fontSize: 13, color: "#64748b", fontFamily: f } },
+        isInternal ? "Link vendor and partner contacts to this person's transaction." :
+        "See who's on your team, and add your own contacts."
+      ),
+      (saving || saved) && React.createElement("span", { style: { fontSize: 12, fontWeight: 700, color: saving ? "#94a3b8" : "#16a34a", fontFamily: f } }, saving ? "Saving…" : "✓ Saved")
+    ),
+
+    // Role cards
+    TEAM_ROLES.map(function(role) {
+      var roleEntries  = entriesForRole(role.key);
+      var loEntry      = roleEntries.find(function(e) { return e.source === "lo"; });
+      var partnerEntry = roleEntries.find(function(e) { return e.source === "partner"; });
+      var clientEntry  = roleEntries.find(function(e) { return e.source === "client"; });
+      var hasAny       = loEntry || partnerEntry || clientEntry;
+      var isPickingThis = picking && picking.role === role.key;
+
+      return React.createElement("div", { key: role.key, style: { border: "1px solid #e2e8f0", borderRadius: 10, marginBottom: 10, overflow: "hidden" } },
+
+        // Role header bar
+        React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 14px", background: hasAny ? role.color + "0f" : "#f8fafc" } },
+          React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
+            React.createElement("span", { style: { fontSize: 16 } }, role.icon),
+            React.createElement("span", { style: { fontSize: 13, fontWeight: 700, color: role.color, fontFamily: f, textTransform: "uppercase", letterSpacing: "0.05em" } }, role.label)
+          ),
+          React.createElement("div", { style: { display: "flex", gap: 6 } },
+            // LO: show Link button (if no LO entry yet)
+            isInternal && !loEntry && React.createElement("button", {
+              onClick: function() { setPicking(isPickingThis && picking.source === "lo" ? null : { role: role.key, source: "lo" }); setSearch(""); },
+              style: { fontSize: 12, fontWeight: 600, color: "#fff", background: role.color, border: "none", borderRadius: 6, padding: "3px 12px", cursor: "pointer", fontFamily: f }
+            }, isPickingThis && picking.source === "lo" ? "Cancel" : "+ Link"),
+            // Partner: show Link button (if no partner entry yet)
+            isPartner && !partnerEntry && React.createElement("button", {
+              onClick: function() { setPicking(isPickingThis && picking.source === "partner" ? null : { role: role.key, source: "partner" }); setSearch(""); },
+              style: { fontSize: 12, fontWeight: 600, color: "#fff", background: role.color, border: "none", borderRadius: 6, padding: "3px 12px", cursor: "pointer", fontFamily: f }
+            }, isPickingThis && picking.source === "partner" ? "Cancel" : "+ Link"),
+            // Client: show + Add button (if no client entry yet)
+            !isInternal && !isPartner && !clientEntry && React.createElement("button", {
+              onClick: function() { setClientEdit(clientEdit === role.key ? null : role.key); },
+              style: { fontSize: 12, fontWeight: 600, color: "#fff", background: role.color, border: "none", borderRadius: 6, padding: "3px 12px", cursor: "pointer", fontFamily: f }
+            }, clientEdit === role.key ? "Cancel" : "+ Add Mine")
+          )
+        ),
+
+        // Auto-builder: contact creator shown when no explicit builder entries exist
+        role.key === "builder" && !loEntry && !partnerEntry && !clientEntry && creatorBuilderProfile && (function() {
+          var bName    = creatorBuilderProfile.display_name || creatorBuilderProfile.email || "Builder";
+          var bEmail   = creatorBuilderProfile.email || "";
+          var bPhone   = creatorBuilderContact ? (creatorBuilderContact.phone_cell || creatorBuilderContact.phone_work || "") : "";
+          var bCompany = creatorBuilderContact ? (creatorBuilderContact.company || "") : "";
+          var dp = function(raw) { var n=(raw||"").replace(/\D/g,""); if(n.length<4)return raw||""; if(n.length<7)return"("+n.slice(0,3)+") "+n.slice(3); return"("+n.slice(0,3)+") "+n.slice(3,6)+"-"+n.slice(6,10); };
+          return React.createElement("div", { style: { padding: "10px 14px", borderTop: "1px solid #f1f5f9" } },
+            React.createElement("div", { style: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 } },
+              React.createElement("div", { style: { flex: 1 } },
+                React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6, marginBottom: 2 } },
+                  React.createElement("button", { onClick: creatorBuilderContact && onSelectContact ? function() { onSelectContact(creatorBuilderContact); } : undefined, disabled: !(creatorBuilderContact && onSelectContact), style: { fontSize: 14, fontWeight: 700, color: creatorBuilderContact && onSelectContact ? "#2563eb" : "#1e293b", fontFamily: f, cursor: creatorBuilderContact && onSelectContact ? "pointer" : "default", textDecoration: creatorBuilderContact && onSelectContact ? "underline" : "none", background: "none", border: "none", padding: 0, textAlign: "left" } }, bName),
+                  React.createElement("span", { style: { fontSize: 10, fontWeight: 700, color: "#fff", background: "#f97316", borderRadius: 4, padding: "1px 6px", fontFamily: f } }, "Created By")
+                ),
+                bCompany && React.createElement("div", { style: { fontSize: 12, color: "#64748b", fontFamily: f } }, bCompany),
+                React.createElement("div", { style: { display: "flex", gap: 14, marginTop: 4, flexWrap: "wrap" } },
+                  bPhone && React.createElement("a", { href: "tel:" + bPhone.replace(/\D/g,""), style: { fontSize: 12, color: "#0C4160", textDecoration: "none", fontFamily: f } }, "📞 " + dp(bPhone)),
+                  bEmail && React.createElement("a", { href: "mailto:" + bEmail, style: { fontSize: 12, color: "#0C4160", textDecoration: "none", fontFamily: f } }, "✉️ " + bEmail)
+                )
+              ),
+              creatorBuilderContact && onSelectContact && React.createElement("button", {
+                onClick: function() { onSelectContact(creatorBuilderContact); },
+                style: { fontSize: 12, fontWeight: 600, color: "#f97316", background: "none", border: "1px solid #f9731644", borderRadius: 6, padding: "3px 9px", cursor: "pointer", fontFamily: f, flexShrink: 0 }
+              }, "Open →")
+            )
+          );
+        })(),
+
+        // Auto-lender: assigned LO shown when no explicit lender entries exist
+        role.key === "lender" && !loEntry && !partnerEntry && !clientEntry && assignedLoProfile && (function() {
+          var loName  = assignedLoProfile.display_name || assignedLoProfile.email || "Loan Officer";
+          var loEmail = assignedLoProfile.email || "";
+          var loPhone = assignedLoContact ? (assignedLoContact.phone_cell || assignedLoContact.phone_work || "") : "";
+          var loCompany = assignedLoContact ? (assignedLoContact.company || "") : "";
+          var d = (raw => { var n=(raw||"").replace(/\D/g,""); if(n.length<4)return raw||""; if(n.length<7)return"("+n.slice(0,3)+") "+n.slice(3); return"("+n.slice(0,3)+") "+n.slice(3,6)+"-"+n.slice(6,10); });
+          return React.createElement("div", { style: { padding: "10px 14px", borderTop: "1px solid #f1f5f9" } },
+            React.createElement("div", { style: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 } },
+              React.createElement("div", { style: { flex: 1 } },
+                React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6, marginBottom: 2 } },
+                  React.createElement("button", { onClick: assignedLoContact && onSelectContact ? function() { onSelectContact(assignedLoContact); } : undefined, disabled: !(assignedLoContact && onSelectContact), style: { fontSize: 14, fontWeight: 700, color: assignedLoContact && onSelectContact ? "#2563eb" : "#1e293b", fontFamily: f, cursor: assignedLoContact && onSelectContact ? "pointer" : "default", textDecoration: assignedLoContact && onSelectContact ? "underline" : "none", background: "none", border: "none", padding: 0, textAlign: "left" } }, loName),
+                  React.createElement("span", { style: { fontSize: 10, fontWeight: 700, color: "#fff", background: "#0C4160", borderRadius: 4, padding: "1px 6px", fontFamily: f } }, "Assigned LO")
+                ),
+                loCompany && React.createElement("div", { style: { fontSize: 12, color: "#64748b", fontFamily: f } }, loCompany),
+                React.createElement("div", { style: { display: "flex", gap: 14, marginTop: 4, flexWrap: "wrap" } },
+                  loPhone && React.createElement("a", { href: "tel:" + loPhone.replace(/\D/g,""), style: { fontSize: 12, color: "#0C4160", textDecoration: "none", fontFamily: f } }, "📞 " + d(loPhone)),
+                  loEmail && React.createElement("a", { href: "mailto:" + loEmail, style: { fontSize: 12, color: "#0C4160", textDecoration: "none", fontFamily: f } }, "✉️ " + loEmail)
+                )
+              ),
+              assignedLoContact && onSelectContact && React.createElement("button", {
+                onClick: function() { onSelectContact(assignedLoContact); },
+                style: { fontSize: 12, fontWeight: 600, color: "#0C4160", background: "none", border: "1px solid #0C416044", borderRadius: 6, padding: "3px 9px", cursor: "pointer", fontFamily: f, flexShrink: 0 }
+              }, "Open →")
+            )
+          );
+        })(),
+
+        // Empty state
+        !hasAny
+          && !(role.key === "lender"  && assignedLoProfile)
+          && !(role.key === "builder" && creatorBuilderProfile)
+          && clientEdit !== role.key
+          && React.createElement("div", { style: { padding: "10px 14px", fontSize: 13, color: "#94a3b8", fontFamily: f, fontStyle: "italic" } },
+            "No " + role.label.toLowerCase() + " linked yet."
+          ),
+
+        // LO-linked contact card
+        loEntry && loEntry.contact_id && contactMap[loEntry.contact_id] && React.createElement(ContactMiniCard, {
+          c: contactMap[loEntry.contact_id], roleColor: role.color,
+          sourceBadge: { label: "From LO", color: role.color },
+          onOpen: onSelectContact ? function() { onSelectContact(contactMap[loEntry.contact_id]); } : null,
+          onRemove: function() { removeEntry(role.key, "lo"); },
+          canRemove: isInternal,
+        }),
+
+        // Partner-linked contact card
+        partnerEntry && partnerEntry.contact_id && contactMap[partnerEntry.contact_id] && React.createElement(ContactMiniCard, {
+          c: contactMap[partnerEntry.contact_id], roleColor: role.color,
+          sourceBadge: { label: "From " + (partnerEntry.source_name || "Partner"), color: "#7c3aed" },
+          onOpen: onSelectContact ? function() { onSelectContact(contactMap[partnerEntry.contact_id]); } : null,
+          onRemove: function() { removeEntry(role.key, "partner"); },
+          canRemove: isInternal,
+        }),
+
+        // Client-linked contact card (already imported)
+        clientEntry && clientEntry.contact_id && contactMap[clientEntry.contact_id] && React.createElement(ContactMiniCard, {
+          c: contactMap[clientEntry.contact_id], roleColor: role.color,
+          sourceBadge: { label: "Client Added", color: "#f59e0b" },
+          onOpen: onSelectContact ? function() { onSelectContact(contactMap[clientEntry.contact_id]); } : null,
+          onRemove: function() { removeEntry(role.key, "client"); },
+          canRemove: isInternal || !isInternal,
+        }),
+
+        // Client-entered data (not yet imported)
+        clientEntry && !clientEntry.contact_id && clientEntry.client_data && React.createElement(ClientDataCard, {
+          roleKey: role.key, roleColor: role.color,
+          data: clientEntry.client_data,
+          onImport: function() { importClientEntry(role.key, clientEntry.client_data); },
+          onEdit: function() {
+            setClientForm(function(prev) { var n = Object.assign({}, prev); n[role.key] = Object.assign({}, clientEntry.client_data); return n; });
+            setClientEdit(role.key);
+          },
+          onRemove: function() { removeEntry(role.key, "client"); },
+        }),
+
+        // Client edit form
+        clientEdit === role.key && React.createElement(ClientEntryForm, { roleKey: role.key, roleColor: role.color }),
+
+        // LO / partner contact picker
+        isPickingThis && React.createElement(ContactPicker, { roleKey: role.key, source: picking.source, roleColor: role.color })
+      );
+    })
+  );
+}
+
 function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onLogout, onSelectScenario, contacts, onSelectContact, onScenarios, onTasksScenarios, onTasksContacts, activeView, onSetView }) {
   const isInternal = !!(user && user.isInternal);
   const isAdmin    = !!(user && user.role === "admin");
@@ -204,8 +662,8 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
     if (!supabaseCD) return;
     supabaseCD
       .from("profiles")
-      .select("id, display_name, email")
-      .in("role", ["admin", "super_admin", "branch_admin", "internal"])
+      .select("id, display_name, email, role")
+      .in("role", ["admin", "super_admin", "branch_admin", "internal", "builder", "realtor"])
       .order("display_name", { ascending: true })
       .then(function(res) {
         if (!res.error && res.data) setLoProfiles(res.data);
@@ -256,9 +714,10 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
     last_name:  contact.last_name  || "",
     company:    contact.company    || "",
     team_name:  contact.team_name  || "",
-    photo_url:     contact.photo_url     || "",
-    logo_url:      contact.logo_url      || "",
-    signature_url: contact.signature_url || "",
+    photo_url:      contact.photo_url      || "",
+    logo_url:       contact.logo_url       || "",
+    team_logo_url:  contact.team_logo_url  || "",
+    signature_url:  contact.signature_url  || "",
     // Classification
     contact_type:           contact.contact_type            || "client",
     contact_category:       contact.contact_category        || "",
@@ -842,22 +1301,36 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
 
         {/* Tab bar + Create Login + Edit button — always visible regardless of active tab */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", marginBottom: "12px" }}>
-          {/* Left: Contact Info / Internal Notes tabs (internal users only) */}
-          {isInternal ? (
-            <div style={{ display: "flex", gap: "2px", background: "#e2e8f0", borderRadius: "10px", padding: "3px" }}>
-              <button
-                onClick={function () { if (onSetView) onSetView("contact"); }}
-                style={{
-                  padding: "5px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600,
-                  border: "none", cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif",
-                  background: activeView === "contact" ? "#ffffff" : "transparent",
-                  color:      activeView === "contact" ? "#1e3a5f"  : "#64748b",
-                  boxShadow:  activeView === "contact" ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
-                  transition: "background 0.15s, color 0.15s",
-                }}
-              >
-                Contact Info
-              </button>
+          {/* Left: Contact Info / My Team / Internal Notes tabs */}
+          <div style={{ display: "flex", gap: "2px", background: "#e2e8f0", borderRadius: "10px", padding: "3px" }}>
+            <button
+              onClick={function () { if (onSetView) onSetView("contact"); }}
+              style={{
+                padding: "5px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600,
+                border: "none", cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif",
+                background: activeView === "contact" ? "#ffffff" : "transparent",
+                color:      activeView === "contact" ? "#1e3a5f"  : "#64748b",
+                boxShadow:  activeView === "contact" ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
+                transition: "background 0.15s, color 0.15s",
+              }}
+            >
+              Contact Info
+            </button>
+            <button
+              onClick={function () { if (onSetView) onSetView("network"); }}
+              style={{
+                padding: "5px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600,
+                border: "none", cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif",
+                background: activeView === "network" ? "#ffffff" : "transparent",
+                color:      activeView === "network" ? "#1e3a5f"  : "#64748b",
+                boxShadow:  activeView === "network" ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
+                transition: "background 0.15s, color 0.15s",
+                whiteSpace: "nowrap",
+              }}
+            >
+              My Team
+            </button>
+            {isInternal && (
               <button
                 onClick={function () { if (onSetView) onSetView("internal"); }}
                 style={{
@@ -867,14 +1340,13 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                   color:      activeView === "internal" ? "#1e3a5f"  : "#64748b",
                   boxShadow:  activeView === "internal" ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
                   transition: "background 0.15s, color 0.15s",
+                  whiteSpace: "nowrap",
                 }}
               >
                 Internal Notes
               </button>
-            </div>
-          ) : (
-            <div />
-          )}
+            )}
+          </div>
           {/* Buttons — Edit is on both tabs; Create Login is Contact Info tab only */}
           {!editMode && (
             <div style={{ display: "flex", gap: "8px", alignItems: "center", flexShrink: 0 }}>
@@ -1106,27 +1578,42 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                     placeholder="Last name"
                   />
                 </div>
-                <div>
-                  <label style={labelStyle}>Company</label>
-                  <input
-                    style={fieldStyle}
-                    value={editForm.company}
-                    onChange={function (e) { handleFieldChange("company", e.target.value); }}
-                    placeholder="Employer / company name"
-                  />
-                </div>
-                <div>
-                  <label style={labelStyle}>Team Name</label>
-                  <input
-                    style={fieldStyle}
-                    value={editForm.team_name}
-                    onChange={function (e) { handleFieldChange("team_name", e.target.value); }}
-                    placeholder="e.g. The Pfeiffer Team"
-                  />
-                </div>
+                {isMobileCD && editForm.contact_type !== "client" && (
+                  <div>
+                    <label style={labelStyle}>Company</label>
+                    <input style={fieldStyle} value={editForm.company}
+                      onChange={function(e) { handleFieldChange("company", e.target.value); }}
+                      placeholder="Employer / company name" />
+                  </div>
+                )}
+                {isMobileCD && editForm.contact_type !== "client" && (
+                  <div>
+                    <label style={labelStyle}>Team Name</label>
+                    <input style={fieldStyle} value={editForm.team_name}
+                      onChange={function(e) { handleFieldChange("team_name", e.target.value); }}
+                      placeholder="e.g. Sample Team Name" />
+                  </div>
+                )}
               </div>
-              {/* Right column intentionally empty — classification moved to Internal Info section */}
-              <div />
+              {/* Right column: Company + Team Name for business contacts (desktop only) */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                {!isMobileCD && editForm.contact_type !== "client" && (
+                  <div>
+                    <label style={labelStyle}>Company</label>
+                    <input style={fieldStyle} value={editForm.company}
+                      onChange={function(e) { handleFieldChange("company", e.target.value); }}
+                      placeholder="Employer / company name" />
+                  </div>
+                )}
+                {!isMobileCD && editForm.contact_type !== "client" && (
+                  <div>
+                    <label style={labelStyle}>Team Name</label>
+                    <input style={fieldStyle} value={editForm.team_name}
+                      onChange={function(e) { handleFieldChange("team_name", e.target.value); }}
+                      placeholder="e.g. Sample Team Name" />
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             /* Read View */
@@ -1143,7 +1630,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                 <InfoRow label="First Name" value={contact.first_name} />
                 <InfoRow label="Nickname"   value={contact.nickname} />
                 <InfoRow label="Last Name"  value={contact.last_name} />
-                <InfoRow label="Company"    value={contact.company} />
+                {contact.contact_type !== "client" && <InfoRow label="Company" value={contact.company} />}
               </div>
               {/* Classification moved to Internal Info section below */}
               <div />
@@ -1157,48 +1644,59 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
           <div style={sectionStyle}>
             <div style={sectionTitleStyle}>Internal Info</div>
             {editMode ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                <div>
-                  <label style={labelStyle}>Type</label>
-                  <select style={fieldStyle} value={editForm.contact_type}
-                    onChange={function(e) {
-                      var newType = e.target.value;
-                      var defaultCat = newType === "business" ? "Other" : "Client";
-                      setEditForm(function(prev) { return Object.assign({}, prev, { contact_type: newType, contact_category: defaultCat }); });
-                    }}>
-                    <option value="client">Client</option>
-                    <option value="business">Business</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={labelStyle}>Category</label>
-                  <select style={fieldStyle} value={editForm.contact_category}
-                    onChange={function(e) { handleFieldChange("contact_category", e.target.value); }}>
-                    {(editForm.contact_type === "business" ? CD_BUSINESS_CATEGORIES : CD_CLIENT_CATEGORIES)
-                      .map(function(cat) { return <option key={cat} value={cat}>{cat}</option>; })}
-                  </select>
-                </div>
-                <div>
-                  <label style={labelStyle}>Source (Referred By)</label>
-                  <ReferralPickerCD value={editForm.referred_by_contact_id}
-                    onChange={function(id) { handleFieldChange("referred_by_contact_id", id); }}
-                    contacts={contacts || []} excludeId={contact.id} />
-                </div>
-                {editForm.contact_type !== "business" && (
+              <div style={{ display: "grid", gridTemplateColumns: cols2, gap: "16px" }}>
+                {/* Left: Type + Category */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                   <div>
-                    <label style={labelStyle}>Assigned LO</label>
-                    <select style={fieldStyle} value={editForm.assigned_lo_id || ""}
-                      onChange={function(e) { handleFieldChange("assigned_lo_id", e.target.value || null); }}>
-                      <option value="">-- Unassigned --</option>
-                      {loProfiles.map(function(lo) { return <option key={lo.id} value={lo.id}>{lo.display_name || lo.email}</option>; })}
+                    <label style={labelStyle}>Type</label>
+                    <select style={fieldStyle} value={editForm.contact_type}
+                      onChange={function(e) {
+                        var newType = e.target.value;
+                        var defaultCat = newType === "business" ? "Other" : "Client";
+                        setEditForm(function(prev) { return Object.assign({}, prev, { contact_type: newType, contact_category: defaultCat }); });
+                      }}>
+                      <option value="client">Client</option>
+                      <option value="business">Business</option>
                     </select>
                   </div>
-                )}
+                  <div>
+                    <label style={labelStyle}>Category</label>
+                    <select style={fieldStyle} value={editForm.contact_category}
+                      onChange={function(e) { handleFieldChange("contact_category", e.target.value); }}>
+                      {(editForm.contact_type === "business" ? CD_BUSINESS_CATEGORIES : CD_CLIENT_CATEGORIES)
+                        .map(function(cat) { return <option key={cat} value={cat}>{cat}</option>; })}
+                    </select>
+                  </div>
+                </div>
+                {/* Right: Source + Assigned LO */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  <div>
+                    <label style={labelStyle}>Source (Referred By)</label>
+                    <ReferralPickerCD value={editForm.referred_by_contact_id}
+                      onChange={function(id) { handleFieldChange("referred_by_contact_id", id); }}
+                      contacts={contacts || []} excludeId={contact.id} />
+                  </div>
+                  {editForm.contact_type !== "business" && (
+                    <div>
+                      <label style={labelStyle}>Assigned LO</label>
+                      <select style={fieldStyle} value={editForm.assigned_lo_id || ""}
+                        onChange={function(e) { handleFieldChange("assigned_lo_id", e.target.value || null); }}>
+                        <option value="">-- Unassigned --</option>
+                        {loProfiles.map(function(lo) { return <option key={lo.id} value={lo.id}>{lo.display_name || lo.email}</option>; })}
+                      </select>
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: cols2, gap: "16px" }}>
+                {/* Left: Type + Category */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 <InfoRow label="Type" value={contact.contact_type ? contact.contact_type.charAt(0).toUpperCase() + contact.contact_type.slice(1) : ""} />
                 <InfoRow label="Category" value={contact.contact_category} />
+                </div>
+                {/* Right: Source + Assigned LO + Creator + Referral */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 <div>
                   <div style={{ fontSize: "11px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>Source (Referred By)</div>
                   {(() => {
@@ -1241,6 +1739,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                     )}
                   </div>
                 )}
+                </div>{/* end right column */}
               </div>
             )}
           </div>
@@ -1365,6 +1864,22 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
         </div>
 
           </React.Fragment>
+        )}
+
+        {/* ── My Team tab ──────────────────────────────────────────── */}
+        {activeView === "network" && (
+          <TransactionTeamTab
+            contact={contact}
+            contacts={contacts}
+            loProfiles={loProfiles}
+            isInternal={isInternal}
+            isPartner={isPartner}
+            user={user}
+            onSelectContact={onSelectContact}
+            onNetworkPatched={function(newLinks) {
+              if (onSave) onSave(Object.assign({}, contact, { network_links: newLinks }));
+            }}
+          />
         )}
 
         {activeView === "internal" && isInternal && (
@@ -2163,7 +2678,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                   </div>
                 )}
                 <div style={{ display: "grid", gridTemplateColumns: cols3, gap: 14 }}>
-                  {[["photo_url","Headshot","👤"],["logo_url","Company Logo","🏢"],["signature_url","Signature","✍️"]].map(function(f) {
+                  {[["photo_url","Headshot","👤"],["logo_url","Company Logo","🏢"],["team_logo_url","Team / Brand Logo","⭐"],["signature_url","Signature","✍️"]].map(function(f) {
                     var field = f[0], label = f[1], icon = f[2];
                     var url = editForm[field];
                     return (

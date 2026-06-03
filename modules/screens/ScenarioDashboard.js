@@ -2507,7 +2507,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                         {/* Scenario Name */}
                         <td style={tdStyle}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                            <span style={{ fontWeight: 600, color: "#2563eb", textDecoration: "underline", cursor: "pointer" }}>{scenario.clientName}</span>
+                            <span style={{ fontWeight: 500, color: "#60a5fa", textDecoration: "underline", cursor: "pointer", whiteSpace: "nowrap" }}>{scenario.clientName}</span>
                             {user.isInternal && referralScenarioIds.has(scenario.id) && (
                               <span title="Referred by a partner" style={{
                                 fontSize: "10px", fontWeight: 700,
@@ -3069,7 +3069,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                           {/* Scenario Name */}
                           <td style={tdStyle}>
                             <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                              <span style={{ fontWeight: 600, color: "#2563eb", textDecoration: "underline", cursor: "pointer" }}>{scenario.clientName}</span>
+                              <span style={{ fontWeight: 500, color: "#60a5fa", textDecoration: "underline", cursor: "pointer", whiteSpace: "nowrap" }}>{scenario.clientName}</span>
                               {referredIds.has(scenario.id) && (
                                 <span style={{ fontSize: 12, fontWeight: 700, background: "rgba(124,58,237,0.12)", color: "#7c3aed", border: "1px solid rgba(124,58,237,0.25)", borderRadius: 99, padding: "1px 7px", whiteSpace: "nowrap" }}>⭐ Referred</span>
                               )}

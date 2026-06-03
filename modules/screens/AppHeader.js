@@ -112,29 +112,8 @@ function AppHeader({
   const initials = getInitials(user);
 
   return (
-    <div ref={rootRef} style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+    <div ref={rootRef} style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0, justifyContent: "flex-end" }}>
 
-      {/* ── View label — only show for actual admins ── */}
-      {userRole && isAdmin && (
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{
-            fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)",
-            textTransform: "uppercase", letterSpacing: "0.07em",
-            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-          }}>
-            {roleLabels[userRole] || userRole}
-          </div>
-          {(user?.name || user?.email) && (
-            <div style={{
-              fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.7)",
-              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-              marginTop: 1,
-            }}>
-              {user.name || user.email}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* ── Profile circle dropdown (includes all settings) ── */}
       <div style={{ position: "relative" }}>
@@ -191,14 +170,6 @@ function AppHeader({
               </button>
             )}
 
-            {isAdmin && onTeam && (
-              <button
-                style={dropItem}
-                onClick={() => { onTeam(); setShowProfile(false); }}
-              >
-                👥 Team
-              </button>
-            )}
 
             <hr style={divider} />
             <div style={sectionLabel}>Settings</div>

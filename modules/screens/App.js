@@ -1481,6 +1481,93 @@ function App() {
       localStorage.setItem("mtk_active_scenario", JSON.stringify(scenario));
       scenarioSnapshotRef.current = calcData;
       setActiveScenario(scenario);
+
+      // ── Auto-populate PQ LO from My Team lender or assigned LO ──────────
+      // Only for internal users who have a linked contact on the scenario
+      if (loggedInUser && loggedInUser.isInternal && scenario.contact_id) {
+        (async function() {
+          try {
+            var supabase = window._supabaseClient;
+            if (!supabase) return;
+            // Fetch the contact
+            var { data: ct } = await supabase.from("contacts").select("*").eq("id", scenario.contact_id).single();
+            if (!ct) return;
+
+            var loInfo = null;
+
+            // Priority 1: My Team lender entry with a contact_id
+            var netLinks = [];
+            try { netLinks = Array.isArray(ct.network_links) ? ct.network_links : JSON.parse(ct.network_links || "[]"); } catch(e) {}
+            var lenderEntry = netLinks.find(function(e) { return e.role === "lender" && e.contact_id; });
+            if (lenderEntry) {
+              var { data: lenderCt } = await supabase.from("contacts").select("*").eq("id", lenderEntry.contact_id).single();
+              if (lenderCt) {
+                loInfo = {
+                  name:        [lenderCt.first_name, lenderCt.last_name].filter(Boolean).join(" "),
+                  title:       lenderCt.lo_title      || "",
+                  nmls:        lenderCt.lo_nmls        || "",
+                  phone:       lenderCt.phone_work     || lenderCt.phone_cell || "",
+                  cell:        lenderCt.phone_cell     || "",
+                  email:       lenderCt.lo_email_display || lenderCt.email_work || lenderCt.email_personal || "",
+                  email_display: lenderCt.lo_email_display || "",
+                  website:     lenderCt.lo_website     || "",
+                  company:     lenderCt.company        || "",
+                  companyNMLS: lenderCt.lo_company_nmls || "",
+                  branchNmls:  lenderCt.lo_branch_nmls  || "",
+                  _contactRef: lenderCt,
+                };
+              }
+            }
+
+            // Priority 2: Assigned LO from profiles
+            if (!loInfo && ct.assigned_lo_id) {
+              var { data: prof } = await supabase.from("profiles").select("id, display_name, email, role").eq("id", ct.assigned_lo_id).single();
+              if (prof) {
+                // Find the LO's contact card by email for extra details
+                var loEmail = prof.email || "";
+                var loCt = null;
+                if (loEmail) {
+                  var { data: loCtData } = await supabase.from("contacts").select("*").ilike("email_work", loEmail).maybeSingle();
+                  if (!loCtData) {
+                    var { data: loCtData2 } = await supabase.from("contacts").select("*").ilike("email_personal", loEmail).maybeSingle();
+                    loCt = loCtData2;
+                  } else { loCt = loCtData; }
+                }
+                loInfo = {
+                  name:        loCt ? [loCt.first_name, loCt.last_name].filter(Boolean).join(" ") : (prof.display_name || ""),
+                  title:       loCt ? (loCt.lo_title || "") : "",
+                  nmls:        loCt ? (loCt.lo_nmls  || "") : "",
+                  phone:       loCt ? (loCt.phone_work || loCt.phone_cell || "") : "",
+                  cell:        loCt ? (loCt.phone_cell || "") : "",
+                  email:       loCt ? (loCt.lo_email_display || loCt.email_work || loEmail) : loEmail,
+                  email_display: loCt ? (loCt.lo_email_display || "") : "",
+                  website:     loCt ? (loCt.lo_website || "") : "",
+                  company:     loCt ? (loCt.company   || "") : "",
+                  companyNMLS: loCt ? (loCt.lo_company_nmls || "") : "",
+                  branchNmls:  loCt ? (loCt.lo_branch_nmls  || "") : "",
+                  _contactRef: loCt || null,
+                };
+              }
+            }
+
+            if (loInfo && loInfo.name && window.propagateLOToPreQual) {
+              window.propagateLOToPreQual(loInfo);
+            }
+            // Populate PQ letter logos from LO contact card
+            // company logo (upper-left) → logo_url on LO contact
+            // team/brand logo (upper-right) → team_logo_url on LO contact
+            var loCt = loInfo && loInfo._contactRef;
+            if (loCt) {
+              try {
+                if (loCt.logo_url) localStorage.setItem("mtk_pq_company_logo", JSON.stringify(loCt.logo_url));
+                else localStorage.setItem("mtk_pq_company_logo", JSON.stringify(""));
+                if (loCt.team_logo_url) localStorage.setItem("mtk_pq_team_logo", JSON.stringify(loCt.team_logo_url));
+                else localStorage.setItem("mtk_pq_team_logo", JSON.stringify(""));
+              } catch(e) {}
+            }
+          } catch(err) { /* silent — don't block scenario load */ }
+        })();
+      }
     }
   };
 
@@ -1722,8 +1809,10 @@ function App() {
 
   const isPartner = !!(loggedInUser && (loggedInUser.role === "realtor" || loggedInUser.role === "builder"));
 
-  // Sidebar is visible for internal users + partners on all non-scenario screens
-  const showSidebar = !!((isInternal || isPartner) && loggedInUser && !activeScenario && !authLoading &&
+  // Sidebar is visible for internal/partner users on non-scenario screens
+  // Also show sidebar when Teams/Contacts is open (even if a scenario is active) so user can navigate back
+  const showSidebar = !!((isInternal || isPartner) && loggedInUser && !authLoading &&
+    (!activeScenario || showUsers || showContacts) &&
     !showChangePassword && !showProfileSetup && !showMyInfo);
   const sidebarWidth = showSidebar && !isMobile ? (sidebarPinned ? 220 : 42) : 0;
 
@@ -1759,12 +1848,12 @@ function App() {
           justifyContent: collapsed ? "center" : "flex-start",
           gap: 9,
           width: "100%", textAlign: "left",
-          padding: collapsed ? "12px 0" : "12px 16px",
-          minHeight: 44,
+          padding: collapsed ? "12px 0" : (isMobile ? "14px 18px" : "12px 16px"),
+          minHeight: isMobile ? 52 : 44,
           border: "none", cursor: "pointer",
           background: isActive ? "rgba(255,255,255,0.12)" : "transparent",
           color: isActive ? "#fff" : "rgba(255,255,255,0.75)",
-          fontSize: collapsed ? 20 : 14,
+          fontSize: collapsed ? 20 : (isMobile ? "1rem" : 14),
           fontWeight: isActive ? 700 : 500,
           fontFamily: "'Inter', system-ui, sans-serif",
           borderLeft: (!collapsed && isActive) ? "3px solid #60a5fa" : "3px solid transparent",
@@ -1773,7 +1862,7 @@ function App() {
         onMouseEnter={function(e) { if (!isActive) e.currentTarget.style.background = "rgba(255,255,255,0.07)"; }}
         onMouseLeave={function(e) { if (!isActive) e.currentTarget.style.background = "transparent"; }}
       >
-        {icon && <span style={{ fontSize: collapsed ? 18 : 15, lineHeight: 1, flexShrink: 0, filter: "grayscale(1) brightness(1.8)" }}>{icon}</span>}
+        {icon && <span style={{ fontSize: collapsed ? 18 : (isMobile ? "1.1rem" : 15), lineHeight: 1, flexShrink: 0, filter: "grayscale(1) brightness(1.8)" }}>{icon}</span>}
         {!collapsed && label}
       </button>
     );
@@ -1832,32 +1921,29 @@ function App() {
           boxSizing: "border-box",
         }}>
 
-          {/* ── Contact / user name at top of sidebar ── */}
-          {(sidebarPinned || isMobile) && (
-            <div style={{
-              padding: "16px 16px 12px",
-              borderBottom: "1px solid rgba(255,255,255,0.12)",
-              flexShrink: 0,
-            }}>
-              <div style={{
-                fontSize: 15, fontWeight: 700, color: "#fff",
-                lineHeight: 1.3, overflow: "hidden",
-                textOverflow: "ellipsis", whiteSpace: "nowrap",
-                fontFamily: "'Inter', system-ui, sans-serif",
-              }}>
-                {activeContactInfo ? activeContactInfo.name : (loggedInUser && (loggedInUser.name || loggedInUser.email)) || ""}
-              </div>
-              {(activeContactInfo ? activeContactInfo.badge : (loggedInUser && loggedInUser.role)) && (
-                <div style={{
-                  fontSize: 11, color: "rgba(255,255,255,0.55)",
-                  marginTop: 3, overflow: "hidden",
-                  textOverflow: "ellipsis", whiteSpace: "nowrap",
-                  fontFamily: "'Inter', system-ui, sans-serif",
-                  textTransform: "capitalize",
-                }}>
-                  {activeContactInfo ? activeContactInfo.badge : (loggedInUser && loggedInUser.role)}
+          {/* ── Name + Profile icon at very top ── */}
+          {/* Always visible on desktop; on mobile only when sidebar is open */}
+          {(!isMobile || sidebarPinned) && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: sidebarPinned ? "space-between" : "center", padding: sidebarPinned ? "14px 14px 12px" : "10px 0", borderBottom: "1px solid rgba(255,255,255,0.12)", flexShrink: 0, gap: 10 }}>
+              {sidebarPinned && (
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "'Inter', system-ui, sans-serif" }}>
+                    {activeContactInfo ? activeContactInfo.name : (loggedInUser && (loggedInUser.name || loggedInUser.email)) || ""}
+                  </div>
+                  {(activeContactInfo ? activeContactInfo.badge : (loggedInUser && loggedInUser.role)) && (
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "'Inter', system-ui, sans-serif", textTransform: "capitalize" }}>
+                      {activeContactInfo ? activeContactInfo.badge : (loggedInUser && loggedInUser.role)}
+                    </div>
+                  )}
                 </div>
               )}
+              {window.AppHeader && React.createElement(window.AppHeader, {
+                user: loggedInUser, darkMode: darkMode, setDarkMode: setDarkMode,
+                userRole: userRole, setUserRole: isInternal ? setUserRole : null,
+                onTeam: (loggedInUser && loggedInUser.role === "admin") ? function() { setShowUsers(true); } : null,
+                onLogout: handleLogout, isInternal: isInternal,
+                isAdmin: !!(loggedInUser && loggedInUser.role === "admin"),
+              })}
             </div>
           )}
 
@@ -1871,7 +1957,7 @@ function App() {
           }}>
             {(sidebarPinned || isMobile) && (
               <span style={{
-                fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.85)",
+                fontSize: isMobile ? "1rem" : 13, fontWeight: 700, color: "rgba(255,255,255,0.85)",
                 fontFamily: "'Inter', system-ui, sans-serif",
                 letterSpacing: "0.01em", paddingLeft: 4,
               }}>
@@ -1919,11 +2005,11 @@ function App() {
 
             {/* ── DASHBOARD section ── */}
             {(sidebarPinned || isMobile) && (
-              <div style={{ padding: "8px 16px 4px", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.38)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+              <div style={{ padding: isMobile ? "10px 18px 4px" : "8px 16px 4px", fontSize: isMobile ? 13 : 10, fontWeight: 700, color: "rgba(255,255,255,0.38)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
                 Dashboard
               </div>
             )}
-            {(isInternal || isPartner) && sidebarNavBtn(t("Contacts"), showContacts && !showTasksContacts, function() {
+            {(isInternal || isPartner) && sidebarNavBtn(t("People"), showContacts && !showTasksContacts, function() {
               setTypeFilter("all");
               setContactsKey(function(k) { return k + 1; });
               setShowContacts(true);
@@ -1951,14 +2037,10 @@ function App() {
               <React.Fragment>
                 {(sidebarPinned || isMobile) && <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "8px 16px 0" }} />}
                 {(sidebarPinned || isMobile) && (
-                  <div style={{ padding: "8px 16px 4px", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.38)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                  <div style={{ padding: isMobile ? "10px 18px 4px" : "8px 16px 4px", fontSize: isMobile ? 13 : 10, fontWeight: 700, color: "rgba(255,255,255,0.38)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
                     Team
                   </div>
                 )}
-                {isInternal && sidebarNavBtn(t("My Profile & NMLS"), false, function() {
-                  handleOpenMyProfile();
-                  if (isMobile) setMobileSidebarOpen(false);
-                }, "👤")}
                 {sidebarNavBtn(t("Teams & Users"), showUsers, function() {
                   setShowUsers(true);
                   setShowContacts(false);
@@ -1971,46 +2053,6 @@ function App() {
 
           </div>
 
-          {/* ── Profile pinned to bottom of sidebar — always visible ── */}
-          <div style={{
-            flexShrink: 0,
-            borderTop: "1px solid rgba(255,255,255,0.12)",
-            padding: (sidebarPinned || isMobile) ? "8px 14px" : "8px 0",
-            display: "flex", alignItems: "center",
-            justifyContent: (sidebarPinned || isMobile) ? "flex-start" : "center",
-          }}>
-            {(sidebarPinned || isMobile) && window.AppHeader
-              ? React.createElement(window.AppHeader, {
-                  user: loggedInUser,
-                  darkMode: darkMode,
-                  setDarkMode: setDarkMode,
-                  userRole: userRole,
-                  setUserRole: isInternal ? setUserRole : null,
-                  onTeam: (loggedInUser && loggedInUser.role === "admin") ? function() { setShowUsers(true); } : null,
-                  onLogout: handleLogout,
-                  isInternal: isInternal,
-                  isAdmin: !!(loggedInUser && loggedInUser.role === "admin"),
-                })
-              : (
-                <button
-                  title={(loggedInUser && loggedInUser.name) || "Profile"}
-                  onClick={function() { setSidebarPinned(true); }}
-                  style={{
-                    width: 32, height: 32, borderRadius: "50%",
-                    background: "linear-gradient(135deg, #3b82f6, #1d4ed8)",
-                    border: "2px solid rgba(255,255,255,0.25)",
-                    color: "#fff", fontSize: 13, fontWeight: 700,
-                    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                    fontFamily: "'Inter', system-ui, sans-serif", flexShrink: 0,
-                  }}
-                >
-                  {loggedInUser && loggedInUser.name
-                    ? loggedInUser.name.trim().split(/\s+/).map(function(w) { return w[0]; }).join("").slice(0, 2).toUpperCase()
-                    : "?"}
-                </button>
-              )
-            }
-          </div>
         </div>
       )}
 

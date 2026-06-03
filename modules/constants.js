@@ -720,6 +720,7 @@ const TRANSLATIONS_ES = {
   "Target Payment":                 "Pago Objetivo",
   "Builder's Overview":             "Resumen del Constructor",
   "Contact Lender":                 "Contactar Prestamista",
+  "Vendor Contacts":                "Contactos de Proveedores",
   "Wealth Builder":                 "Constructor de Riqueza",
 
   // ── Settings ──
