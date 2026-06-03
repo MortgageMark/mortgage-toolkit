@@ -28,6 +28,18 @@
   document.head.appendChild(s);
 })();
 
+// Translate helper for primitives — reads localStorage directly for reliability
+function _pt(str) {
+  if (!str) return str;
+  try {
+    var _r = localStorage.getItem("app_lang");
+    var lang = "en";
+    if (_r) { try { lang = JSON.parse(_r); } catch(e) { lang = _r; } }
+    if (lang === "es" && window.TRANSLATIONS_ES && window.TRANSLATIONS_ES[str]) return window.TRANSLATIONS_ES[str];
+  } catch(e) {}
+  return str;
+}
+
 function LabeledInput({ label, value, onChange, onBlur, prefix, suffix, type = "number", step, hint, useCommas, disabled, small, noNegative, rightAddon, infoTip, inputMode: inputModeProp }) {
   const c = useThemeColors();
   // For useCommas inputs: show raw digits while focused, formatted on blur
@@ -62,7 +74,7 @@ function LabeledInput({ label, value, onChange, onBlur, prefix, suffix, type = "
     <div style={{ marginBottom: small ? 10 : 14, minWidth: 0 }}>
       {label && (
         <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5 }}>
-          <label style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: c.gray, fontFamily: font }}>{label}</label>
+          <label style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: c.gray, fontFamily: font }}>{_pt(label)}</label>
           {infoTip && <InfoTip text={infoTip} />}
         </div>
       )}
@@ -92,7 +104,7 @@ function Select({ label, value, onChange, options, small, infoTip }) {
     <div style={{ marginBottom: small ? 10 : 14 }}>
       {label && (
         <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5 }}>
-          <label style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: c.gray, fontFamily: font }}>{label}</label>
+          <label style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: c.gray, fontFamily: font }}>{_pt(label)}</label>
           {infoTip && <InfoTip text={infoTip} />}
         </div>
       )}
@@ -127,7 +139,7 @@ function SectionCard({ title, children, accent, collapsed, onToggle, style: card
       {title && (
         <div onClick={onToggle} style={{ padding: "14px 18px", borderBottom: collapsed ? "none" : `1px solid ${c.border}`, display: "flex", alignItems: "center", gap: 8, cursor: onToggle ? "pointer" : "default" }}>
           <div style={{ width: 4, height: 18, borderRadius: 2, background: accent || c.navy }} />
-          <div style={{ fontSize: 13, fontWeight: 700, color: c.text || c.navy, fontFamily: font, flex: 1 }}>{title}</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: c.text || c.navy, fontFamily: font, flex: 1 }}>{_pt(title)}</div>
           {infoTip && <InfoTip text={infoTip} />}
           {onToggle && <span style={{ color: c.gray, fontSize: 14 }}>{collapsed ? "▸" : "▾"}</span>}
         </div>
