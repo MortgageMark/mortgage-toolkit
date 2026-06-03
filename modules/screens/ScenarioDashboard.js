@@ -90,7 +90,10 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
   const c = useThemeColors();
   const isTaskView = pageTitle === "Tasks: Scenarios"; // tasks view hides/adds specific columns
   const [darkMode, setDarkMode] = useLocalStorage("app_dark", false);
-  const [appLang, setAppLangPref] = useLocalStorage("app_lang", "en");
+  // Read app_lang directly — useLocalStorage adds mtk_ prefix which mismatches the key
+  var _sdRawLang = "en";
+  try { var _sdRl = localStorage.getItem("app_lang"); if (_sdRl) { try { _sdRawLang = JSON.parse(_sdRl); } catch(e) { _sdRawLang = _sdRl; } } } catch(e) {}
+  const [appLang] = useState(_sdRawLang);
   // Read lang directly from localStorage (bypasses JSON.parse which breaks plain strings)
   const t = function(str) {
     var lang = "en";

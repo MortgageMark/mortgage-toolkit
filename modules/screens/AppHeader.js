@@ -26,7 +26,10 @@ function AppHeader({
 }) {
   const [showProfile, setShowProfile] = _ahUseState(false);
   const [dropPos, setDropPos] = _ahUseState(null);
-  const [appLang, setAppLangAH] = _ahUseLocalStorage ? _ahUseLocalStorage("app_lang", "en") : _ahUseState("en");
+  // Read app_lang directly (NOT via useLocalStorage which adds mtk_ prefix and mismatches the key)
+  var _rawLang = "en";
+  try { var _rl = localStorage.getItem("app_lang"); if (_rl) { try { _rawLang = JSON.parse(_rl); } catch(e) { _rawLang = _rl; } } } catch(e) {}
+  const [appLang] = _ahUseState(_rawLang);
   const rootRef = _ahUseRef(null);
   const btnRef  = _ahUseRef(null);
   const f = window.font || "'DM Sans', sans-serif";
