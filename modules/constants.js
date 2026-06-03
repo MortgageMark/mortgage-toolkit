@@ -580,6 +580,34 @@ const TRANSLATIONS_ES = {
   "Teams & Users":                  "Equipo y Usuarios",
   "My Profile & NMLS":              "Mi Perfil y NMLS",
 
+  // ── MI Override section ──
+  "Enter a factor or a dollar amount to override the system-calculated MI. Leave blank to use the auto value.": "Ingrese un factor o monto en dólares para reemplazar el MI calculado. Déjelo en blanco para usar el valor automático.",
+  "Annual % of loan":               "% anual del préstamo",
+  "% of loan amount":               "% del monto del préstamo",
+  "Most servicers require a minimum of $10,000": "La mayoría de los administradores requieren un mínimo de $10,000",
+  "Removed at 80% LTV":            "Se elimina al 80% LTV",
+  "Auto: ":                         "Auto: ",
+
+  // ── Seller Net Sheet comments ──
+  "Subtotal — Mortgage Payoffs":    "Subtotal — Pagos de Hipoteca",
+  "Subtotal — Commission":          "Subtotal — Comisión",
+  "Total Add-Backs":                "Total de Reembolsos",
+  "Subtotal — Property Adjustments": "Subtotal — Ajustes de Propiedad",
+  "Subtotal — Seller's Fees":       "Subtotal — Honorarios del Vendedor",
+  "SELLER'S ESTIMATED NET PROCEEDS": "GANANCIAS NETAS ESTIMADAS DEL VENDEDOR",
+  "NET SHEET — TEXAS":              "HOJA NETA — TEXAS",
+  "ADD-BACKS (RETURNED TO SELLER)": "REEMBOLSOS (DEVUELTOS AL VENDEDOR)",
+  "Homestead exemption applied; tax basis reduced to approx.": "Exención de vivienda aplicada; base imponible reducida aprox.",
+  "Our recommendation for North Texas:": "Nuestra recomendación para el Norte de Texas:",
+  "Auto-prorated: days elapsed ÷ 365 × annual taxes": "Prorrateo automático: días transcurridos ÷ 365 × impuestos anuales",
+  "Reimbursed to seller by buyer":  "Reembolsado al vendedor por el comprador",
+
+  // ── Common short hints ──
+  "Enter your own rate to override": "Ingrese su propia tasa para anular",
+  "Synced with Loan Sizing Worksheet": "Sincronizado con la Hoja de Cálculo",
+  "Based on U.S. government home price data (5-yr avg) · Edit to override": "Basado en datos de precios de vivienda del gobierno de EE.UU. (promedio 5 años) · Edite para anular",
+  "Days elapsed ÷ 365 × annual taxes": "Días transcurridos ÷ 365 × impuestos anuales",
+
   // ── Payment Calculator fields ──
   "Purchase Price":                 "Precio de Compra",
   "Down Payment":                   "Pago Inicial",

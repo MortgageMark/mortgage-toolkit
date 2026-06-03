@@ -81,7 +81,7 @@ function LabeledInput({ label, value, onChange, onBlur, prefix, suffix, type = "
       {rightAddon
         ? <div style={{ display: "flex", gap: 4, alignItems: "stretch" }}>{inputBox}{rightAddon}</div>
         : inputBox}
-      {hint && <div style={{ fontSize: 11, color: c.grayLight || c.textSecondary, marginTop: 3, fontFamily: font }}>{hint}</div>}
+      {hint && <div style={{ fontSize: 11, color: c.grayLight || c.textSecondary, marginTop: 3, fontFamily: font }}>{_pt(hint)}</div>}
     </div>
   );
 }
