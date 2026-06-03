@@ -263,6 +263,11 @@ function AppHeader({
               onClick={() => {
                 var next = appLang === "es" ? "en" : "es";
                 try { localStorage.setItem("app_lang", JSON.stringify(next)); } catch(e) {}
+                // Save active scenario so we restore it after reload
+                try {
+                  var _scen = localStorage.getItem("active_scenario");
+                  if (_scen && _scen !== "null") sessionStorage.setItem("mtk_lang_scenario", _scen);
+                } catch(e) {}
                 setShowProfile(false);
                 setTimeout(function() { window.location.reload(); }, 50);
               }}

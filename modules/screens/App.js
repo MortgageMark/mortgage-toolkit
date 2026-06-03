@@ -1276,9 +1276,15 @@ function App() {
     // Log session activity (daily dedup, fire-and-forget)
     if (window.logUserSession && userData) window.logUserSession(userData);
 
-    // Always land on the Scenario Dashboard after a fresh login.
-    // Magic-link and live-session paths below immediately overwrite this.
-    setActiveScenario(null);
+    // If this reload was triggered by a language toggle, restore the previous scenario
+    var _langScenario = null;
+    try { _langScenario = JSON.parse(sessionStorage.getItem("mtk_lang_scenario") || "null"); sessionStorage.removeItem("mtk_lang_scenario"); } catch(e) {}
+    if (_langScenario) {
+      setActiveScenario(_langScenario);
+    } else {
+      // Always land on the Scenario Dashboard after a fresh login.
+      setActiveScenario(null);
+    }
 
     // Auto-populate PQ letter fields from the LO's own contact record on fresh login.
     if (userData && userData.isInternal && userData.email && supabase) {

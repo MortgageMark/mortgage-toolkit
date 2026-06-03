@@ -505,6 +505,13 @@ function ScenarioContactPanel({ contactId, scenarioId, scenario, darkMode, color
 }
 
 function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, onOpenContact, onOpenProfile, onContactInfo, onLoginSettings, onTeam }) {
+  const t = function(str) {
+    var lang = "en";
+    try { var _r = localStorage.getItem("app_lang"); if (_r) { try { lang = JSON.parse(_r); } catch(e2) { lang = _r; } } } catch(e) {}
+    if (lang !== "es") return str;
+    var tr = window.TRANSLATIONS_ES;
+    return (tr && tr[str]) ? tr[str] : str;
+  };
   const [activeModule, setActiveModule] = useLocalStorage("app_mod", "payment");
   const [userRole, setUserRole] = useLocalStorage("app_role", "admin");
   // Reset cached view role if user is no longer admin
@@ -1099,7 +1106,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
               background: activeModule === m.id ? "rgba(255,255,255,0.2)" : "transparent",
               color: activeModule === m.id ? "#fff" : "rgba(255,255,255,0.6)",
               transition: "all 0.2s",
-            }}><span style={{ marginRight: 6 }}>{m.icon}</span>{m.label}</button>
+            }}><span style={{ marginRight: 6 }}>{m.icon}</span>{t(m.label)}</button>
           ))}
         </div>
         {/* ── Admin-only tab row (second row, shaded) ── */}
@@ -1112,7 +1119,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                 background: activeModule === m.id ? "rgba(255,255,255,0.18)" : "transparent",
                 color: activeModule === m.id ? "#fff" : "rgba(255,255,255,0.45)",
                 transition: "all 0.2s",
-              }}><span style={{ marginRight: 5 }}>{m.icon}</span>{m.label}</button>
+              }}><span style={{ marginRight: 5 }}>{m.icon}</span>{t(m.label)}</button>
             ))}
           </div>
         )}
@@ -1297,25 +1304,25 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                   {(!isInternal || onOpenContact || onBackToScenarios) && !navCollapsed && (
                     <div style={{ margin: "6px 15px 2px", borderBottom: "1px solid rgba(255,255,255,0.12)" }} />
                   )}
-                  {sectionHead("Toolkit")}
+                  {sectionHead(t("Toolkit"))}
                   {regularMods.map(m =>
-                    navBtn(activeModule === m.id, () => { setActiveModule(m.id); setSidebarOpen(false); }, m.icon, m.label, CLIENT_TAB_IDS.includes(m.id) ? enabledModules.includes(m.id) : undefined)
+                    navBtn(activeModule === m.id, () => { setActiveModule(m.id); setSidebarOpen(false); }, m.icon, t(m.label), CLIENT_TAB_IDS.includes(m.id) ? enabledModules.includes(m.id) : undefined)
                   )}
                   {builderMods.length > 0 && (
                     <React.Fragment>
                       {!navCollapsed && <div style={{ height: 4 }} />}
-                      {sectionHead("Builder")}
+                      {sectionHead(t("Builder"))}
                       {builderMods.map(m =>
-                        navBtn(activeModule === m.id, () => { setActiveModule(m.id); setSidebarOpen(false); }, m.icon, m.label, CLIENT_TAB_IDS.includes(m.id) ? enabledModules.includes(m.id) : undefined)
+                        navBtn(activeModule === m.id, () => { setActiveModule(m.id); setSidebarOpen(false); }, m.icon, t(m.label), CLIENT_TAB_IDS.includes(m.id) ? enabledModules.includes(m.id) : undefined)
                       )}
                     </React.Fragment>
                   )}
                   {internalMods.length > 0 && (
                     <React.Fragment>
                       {!navCollapsed && <div style={{ height: 4 }} />}
-                      {sectionHead("Internal")}
+                      {sectionHead(t("Internal"))}
                       {internalMods.map(m =>
-                        navBtn(activeModule === m.id, () => { setActiveModule(m.id); setSidebarOpen(false); }, m.icon, m.label, CLIENT_TAB_IDS.includes(m.id) ? enabledModules.includes(m.id) : undefined)
+                        navBtn(activeModule === m.id, () => { setActiveModule(m.id); setSidebarOpen(false); }, m.icon, t(m.label), CLIENT_TAB_IDS.includes(m.id) ? enabledModules.includes(m.id) : undefined)
                       )}
                     </React.Fragment>
                   )}
@@ -1516,7 +1523,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                 <label key={m.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px 9px 12px", borderRadius: 7, background: enabledModules.includes(m.id) ? (darkMode ? "#1A3040" : "#fff") : "transparent", borderLeft: `3px solid ${enabledModules.includes(m.id) ? accentColor : "transparent"}`, cursor: "pointer", fontSize: 13, fontWeight: 600, color: enabledModules.includes(m.id) ? colors.navy : (colors.gray || "#999"), fontFamily: font, transition: "all 0.15s" }}>
                   <input type="checkbox" checked={enabledModules.includes(m.id)} onChange={() => toggleModule(m.id)} style={{ width: 15, height: 15, accentColor: accentColor, flexShrink: 0 }} />
                   <span style={{ fontSize: 14, lineHeight: 1, flexShrink: 0 }}>{m.icon}</span>
-                  <span>{m.label}</span>
+                  <span>{t(m.label)}</span>
                 </label>
               );
 
@@ -1564,7 +1571,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                       {internalMods.map(m => (
                         <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px 9px 12px", borderRadius: 7, borderLeft: "3px solid transparent", fontSize: 13, fontWeight: 600, color: colors.gray || "#999", fontFamily: font }}>
                           <span style={{ fontSize: 14, lineHeight: 1, flexShrink: 0 }}>{m.icon}</span>
-                          <span>{m.label}</span>
+                          <span>{t(m.label)}</span>
                         </div>
                       ))}
                     </div>

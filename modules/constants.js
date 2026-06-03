@@ -580,6 +580,38 @@ const TRANSLATIONS_ES = {
   "Teams & Users":                  "Equipo y Usuarios",
   "My Profile & NMLS":              "Mi Perfil y NMLS",
 
+  // ── MortgageToolkit sidebar sections ──
+  "Toolkit":                        "Herramientas",
+  "Builder":                        "Constructor",
+  "Internal":                       "Interno",
+  "Dashboard":                      "Panel",
+
+  // ── Module labels ──
+  "Payment Calculator":             "Calculadora de Pagos",
+  "Amortization":                   "Amortización",
+  "Loan Recast":                    "Recalculación",
+  "DTI Calculator":                 "Calculadora DTI",
+  "Fee Sheet":                      "Hoja de Tarifas",
+  "Compare Loans":                  "Comparar Préstamos",
+  "Pre-Qual Letter":                "Carta de Pre-Calificación",
+  "Seller Net Sheet":               "Hoja Neta del Vendedor",
+  "Rent vs Buy":                    "Rentar vs Comprar",
+  "Refinance":                      "Refinanciamiento",
+  "Refi Analysis":                  "Análisis de Refi",
+  "Break-Even":                     "Punto de Equilibrio",
+  "Affordability":                  "Asequibilidad",
+  "HELOC":                          "HELOC",
+  "Notes":                          "Notas",
+  "Live Session":                   "Sesión en Vivo",
+  "Interest Rates":                 "Tasas de Interés",
+  "Title Endorsements":             "Endosos de Título",
+  "Temp Buydown":                   "Buydown Temporal",
+  "Perm Buydown":                   "Buydown Permanente",
+  "Target Payment":                 "Pago Objetivo",
+  "Builder's Overview":             "Resumen del Constructor",
+  "Contact Lender":                 "Contactar Prestamista",
+  "Wealth Builder":                 "Constructor de Riqueza",
+
   // ── Settings ──
   "Settings":                       "Configuración",
   "Language":                       "Idioma",
