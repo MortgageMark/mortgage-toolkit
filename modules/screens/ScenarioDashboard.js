@@ -3646,8 +3646,6 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
         document.body
       )}
 
-    </div>
-
     {/* ── Activity Report Modal ─────────────────────────────────────────── */}
     {showActivityReport && ReactDOM.createPortal(
       <div
@@ -3728,6 +3726,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
       </div>,
       document.body
     )}
+    </div>
   );
 }
 
