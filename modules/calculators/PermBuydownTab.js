@@ -17,14 +17,17 @@ function PermBuydownTab({ isInternal }) {
   const border = c.border || "#D1D9E6";
 
   // Read-only from Payment Calculator
-  const [pcRate]       = useLocalStorage("pc_rate",      "");
-  const [pcLA]         = useLocalStorage("pc_la",        "");
-  const [pcTerm]       = useLocalStorage("pc_term",      "30");
-  const [pcHP]         = useLocalStorage("pc_hp",        "");
-  const [pcDP]         = useLocalStorage("pc_dp",        "");
-  const [pcProg]       = useLocalStorage("pc_prog",      "conventional");
-  const [pcLoanType]   = useLocalStorage("pc_lt",        "fixed");
-  const [pcArmYears]   = useLocalStorage("pc_armfy",     "5");
+  const [pcRate]     = useLocalStorage("pc_rate",    "");
+  const [pcLA]       = useLocalStorage("pc_la",      "");
+  const [pcTerm]     = useLocalStorage("pc_term",    "30");
+  const [pcHP]       = useLocalStorage("pc_hp",      "");
+  const [pcDP]       = useLocalStorage("pc_dp",      "");
+  const [pcProg]     = useLocalStorage("pc_prog",    "conventional");
+  const [pcLoanType] = useLocalStorage("pc_lt",      "fixed");
+  const [pcArmYears] = useLocalStorage("pc_armfy",   "5");
+  const [pcFico]     = useLocalStorage("pc_fico",    "740");
+  const [pcPurp]     = useLocalStorage("pc_purpose", "purchase");
+  const [pcOcc]      = useLocalStorage("pc_occ",     "primary");
 
   // Interest Rates tab — use program-specific market rate as the current rate
   const [irConvRate]  = useLocalStorage("ir_market",       "");
@@ -32,21 +35,16 @@ function PermBuydownTab({ isInternal }) {
   const [irVaRate]    = useLocalStorage("ir_va_market",    "");
   const [irUsdaRate]  = useLocalStorage("ir_usda_market",  "");
   const [irNonqmRate] = useLocalStorage("ir_nonqm_market", "");
+  const [irSteps]     = useLocalStorage("ir_steps",        {});
   const prog = (pcProg || "conventional").toLowerCase();
   const irRate = prog === "fha"   ? irFhaRate
                : prog === "usda"  ? (irUsdaRate  || irFhaRate)
                : prog === "va"    ? irVaRate
                : prog === "nonqm" ? (irNonqmRate || irConvRate)
-               : irConvRate; // conventional, jumbo, everything else
-  // Use IR tab rate when available; fall back to Payment Calculator rate
-  const baseIRRate  = (irRate && parseFloat(irRate) > 0) ? irRate : pcRate;
+               : irConvRate;
+  const baseIRRate = (irRate && parseFloat(irRate) > 0) ? irRate : pcRate;
 
   // ── LLPA adjustment (conventional only) ─────────────────────────────────
-  const [pcFico]   = useLocalStorage("pc_fico",   "740");
-  const [pcHP]     = useLocalStorage("pc_hp",     "0");
-  const [pcPurp]   = useLocalStorage("pc_purpose","purchase");
-  const [pcOcc]    = useLocalStorage("pc_occ",    "primary");
-  const [irSteps]  = useLocalStorage("ir_steps",  {});
 
   const llpaAdjustedRate = React.useMemo(function() {
     var isConv = prog === "conventional" || prog === "homeready" || prog === "homeposs";
