@@ -1254,7 +1254,7 @@ function PaymentCalculator({ isInternal, user }) {
                       ? "⚠️ Exceeds " + programLabel2 + " limit for " + pcCounty
                       : limitAmt2
                         ? "✓ Within " + programLabel2 + " limit — " + pcCounty
-                        : "📍 Select a county to verify — floor is"
+                        : "Selecting a county helps determine loan limits —"
                   ),
                   React.createElement("span", { style: { color: over2 ? "#DC2626" : limitAmt2 ? "#15803d" : "#64748b", fontWeight: 700 } },
                     "$" + (limitAmt2 || floorAmt).toLocaleString("en-US")
@@ -1584,7 +1584,7 @@ function PaymentCalculator({ isInternal, user }) {
                 React.createElement("span", { style: { color: overLa ? "#DC2626" : limitAmtLa ? "#16a34a" : "#64748b", fontWeight: 500 } },
                   overLa      ? "⚠️ Exceeds " + progLabelLa + " limit for " + pcCounty
                   : limitAmtLa ? "✓ Within " + progLabelLa + " limit — " + pcCounty
-                  : "📍 Select a county to verify — floor is"
+                  : "Selecting a county helps determine loan limits —"
                 ),
                 React.createElement("span", { style: { color: overLa ? "#DC2626" : limitAmtLa ? "#15803d" : "#64748b", fontWeight: 700 } },
                   "$" + (limitAmtLa || floorAmtLa).toLocaleString("en-US")
@@ -1923,8 +1923,22 @@ function PaymentCalculator({ isInternal, user }) {
                   </div>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                     {(taxDollarStored || monthly > 0) ? (
-                      <div style={{ fontSize: 12, color: c.grayLight || c.gray, fontFamily: font }}>
-                        {fmt(Math.round((parseFloat(taxDollarStored) || monthly) * 12))} / year
+                      <div style={{ fontFamily: font }}>
+                        <div style={{ fontSize: 12, color: c.grayLight || c.gray }}>
+                          {fmt(Math.round(parseFloat(taxDollarStored) || monthly))}/mo = {fmt(Math.round((parseFloat(taxDollarStored) || monthly) * 12))}/yr
+                          {homesteadExemption ? "… with Homestead Exemption" : ""}
+                        </div>
+                        {homesteadExemption && (() => {
+                          const hp2 = parseFloat(homePrice) || 0;
+                          const rate2 = parseFloat(propertyTaxRate) || 0;
+                          const withoutAnnual = hp2 > 0 && rate2 > 0 ? Math.round(hp2 * rate2 / 100) : null;
+                          const withoutMonthly = withoutAnnual ? Math.round(withoutAnnual / 12) : null;
+                          return withoutAnnual ? (
+                            <div style={{ fontSize: 11, color: c.gray, marginTop: 2 }}>
+                              {fmt(withoutMonthly)}/mo = {fmt(withoutAnnual)}/yr… without Homestead Exemption
+                            </div>
+                          ) : null;
+                        })()}
                       </div>
                     ) : <div />}
                     {taxOverridden && (
@@ -3082,7 +3096,7 @@ function PaymentCalculator({ isInternal, user }) {
                     React.createElement("span", { style: { color: over2 ? "#DC2626" : limitAmt2 ? "#16a34a" : "#64748b", fontWeight: 500 } },
                       over2    ? "⚠️ Exceeds " + progLabel2 + " limit for " + pcCounty
                       : limitAmt2 ? "✓ Within " + progLabel2 + " limit — " + pcCounty
-                      : "📍 Select a county above to verify — floor is"
+                      : "Selecting a county helps determine loan limits —"
                     ),
                     React.createElement("span", { style: { color: over2 ? "#DC2626" : limitAmt2 ? "#15803d" : "#64748b", fontWeight: 700 } },
                       "$" + (limitAmt2 || floorAmt2).toLocaleString("en-US")

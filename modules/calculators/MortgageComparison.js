@@ -48,6 +48,12 @@ function getDefaultScenarios() {
 }
 
 function MortgageComparison() {
+  const [isMobileMC, setIsMobileMC] = React.useState(window.innerWidth < 700);
+  React.useEffect(function() {
+    var handler = function() { setIsMobileMC(window.innerWidth < 700); };
+    window.addEventListener("resize", handler);
+    return function() { window.removeEventListener("resize", handler); };
+  }, []);
 
   // ── Payment Calculator bidirectional sync (Scenario A shares pc_* keys) ──
   const [pcHp,   setPcHp]   = useLocalStorage("pc_hp",   "437500");
@@ -933,7 +939,7 @@ function MortgageComparison() {
       })()}
 
       {/* ══ Scenario input cards ══════════════════════════════════════════ */}
-      <div style={{ display: "grid", gridTemplateColumns: `repeat(${scenarios.length}, 1fr)`, gap: 16, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobileMC ? "1fr" : `repeat(${scenarios.length}, 1fr)`, gap: 16, marginBottom: 16 }}>
         {scenarios.map((s) => {
           const isA        = s.id === 1;
           const isCustomTerm = !PRESET_TERMS_MC.includes(s.term);
@@ -1161,7 +1167,7 @@ function MortgageComparison() {
       </div>
 
       {/* ══ Per-scenario fee cards ═══════════════════════════════════════ */}
-      <div style={{ display: "grid", gridTemplateColumns: `repeat(${scenarios.length}, 1fr)`, gap: 16, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobileMC ? "1fr" : `repeat(${scenarios.length}, 1fr)`, gap: 16, marginBottom: 16 }}>
         {scenarios.map((s) => {
           const sAn       = analyses.find(a => a.id === s.id) || {};
           const la        = parseFloat(sAn.la) || 0;
@@ -1349,7 +1355,7 @@ function MortgageComparison() {
       </div>
 
       {/* ══ Per-scenario buydown cards ════════════════════════════════════ */}
-      <div style={{ display: "grid", gridTemplateColumns: `repeat(${scenarios.length}, 1fr)`, gap: 16, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobileMC ? "1fr" : `repeat(${scenarios.length}, 1fr)`, gap: 16, marginBottom: 16 }}>
         {analyses.map((a, i) => renderBDCard(a, perScenarioBD[i]))}
       </div>
 

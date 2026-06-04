@@ -18,6 +18,12 @@ const font        = window.font;
 function InterestRates() {
   const c      = useThemeColors();
   const isDark = c === COLORS_DARK;
+  const [isMobileIR, setIsMobileIR] = useState(window.innerWidth < 700);
+  useEffect(function() {
+    var h = function() { setIsMobileIR(window.innerWidth < 700); };
+    window.addEventListener("resize", h);
+    return function() { window.removeEventListener("resize", h); };
+  }, []);
 
   // ── Conventional state ────────────────────────────────────────────────────
   const [marketStr, setMarketStr] = useLocalStorage("ir_market",    "6.750");
@@ -382,8 +388,9 @@ function InterestRates() {
 
       {/* ── Config bar ─────────────────────────────────────────────────────── */}
       <div style={{
-        display: "grid", gridTemplateColumns: "auto auto auto 1fr 1fr",
-        gap: 28, alignItems: "start", padding: "20px 24px",
+        display: "grid",
+        gridTemplateColumns: isMobileIR ? "1fr 1fr" : "auto auto auto 1fr 1fr",
+        gap: isMobileIR ? 16 : 28, alignItems: "start", padding: "20px 24px",
         background: c.bgAlt || "#F9FBFC", border: "1px solid " + border,
         borderTop: "3px solid " + activeMeta.color,
         borderRadius: 10, marginBottom: 8,
@@ -472,52 +479,6 @@ function InterestRates() {
         </div>
       )}
 
-      {/* MND sync bar */}
-      <div style={{
-        marginBottom: 20, display: "flex", alignItems: "center", gap: 14,
-        padding: "10px 16px", borderRadius: 8, flexWrap: "wrap",
-        background: c.bgAlt || "#F9FBFC", border: "1px solid " + border,
-      }}>
-        <button
-          onClick={handleSyncMND}
-          disabled={mndStatus === "fetching"}
-          style={{
-            padding: "7px 16px", borderRadius: 6, fontSize: 12, fontWeight: 700,
-            border: "none", cursor: mndStatus === "fetching" ? "wait" : "pointer",
-            background: mndStatus === "fetching" ? (isDark ? "#2A3540" : "#CBD5E1") : COLORS.navy,
-            color: "#fff", fontFamily: font, whiteSpace: "nowrap", flexShrink: 0,
-            transition: "background 0.2s",
-          }}
-        >
-          {mndStatus === "fetching" ? "⏳ Fetching…" : "⬇ Sync from MND"}
-        </button>
-
-        {mndStatus === "ok" && (
-          <span style={{ fontSize: 12, fontWeight: 600, color: "#16a34a" }}>
-            ✓ {mndMsg}
-          </span>
-        )}
-        {mndStatus === "error" && (
-          <span style={{ fontSize: 12, fontWeight: 600, color: "#dc2626" }}>
-            ⚠ {mndMsg}
-          </span>
-        )}
-        {mndStatus === "idle" && (
-          <span style={{ fontSize: 11, color: c.textSecondary || "#94a3b8" }}>
-            Pull today's rates from{" "}
-            <a href="https://www.mortgagenewsdaily.com" target="_blank" rel="noopener noreferrer"
-              style={{ color: c.blue || COLORS.blue }}>MortgageNewsDaily.com
-            </a>
-            {" "}— sets Conv, FHA &amp; VA market rates and today's date.
-          </span>
-        )}
-
-        {mnd15yr && (
-          <span style={{ fontSize: 11, color: c.textSecondary || "#94a3b8", marginLeft: "auto" }}>
-            15yr ref: <strong>{mnd15yr}%</strong>
-          </span>
-        )}
-      </div>
 
       {/* Validation */}
       {!validRange && (

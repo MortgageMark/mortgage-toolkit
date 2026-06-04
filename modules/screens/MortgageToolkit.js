@@ -1508,6 +1508,15 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                   {regularMods.map(m =>
                     navBtn(activeModule === m.id, () => { setActiveModule(m.id); setSidebarOpen(false); }, m.icon, t(m.label), enabledModulesLS.includes(m.id), m.id)
                   )}
+                  {builderMods.length > 0 && isInternal && (
+                    <React.Fragment>
+                      {!(navCollapsed && !isMobile) && <div style={{ height: 4 }} />}
+                      {sectionHead(t("Builder"))}
+                      {builderMods.map(m =>
+                        navBtn(activeModule === m.id, () => { setActiveModule(m.id); setSidebarOpen(false); }, m.icon, t(m.label), enabledModulesLS.includes(m.id), m.id)
+                      )}
+                    </React.Fragment>
+                  )}
                   {internalMods.length > 0 && (
                     <React.Fragment>
                       {!(navCollapsed && !isMobile) && <div style={{ height: 4 }} />}

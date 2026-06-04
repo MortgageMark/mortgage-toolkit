@@ -29,6 +29,7 @@ function buildLetterId(seq) {
 function PreQualLetter({ user, scenario, isInternal, contact }) {
   const c = useThemeColors();
   const isClient = user?.role === "borrower";
+  const isAdmin  = !!(user && user.role === "admin");
 
   // Collapse to single column on iPad and smaller (≤1024px)
   const [isNarrow, setIsNarrow] = React.useState(() => window.innerWidth <= 1024);
@@ -592,13 +593,13 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
       React.createElement(Toggle, { label: "Other", checked: pOther, onChange: setPOther }),
       pOther ? React.createElement(LabeledInput, { label: "Other (specify)", value: pOtherText, onChange: setPOtherText, type: "text" }) : null
     ),
-    !isInternal ? null : React.createElement(SectionCard, { title: "Source of Funds for Down Payment (Internal)" },
+    !isAdmin ? null : React.createElement(SectionCard, { title: "Source of Funds for Down Payment (Admin)" },
       React.createElement(Toggle, { label: "Liquid Accounts (ex: checking, savings, etc.)", checked: fdpReady, onChange: setFdpReady }),
       React.createElement(Toggle, { label: "Semi-Liquid Accounts (ex: brokerage account, retirement account, etc.)", checked: fdpGift, onChange: setFdpGift }),
       React.createElement(Toggle, { label: "Proceeds from the sale of Real Estate Owned (REO)", checked: fdpREOSale, onChange: setFdpREOSale }),
       React.createElement(Toggle, { label: "Proceeds from the refinance of existing Real Estate Owned (REO)", checked: fdpCashRefi, onChange: setFdpCashRefi })
     ),
-    !isInternal ? null : React.createElement(SectionCard, { title: "Contingencies (Internal)" },
+    !isAdmin ? null : React.createElement(SectionCard, { title: "Contingencies (Admin)" },
       React.createElement(Toggle, { label: "REAL ESTATE OWNED (REO): existing home must sell/close/fund before this closing", checked: cREO, onChange: setCREO }),
       React.createElement(Toggle, { label: "REAL ESTATE OWNED (REO): existing home does NOT need to be sold before closing (i.e. this is not contingent)", checked: cREONonConting, onChange: setCREONonConting }),
       React.createElement(Toggle, { label: "CREDIT: credit report will need to be updated and acceptable for underwriting", checked: cCredit, onChange: setCCredit }),
@@ -608,8 +609,8 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
       React.createElement(Toggle, { label: "OTHER", checked: cOther, onChange: setCOther }),
       cOther ? React.createElement(LabeledInput, { label: "Other contingency (specify)", value: cOtherText, onChange: setCOtherText, type: "text" }) : null
     ),
-    // LO Heartburn — renders as "Notable Mentions" on the letter
-    !isInternal ? null : React.createElement(SectionCard, { title: "LO Heartburn (Internal)" },
+    // LO Heartburn — renders as "Notable Mentions" on the letter (admin only)
+    !isAdmin ? null : React.createElement(SectionCard, { title: "LO Heartburn (Admin)" },
       React.createElement("div", { style: { fontSize: 12, color: "#6B7280", marginBottom: 12, lineHeight: 1.5 } },
         "Toggle items on to include them in the letter as \u201cNotable Mentions.\u201d Edit the text to fit the specific situation."
       ),
@@ -638,12 +639,12 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
         );
       })
     ),
-    // All letter buttons in one row: PQ first, then Heartburn
+    // Buttons: Print + Download PQ (all internal); Heartburn buttons admin-only
     !isInternal ? null : React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end", marginTop: "4px", marginBottom: "8px" } },
       React.createElement(Button, { label: "🖨️ Print PQ", small: true, onClick: () => printLetter() }),
       React.createElement(Button, { label: pdfLoading ? "Generating…" : "⬇️ Download PQ PDF", small: true, primary: true, onClick: downloadPDF, disabled: pdfLoading }),
-      React.createElement(Button, { label: "🖨️ Print Heartburn", small: true, onClick: () => printHeartburnLetter() }),
-      React.createElement(Button, { label: "⬇️ Download Heartburn PDF", small: true, onClick: () => downloadHeartburnPDF() })
+      isAdmin && React.createElement(Button, { label: "🖨️ Print Heartburn", small: true, onClick: () => printHeartburnLetter() }),
+      isAdmin && React.createElement(Button, { label: "⬇️ Download Heartburn PDF", small: true, onClick: () => downloadHeartburnPDF() })
     ),
     // LOSelector + LO Signature — full width, internal only
     !isInternal ? null : React.createElement(React.Fragment, null,
