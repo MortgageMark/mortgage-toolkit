@@ -1388,7 +1388,11 @@ function App() {
     }
 
     // ── Normal login flow ──────────────────────────────────────────────────
-    if (userData && userData.newContactId) {
+    // Only open contact card on first signup (flag set in LoginScreen during signUp flow)
+    // On regular logins, go straight to Scenario Dashboard
+    var isNewSignupFlow = false;
+    try { isNewSignupFlow = sessionStorage.getItem("mtk_new_lo_signup") === "1"; } catch(e) {}
+    if (userData && userData.newContactId && isNewSignupFlow) {
       const userIsInternal = userData.isInternal ||
         ["super_admin", "admin", "branch_admin", "internal"].includes(userData.role);
       if (userIsInternal) {
@@ -1398,6 +1402,10 @@ function App() {
         setProfileContactId(userData.newContactId);
         setShowProfileSetup(true);
       }
+    } else if (userData && userData.newContactId && !userData.isInternal) {
+      // Non-internal users (borrowers/partners) still get their profile setup on first login
+      setProfileContactId(userData.newContactId);
+      setShowProfileSetup(true);
     }
     // Borrowers → go straight to Scenario Dashboard (My Info accessible via profile menu)
     // LO / Builder / Realtor → fall through to ScenarioDashboard (activeScenario is null)
@@ -1424,14 +1432,16 @@ function App() {
     setLoggedInUser(null);
   };
 
-  // Detect new LO signup → show setup prompt and open their contact card
+  // Detect new LO signup → show setup prompt and open their contact card (first login only)
+  const _newLoHandledRef = React.useRef(false);
   React.useEffect(function() {
     if (!loggedInUser || !loggedInUser.isInternal) return;
+    if (_newLoHandledRef.current) return; // already handled this session
     var isNewSignup = false;
     try { isNewSignup = sessionStorage.getItem("mtk_new_lo_signup") === "1"; } catch(e) {}
     if (!isNewSignup) return;
+    _newLoHandledRef.current = true;
     try { sessionStorage.removeItem("mtk_new_lo_signup"); } catch(e) {}
-    // Small delay so the dashboard finishes rendering first
     setTimeout(function() {
       setShowLoSetupPrompt(true);
       handleOpenMyProfile();

@@ -92,6 +92,40 @@ function dayOfYear(dateStr) {
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
+// ── FeeRow — defined OUTSIDE component so React doesn't remount on every render ──
+// (Defining inside the component creates a new function reference each render,
+//  causing React to unmount/remount the input and lose focus after each keystroke.)
+function SellerNetSheetFeeRow({ label, amount, bold, indent, color, editKey, editValue, onEdit, defaultVal, last }) {
+  return (
+    <div style={{
+      display: "flex", justifyContent: "space-between", alignItems: "center",
+      padding: `${bold ? 10 : 6}px 0`,
+      borderBottom: last ? "none" : bold ? `2px solid ${window.COLORS.navy}` : `1px solid ${window.COLORS.border}`,
+      marginLeft: indent ? 20 : 0, gap: 8,
+    }}>
+      <span style={{ fontSize: bold ? 14 : 13, fontWeight: bold ? 700 : 400, color: color || window.COLORS.navy, fontFamily: window.font, flex: 1 }}>
+        {label}
+      </span>
+      {editKey ? (
+        <input
+          type="text" inputMode="decimal" value={editValue} placeholder={window.fmt(defaultVal)}
+          onFocus={function(e) { e.target.select(); }}
+          onChange={function(e) { onEdit(e.target.value.replace(/[^0-9.]/g, "")); }}
+          style={{ width: 90, textAlign: "right", fontSize: 13, fontWeight: 600, fontFamily: window.font,
+            color: editValue !== "" ? window.COLORS.blue : window.COLORS.navy,
+            border: `1px solid ${editValue !== "" ? window.COLORS.blue : window.COLORS.border}`,
+            borderRadius: 4, padding: "2px 6px",
+            background: editValue !== "" ? "#EAF4FB" : "transparent", outline: "none" }}
+        />
+      ) : (
+        <span style={{ fontSize: bold ? 15 : 13, fontWeight: bold ? 800 : 500, color: color || window.COLORS.navy, fontFamily: window.font }}>
+          {amount < 0 ? window.fmtCredit(amount) : window.fmt(Math.round(amount))}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function SellerNetSheet({ isInternal = false, user = null, contact = null, scenario = null }) {
   const today = new Date();
   const defaultCD = `${today.getFullYear()}-${String(today.getMonth() + 2 > 12 ? 1 : today.getMonth() + 2).padStart(2, "0")}-15`;
@@ -266,34 +300,8 @@ function SellerNetSheet({ isInternal = false, user = null, contact = null, scena
       ovSettlement, ovDocPrep, ovCourier, ovTaxCert, ovRecording, ovTransfer, ovAttorney, ovGuaranty,
       otherAmt1, otherAmt2, otherAmt3]);
 
-  // ── FeeRow ───────────────────────────────────────────────────────────────
-  const FeeRow = ({ label, amount, bold, indent, color, editKey, editValue, onEdit, defaultVal, last }) => (
-    <div style={{
-      display: "flex", justifyContent: "space-between", alignItems: "center",
-      padding: `${bold ? 10 : 6}px 0`,
-      borderBottom: last ? "none" : bold ? `2px solid ${COLORS.navy}` : `1px solid ${COLORS.border}`,
-      marginLeft: indent ? 20 : 0, gap: 8,
-    }}>
-      <span style={{ fontSize: bold ? 14 : 13, fontWeight: bold ? 700 : 400, color: color || COLORS.navy, fontFamily: font, flex: 1 }}>
-        {label}
-      </span>
-      {editKey ? (
-        <input
-          type="text" value={editValue} placeholder={fmt(defaultVal)}
-          onChange={e => onEdit(e.target.value.replace(/[^0-9.]/g, ""))}
-          style={{ width: 90, textAlign: "right", fontSize: 13, fontWeight: 600, fontFamily: font,
-            color: editValue !== "" ? COLORS.blue : COLORS.navy,
-            border: `1px solid ${editValue !== "" ? COLORS.blue : COLORS.border}`,
-            borderRadius: 4, padding: "2px 6px",
-            background: editValue !== "" ? "#EAF4FB" : "transparent", outline: "none" }}
-        />
-      ) : (
-        <span style={{ fontSize: bold ? 15 : 13, fontWeight: bold ? 800 : 500, color: color || COLORS.navy, fontFamily: font }}>
-          {amount < 0 ? fmtCredit(amount) : fmt(Math.round(amount))}
-        </span>
-      )}
-    </div>
-  );
+  // FeeRow is defined outside this component — see SellerNetSheetFeeRow above
+  const FeeRow = SellerNetSheetFeeRow;
 
   const GroupHeader = ({ label }) => (
     <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.blue, letterSpacing: "0.06em", marginBottom: 6, marginTop: 4, fontFamily: font }}>
@@ -441,7 +449,7 @@ function SellerNetSheet({ isInternal = false, user = null, contact = null, scena
                 <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: COLORS.grayLight, marginBottom: 4, fontFamily: font, letterSpacing: "0.04em" }}>Amount</label>
                 <div style={{ display: "flex", alignItems: "center", border: `1px solid ${COLORS.border}`, borderRadius: 6, overflow: "hidden" }}>
                   <span style={{ padding: "7px 6px", background: "#f5f5f5", fontSize: 13, color: COLORS.grayLight, fontFamily: font }}>$</span>
-                  <input type="text" value={addCommasLocal(otherAmt1)} onChange={e => setOtherAmt1(stripCommasLocal(e.target.value))} placeholder="0"
+                  <input type="text" inputMode="decimal" value={addCommasLocal(otherAmt1)} onChange={e => setOtherAmt1(stripCommasLocal(e.target.value))} onFocus={e => e.target.select()} placeholder="0"
                     style={{ flex: 1, padding: "7px 6px", border: "none", fontSize: 13, fontFamily: font, color: COLORS.navy, outline: "none", minWidth: 0 }} />
                 </div>
               </div>
@@ -454,7 +462,7 @@ function SellerNetSheet({ isInternal = false, user = null, contact = null, scena
               <div style={{ width: 100 }}>
                 <div style={{ display: "flex", alignItems: "center", border: `1px solid ${COLORS.border}`, borderRadius: 6, overflow: "hidden" }}>
                   <span style={{ padding: "7px 6px", background: "#f5f5f5", fontSize: 13, color: COLORS.grayLight, fontFamily: font }}>$</span>
-                  <input type="text" value={addCommasLocal(otherAmt2)} onChange={e => setOtherAmt2(stripCommasLocal(e.target.value))} placeholder="0"
+                  <input type="text" value={addCommasLocal(otherAmt2)} onChange={e => setOtherAmt2(stripCommasLocal(e.target.value))} onFocus={e => e.target.select()} placeholder="0"
                     style={{ flex: 1, padding: "7px 6px", border: "none", fontSize: 13, fontFamily: font, color: COLORS.navy, outline: "none", minWidth: 0 }} />
                 </div>
               </div>
@@ -467,7 +475,7 @@ function SellerNetSheet({ isInternal = false, user = null, contact = null, scena
               <div style={{ width: 100 }}>
                 <div style={{ display: "flex", alignItems: "center", border: `1px solid ${COLORS.border}`, borderRadius: 6, overflow: "hidden" }}>
                   <span style={{ padding: "7px 6px", background: "#f5f5f5", fontSize: 13, color: COLORS.grayLight, fontFamily: font }}>$</span>
-                  <input type="text" value={addCommasLocal(otherAmt3)} onChange={e => setOtherAmt3(stripCommasLocal(e.target.value))} placeholder="0"
+                  <input type="text" value={addCommasLocal(otherAmt3)} onChange={e => setOtherAmt3(stripCommasLocal(e.target.value))} onFocus={e => e.target.select()} placeholder="0"
                     style={{ flex: 1, padding: "7px 6px", border: "none", fontSize: 13, fontFamily: font, color: COLORS.navy, outline: "none", minWidth: 0 }} />
                 </div>
               </div>

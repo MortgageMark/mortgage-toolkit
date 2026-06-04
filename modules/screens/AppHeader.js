@@ -202,14 +202,6 @@ function AppHeader({
               </button>
             )}
 
-            {isInternal && onModules && (
-              <button
-                style={dropItem}
-                onClick={() => { onModules(); setShowProfile(false); }}
-              >
-                🧩 Modules
-              </button>
-            )}
 
             {isAdmin && setUserRole && (
               <>

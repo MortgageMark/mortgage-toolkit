@@ -683,8 +683,6 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
   const [headerContact, setHeaderContact] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [navCollapsed, setNavCollapsed] = useLocalStorage("app_nav_collapsed", false);
-  // On mobile the sidebar is always full-width overlay — never collapse labels
-  const isNavCollapsed = isMobile ? false : navCollapsed;
   const [showLenderPanel,  setShowLenderPanel]  = useState(false);
   const [notesOpen,        setNotesOpen]        = useState(false);
   const [sidebarNotes,     setSidebarNotes]     = useState([]);
@@ -1469,32 +1467,32 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                 return (
                 <button onClick={onClick} style={{
                   display: "flex", alignItems: "center", width: "100%",
-                  padding: isNavCollapsed ? "10px 0" : "10px 18px 10px 15px",
-                  justifyContent: isNavCollapsed ? "center" : "flex-start",
+                  padding: (navCollapsed && !isMobile) ? "10px 0" : "10px 18px 10px 15px",
+                  justifyContent: (navCollapsed && !isMobile) ? "center" : "flex-start",
                   background: isActive ? "rgba(255,255,255,0.18)" : "transparent",
                   color: isActive ? "#fff" : (locked ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.6)"),
                   border: "none",
-                  borderLeft: isNavCollapsed ? "none" : (isActive ? "3px solid rgba(255,255,255,0.9)" : "3px solid transparent"),
+                  borderLeft: (navCollapsed && !isMobile) ? "none" : (isActive ? "3px solid rgba(255,255,255,0.9)" : "3px solid transparent"),
                   cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: font,
                   transition: "all 0.15s", whiteSpace: "nowrap", overflow: "hidden",
                 }}>
-                  <span style={{ fontSize: isNavCollapsed ? 17 : 14, marginRight: isNavCollapsed ? 0 : 8, lineHeight: 1, flexShrink: 0, opacity: locked ? 0.4 : 1 }}>{icon}</span>
-                  {!isNavCollapsed && label}
-                  {!isNavCollapsed && locked && (
+                  <span style={{ fontSize: (navCollapsed && !isMobile) ? 17 : 14, marginRight: (navCollapsed && !isMobile) ? 0 : 8, lineHeight: 1, flexShrink: 0, opacity: locked ? 0.4 : 1 }}>{icon}</span>
+                  {!(navCollapsed && !isMobile) && label}
+                  {!(navCollapsed && !isMobile) && locked && (
                     <span style={{ fontSize: 11, marginLeft: "auto", opacity: 0.5, flexShrink: 0 }}>🔒</span>
                   )}
-                  {!isNavCollapsed && !locked && isInternal && isClientVisible === false && (
+                  {!(navCollapsed && !isMobile) && !locked && isInternal && isClientVisible === false && (
                     <span title="Hidden from client" style={{ fontSize: 13, fontWeight: 900, color: "#F87171", marginLeft: "auto", flexShrink: 0, lineHeight: 1 }}>*</span>
                   )}
                 </button>
                 );
               };
-              const sectionHead = (label) => isNavCollapsed
+              const sectionHead = (label) => (navCollapsed && !isMobile)
                 ? <div style={{ margin: "6px 10px", borderTop: "1px solid rgba(255,255,255,0.15)" }} />
                 : <div style={{ padding: "14px 15px 4px", fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)", fontFamily: font }}>{label}</div>;
               return (
                 <React.Fragment>
-                  {!isNavCollapsed && <div style={{ height: 6 }} />}
+                  {!(navCollapsed && !isMobile) && <div style={{ height: 6 }} />}
                   {/* ── Contacts + Scenarios shortcuts ── */}
                   {effectiveIsInternal && onOpenContact && navBtn(false, () => { onOpenContact(null); setSidebarOpen(false); }, <span style={{filter:"grayscale(1) invert(1) opacity(0.7)"}}>👥</span>, "People")}
                   {/* Vendor Contacts tab hidden — uncomment to restore: */}
@@ -1502,19 +1500,20 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                   {onBackToScenarios && navBtn(false, () => { onBackToScenarios(); setSidebarOpen(false); }, "🗂️", "Scenarios")}
                   {isInternal && activeScenario && activeScenario.contact_id && onOpenContact && navBtn(false, () => { onOpenContact(activeScenario.contact_id); setSidebarOpen(false); }, React.createElement("span", { style: { filter: "grayscale(1) invert(1) opacity(0.7)" } }, "👤"), "Contact")}
                   {isInternal && activeScenario && activeScenario.contact_id && navBtn(false, () => { setNotesOpen(true); setSidebarOpen(false); }, "📝", "Notes")}
-                  {(!isInternal || onOpenContact || onBackToScenarios) && !isNavCollapsed && (
+                  {isInternal && navBtn(activeModule === "__modules__", () => { setActiveModule("__modules__"); setSidebarOpen(false); }, "🔧", "Tools")}
+                  {(!isInternal || onOpenContact || onBackToScenarios) && !(navCollapsed && !isMobile) && (
                     <div style={{ margin: "6px 15px 2px", borderBottom: "1px solid rgba(255,255,255,0.12)" }} />
                   )}
                   {sectionHead(t("Toolkit"))}
                   {regularMods.map(m =>
-                    navBtn(activeModule === m.id, () => { setActiveModule(m.id); setSidebarOpen(false); }, m.icon, t(m.label), enabledModules.includes(m.id), m.id)
+                    navBtn(activeModule === m.id, () => { setActiveModule(m.id); setSidebarOpen(false); }, m.icon, t(m.label), enabledModulesLS.includes(m.id), m.id)
                   )}
                   {internalMods.length > 0 && (
                     <React.Fragment>
-                      {!isNavCollapsed && <div style={{ height: 4 }} />}
+                      {!(navCollapsed && !isMobile) && <div style={{ height: 4 }} />}
                       {sectionHead(t("Internal"))}
                       {internalMods.map(m =>
-                        navBtn(activeModule === m.id, () => { setActiveModule(m.id); setSidebarOpen(false); }, m.icon, t(m.label), enabledModules.includes(m.id), m.id)
+                        navBtn(activeModule === m.id, () => { setActiveModule(m.id); setSidebarOpen(false); }, m.icon, t(m.label), enabledModulesLS.includes(m.id), m.id)
                       )}
                     </React.Fragment>
                   )}
@@ -1543,17 +1542,17 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                     }}
                     style={{
                       display: "flex", alignItems: "center", width: "100%",
-                      padding: isNavCollapsed ? "10px 0" : "9px 18px 9px 15px",
+                      padding: (navCollapsed && !isMobile) ? "10px 0" : "9px 18px 9px 15px",
                       background: showLivePanel ? "rgba(255,255,255,0.10)" : "transparent",
                       color: showLivePanel ? "#fff" : "rgba(255,255,255,0.65)",
                       border: "none", cursor: "pointer",
                       fontSize: 13, fontWeight: 600, fontFamily: font,
-                      justifyContent: isNavCollapsed ? "center" : "flex-start",
+                      justifyContent: (navCollapsed && !isMobile) ? "center" : "flex-start",
                       gap: 8, transition: "all 0.15s",
                     }}
                   >
                     <span style={{ position: "relative", display: "inline-flex", flexShrink: 0 }}>
-                      <span style={{ fontSize: isNavCollapsed ? 17 : 14, lineHeight: 1 }}>📡</span>
+                      <span style={{ fontSize: (navCollapsed && !isMobile) ? 17 : 14, lineHeight: 1 }}>📡</span>
                       <span style={{
                         position: "absolute", top: -2, right: -3,
                         width: 7, height: 7, borderRadius: "50%",
@@ -1562,7 +1561,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                         transition: "background 0.3s",
                       }} />
                     </span>
-                    {!isNavCollapsed && <span>Live Session</span>}
+                    {!(navCollapsed && !isMobile) && <span>Live Session</span>}
                   </button>
                 </div>
               );
@@ -1619,8 +1618,8 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                 <div style={{ padding: "4px 4px 6px", fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: colors.gray || "#94a3b8", fontFamily: font }}>{label}</div>
               );
               const modRow = (m, accentColor) => (
-                <label key={m.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px 9px 12px", borderRadius: 7, background: enabledModules.includes(m.id) ? (darkMode ? "#1A3040" : "#fff") : "transparent", borderLeft: `3px solid ${enabledModules.includes(m.id) ? accentColor : "transparent"}`, cursor: "pointer", fontSize: 13, fontWeight: 600, color: enabledModules.includes(m.id) ? colors.navy : (colors.gray || "#999"), fontFamily: font, transition: "all 0.15s" }}>
-                  <input type="checkbox" checked={enabledModules.includes(m.id)} onChange={() => toggleModule(m.id)} style={{ width: 15, height: 15, accentColor: accentColor, flexShrink: 0 }} />
+                <label key={m.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px 9px 12px", borderRadius: 7, background: enabledModulesLS.includes(m.id) ? (darkMode ? "#1A3040" : "#fff") : "transparent", borderLeft: `3px solid ${enabledModulesLS.includes(m.id) ? accentColor : "transparent"}`, cursor: "pointer", fontSize: 13, fontWeight: 600, color: enabledModulesLS.includes(m.id) ? colors.navy : (colors.gray || "#999"), fontFamily: font, transition: "all 0.15s" }}>
+                  <input type="checkbox" checked={enabledModulesLS.includes(m.id)} onChange={() => toggleModule(m.id)} style={{ width: 15, height: 15, accentColor: accentColor, flexShrink: 0 }} />
                   <span style={{ fontSize: 14, lineHeight: 1, flexShrink: 0 }}>{m.icon}</span>
                   <span>{t(m.label)}</span>
                 </label>

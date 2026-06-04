@@ -42,11 +42,9 @@ function _pt(str) {
 
 function LabeledInput({ label, value, onChange, onBlur, prefix, suffix, type = "number", step, hint, useCommas, disabled, small, noNegative, rightAddon, infoTip, inputMode: inputModeProp }) {
   const c = useThemeColors();
-  // For useCommas inputs: show raw digits while focused, formatted on blur
+  // For useCommas inputs: always show formatted value with live commas as you type
   const [isFocused, setIsFocused] = React.useState(false);
-  const displayVal = useCommas
-    ? (isFocused ? (value || "") : addCommas(value))
-    : value;
+  const displayVal = useCommas ? addCommas(value) : value;
   const handleChange = (raw) => {
     if (noNegative) {
       const n = parseFloat(String(raw).replace(/,/g, ''));
@@ -54,13 +52,33 @@ function LabeledInput({ label, value, onChange, onBlur, prefix, suffix, type = "
     }
     onChange(raw);
   };
+  // Live comma formatting: called from onChange to preserve cursor position
+  const handleCommaChange = (e) => {
+    const input = e.target;
+    const oldVal = input.value;
+    const cursorPos = input.selectionStart;
+    // Count commas before cursor in old value
+    const commasBefore = (oldVal.slice(0, cursorPos).match(/,/g) || []).length;
+    // Strip commas and get raw digits only
+    const raw = oldVal.replace(/,/g, '').replace(/[^0-9.]/g, '');
+    if (noNegative && raw.startsWith('-')) return;
+    onChange(raw);
+    // After React re-renders with new formatted value, restore cursor
+    requestAnimationFrame(() => {
+      const newVal = input.value;
+      const commasBeforeNew = (newVal.slice(0, cursorPos).match(/,/g) || []).length;
+      const adjust = commasBeforeNew - commasBefore;
+      const newPos = Math.max(0, cursorPos + adjust);
+      try { input.setSelectionRange(newPos, newPos); } catch(e) {}
+    });
+  };
   const inputBox = (
     <div style={{ flex: rightAddon ? 1 : undefined, display: "flex", alignItems: "center", background: disabled ? (c === COLORS_DARK ? "#1A2530" : "#f0f0f0") : c.bg, border: `1.5px solid ${c.border}`, borderRadius: 8, overflow: "hidden" }}>
       {prefix && <span style={{ padding: "8px 0 8px 10px", color: c.navy, fontWeight: 600, fontSize: small ? 13 : 15, fontFamily: font }}>{prefix}</span>}
       <input type={useCommas ? "text" : type} value={displayVal}
         inputMode={inputModeProp || (type === "number" || useCommas ? "decimal" : undefined)}
         onFocus={(e) => { setIsFocused(true); e.target.select(); }}
-        onChange={(e) => handleChange(useCommas ? stripCommas(e.target.value) : e.target.value)}
+        onChange={useCommas ? handleCommaChange : (e) => handleChange(e.target.value)}
         onBlur={(e) => {
           setIsFocused(false);
           if (onBlur) onBlur(useCommas ? stripCommas(e.target.value) : e.target.value);

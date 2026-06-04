@@ -3623,18 +3623,26 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
 
     {/* ── Activity Report Modal ─────────────────────────────────────────── */}
     {showActivityReport && ReactDOM.createPortal(
-      <div
-        onClick={function(e) { if (e.target === e.currentTarget) setShowActivityReport(false); }}
-        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9000, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 20px", overflowY: "auto" }}
-      >
-        <div style={{ background: "#fff", borderRadius: 14, width: "100%", maxWidth: 860, boxShadow: "0 8px 40px rgba(0,0,0,0.2)", fontFamily: "'Inter', system-ui, sans-serif" }}>
+      (() => {
+        const isMobileAR = window.innerWidth < 700;
+        return (
+        <div
+          onClick={function(e) { if (e.target === e.currentTarget) setShowActivityReport(false); }}
+          style={isMobileAR
+            ? { position: "fixed", inset: 0, background: "#fff", zIndex: 9000, display: "flex", flexDirection: "column", overflowY: "auto" }
+            : { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9000, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 20px", overflowY: "auto" }}
+        >
+        <div style={isMobileAR
+          ? { background: "#fff", width: "100%", flex: 1, display: "flex", flexDirection: "column", fontFamily: "'Inter', system-ui, sans-serif" }
+          : { background: "#fff", borderRadius: 14, width: "100%", maxWidth: 860, boxShadow: "0 8px 40px rgba(0,0,0,0.2)", fontFamily: "'Inter', system-ui, sans-serif" }}
+        >
           {/* Header */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 24px", borderBottom: "1px solid #e2e8f0" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 18px", borderBottom: "1px solid #e2e8f0", flexShrink: 0 }}>
             <div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: "#1e3a5f" }}>📊 Activity Report — Last 30 Days</div>
-              <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>Scenarios with client or partner activity. Sorted by most recently active.</div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: "#1e3a5f" }}>📊 Activity Report — Last 30 Days</div>
+              <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>Sorted by most recently active.</div>
             </div>
-            <button onClick={function() { setShowActivityReport(false); }} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#94a3b8", padding: "0 4px" }}>✕</button>
+            <button onClick={function() { setShowActivityReport(false); }} style={{ background: "#f1f5f9", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: "pointer", color: "#475569", padding: "6px 12px" }}>✕ Close</button>
           </div>
 
           {/* Body */}
@@ -3698,7 +3706,9 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
             )}
           </div>
         </div>
-      </div>,
+        </div>
+        );
+      })(),
       document.body
     )}
     </div>

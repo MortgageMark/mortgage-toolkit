@@ -98,7 +98,7 @@ function AmortizationSchedule() {
   const [extraPrincipal, setExtraPrincipal] = useLocalStorage("am_extra", "0");
   const [extraEnabled, setExtraEnabled] = useLocalStorage("am_extra_enabled", "false");
   const [biWeekly, setBiWeekly] = useLocalStorage("am_biweekly", "false");
-  const [lumpsRaw, setLumpsRaw] = useLocalStorage("am_lumps", "[]");
+  const [lumpsRaw, setLumpsRaw] = useLocalStorage("am_lumps", JSON.stringify([{ month: "", amount: "" }]));
   const [lumpsEnabled, setLumpsEnabled] = useLocalStorage("am_lumps_enabled", "false");
   const [viewMode, setViewMode] = useLocalStorage("am_view", "monthly");
   const [biwExtra, setBiwExtra] = useLocalStorage("biw_extra", "0");

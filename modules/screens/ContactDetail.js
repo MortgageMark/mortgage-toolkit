@@ -1389,20 +1389,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                   </button>
                 )
               )}
-              {/* Edit — visible on both Contact Info and Internal Notes tabs */}
-              {isInternal && (
-                <button
-                  onClick={function () { setEditMode(true); setSaveError(null); }}
-                  style={{
-                    background: "transparent", border: "1px solid #cbd5e1", borderRadius: "8px",
-                    padding: "4px 16px", fontSize: "13px", fontWeight: 600, color: "#1e3a5f",
-                    cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif",
-                    letterSpacing: "0.01em", flexShrink: 0,
-                  }}
-                >
-                  Edit
-                </button>
-              )}
+              {/* Edit button replaced by floating action button below */}
             </div>
           )}
           </div>{/* end row */}
@@ -2538,23 +2525,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
           )}
         </div>
 
-        {/* ── Delete — bottom of page, admin only ── */}
-        {isAdmin && !editMode && (
-          <div style={{ paddingTop: "24px", paddingBottom: "8px", textAlign: "center" }}>
-            <button
-              onClick={handleDelete}
-              title="Permanently delete this contact"
-              style={{
-                background: "transparent", border: "1px solid #fca5a5",
-                color: "#dc2626", borderRadius: "8px",
-                padding: "9px 28px", fontSize: "13px", fontWeight: 600,
-                cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif",
-              }}
-            >
-              🗑 Delete Contact
-            </button>
-          </div>
-        )}
+        {/* Delete moved to edit mode bar — see below */}
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
         {/* LO / PARTNER PROFILE (business contacts, admin only)              */}
@@ -2752,6 +2723,34 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
       </div>
       </div>
 
+      {/* ── Floating Edit button (always visible when not in edit mode) ─── */}
+      {!editMode && isInternal && (
+        <button
+          onClick={function () { setEditMode(true); setSaveError(null); }}
+          title="Edit contact"
+          style={{
+            position: "fixed",
+            bottom: "max(24px, calc(env(safe-area-inset-bottom, 0px) + 20px))",
+            right: 24,
+            zIndex: 290,
+            width: 52, height: 52,
+            borderRadius: "50%",
+            background: "#1e3a5f",
+            color: "#fff",
+            border: "none",
+            fontSize: 22,
+            cursor: "pointer",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            transition: "transform 0.15s, box-shadow 0.15s",
+          }}
+          onMouseEnter={function(e) { e.currentTarget.style.transform = "scale(1.08)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,0.32)"; }}
+          onMouseLeave={function(e) { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.25)"; }}
+        >
+          ✏️
+        </button>
+      )}
+
       {/* ── Sticky Save / Discard bar (edit mode only) ───────────────────── */}
       {editMode && (
         <div style={{
@@ -2762,8 +2761,22 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
           paddingBottom: "max(14px, env(safe-area-inset-bottom))",
           display: "flex", alignItems: "center", justifyContent: "center", gap: "10px",
         }}>
+          {/* Delete — admin only, far left, requires edit mode to see */}
+          {isAdmin && (
+            <button
+              onClick={handleDelete}
+              title="Permanently delete this contact"
+              style={{
+                padding: "10px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600,
+                border: "1px solid #fca5a5", background: "transparent", color: "#dc2626",
+                cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif", marginRight: "auto",
+              }}
+            >
+              🗑 Delete
+            </button>
+          )}
           {saveError && (
-            <div style={{ flex: 1, fontSize: "13px", color: "#dc2626", fontFamily: "'Inter', system-ui, sans-serif" }}>
+            <div style={{ fontSize: "13px", color: "#dc2626", fontFamily: "'Inter', system-ui, sans-serif" }}>
               {saveError}
             </div>
           )}
