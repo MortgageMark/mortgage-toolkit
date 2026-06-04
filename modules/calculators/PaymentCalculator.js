@@ -1247,7 +1247,10 @@ function PaymentCalculator({ isInternal, user }) {
             {/* County selector + loan limit badge — FHA and Conventional */}
             {(loanProgram === "fha" || isConvType) && (function() {
               var isFHA  = loanProgram === "fha";
-              var limitDB = isFHA ? (window.FHA_COUNTY_LIMITS || {}) : (window.CONFORMING_COUNTY_LIMITS || {});
+              // Access county limit data — read directly each render so it's always current
+              var fhaLimits  = window.FHA_COUNTY_LIMITS        || {};
+              var convLimits = window.CONFORMING_COUNTY_LIMITS || {};
+              var limitDB = isFHA ? fhaLimits : convLimits;
               var countyData = limitDB[pcState] || {};
               var countyNames = Object.keys(countyData).sort();
               // Pick unit tier based on property type
