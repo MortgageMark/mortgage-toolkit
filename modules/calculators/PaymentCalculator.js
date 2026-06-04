@@ -283,6 +283,7 @@ function PaymentCalculator({ isInternal, user }) {
   const [loanType, setLoanType] = useLocalStorage("pc_lt", "fixed");
   const [purpose, setPurpose] = useLocalStorage("pc_purpose", "purchase");
   const [loanProgram, setLoanProgram] = useLocalStorage("pc_prog", "conventional");
+  const [pcCounty,    setPcCounty]    = useLocalStorage("pc_county", "");
   const [renovationProg, setRenovationProg] = useLocalStorage("pc_reno", "none");
   const [occupancy, setOccupancy] = useLocalStorage("pc_occ", "primary");
   const [armFixedYears, setArmFixedYears] = useLocalStorage("pc_armfy", "5");
@@ -376,6 +377,7 @@ function PaymentCalculator({ isInternal, user }) {
   const [s2Term,    setS2Term]    = useLocalStorage("pc_2nd_term",    "");
   const [s2Amt,     setS2Amt]     = useLocalStorage("pc_2nd_amt",     "");
   const [s2Mode,    setS2Mode]    = useLocalStorage("pc_2nd_mode",    "pct"); // "pct" | "dollar"
+  const [s2IO,      setS2IO]      = useLocalStorage("pc_2nd_io",      false); // interest-only toggle
 
   // Derived MI factors — used in both the PMI useEffect and the calc useMemo
   const qualifyingFico = (() => {
@@ -428,14 +430,13 @@ function PaymentCalculator({ isInternal, user }) {
     const isFixed = loanType === "fixed";
     const isCashOut = purpose === "cashOutRefi";
     const result = lookupPMI({ ltv, fico: qualifyingFico, termYears: termYrs, occupancy, isFixed, isCashOut, isMultiBorrower: isMultiBorr, highDTI, reducedCoverage: useReducedMIFinal });
-    // Use cheapest actual company rate (Enact vs Essent) — overrides generic table
+    // Use cheapest actual company rate (Enact vs Essent vs Arch) — overrides generic table
     const compParams = { ltv, fico: qualifyingFico, termYears: termYrs, isMultiBorrower: isMultiBorr, highDTI, isCashOut, occupancy, reducedCoverage: useReducedMIFinal };
     const enactR  = lookupPMICompany("enact",  compParams);
     const essentR = lookupPMICompany("essent", compParams);
-    let cheapestRate = null;
-    if (enactR !== null && essentR !== null) cheapestRate = Math.min(enactR, essentR);
-    else if (enactR !== null) cheapestRate = enactR;
-    else if (essentR !== null) cheapestRate = essentR;
+    const archR   = lookupPMICompany("arch",   compParams);
+    const allRates = [enactR, essentR, archR].filter(r => r !== null);
+    let cheapestRate = allRates.length > 0 ? Math.min(...allRates) : null;
     if (cheapestRate !== null) {
       setPmiRate(String((cheapestRate * 100).toFixed(2)));
       setPmiInfo(result.rate !== null ? { ...result, rate: cheapestRate } : null);
@@ -832,7 +833,8 @@ function PaymentCalculator({ isInternal, user }) {
     const s2R   = (parseFloat(s2Rate) || 0) / 100 / 12;
     const s2N   = (s2Term === "balloon" ? 30 : (parseFloat(s2Term) || 20)) * 12;
     const s2PI  = (s2On && s2R > 0 && s2LA > 0)
-      ? Math.round(s2LA * s2R * Math.pow(1 + s2R, s2N) / (Math.pow(1 + s2R, s2N) - 1))
+      ? (s2IO ? Math.round(s2LA * s2R)  // Interest-only: balance × monthly rate
+              : Math.round(s2LA * s2R * Math.pow(1 + s2R, s2N) / (Math.pow(1 + s2R, s2N) - 1)))
       : 0;
 
     const totalMonthly = monthlyPI + effectiveMonthlyTax + monthlyIns + monthlyMI + s2PI;
@@ -1241,22 +1243,104 @@ function PaymentCalculator({ isInternal, user }) {
                 ✓ Reduced MI coverage (25%) — {loanProgram === "homeready" ? "HomeReady" : loanProgram === "homeposs" ? "Home Possible" : "HFA"} program
               </div>
             )}
+
+            {/* County selector + loan limit badge — FHA and Conventional */}
+            {(loanProgram === "fha" || isConvType) && (function() {
+              var isFHA  = loanProgram === "fha";
+              var limitDB = isFHA ? (window.FHA_COUNTY_LIMITS || {}) : (window.CONFORMING_COUNTY_LIMITS || {});
+              var countyData = limitDB[pcState] || {};
+              var countyNames = Object.keys(countyData).sort();
+              // Pick unit tier based on property type
+              var unitKey = propType === "duplex" ? "u2" : propType === "3plex" ? "u3" : propType === "4plex" ? "u4" : "u1";
+              var unitLabel = propType === "duplex" ? "2-unit" : propType === "3plex" ? "3-unit" : propType === "4plex" ? "4-unit" : "1-unit";
+              var countyEntry = pcCounty && countyData[pcCounty] ? countyData[pcCounty] : null;
+              var limitAmt = countyEntry ? countyEntry[unitKey] : null;
+              var la = parseFloat(loanAmount) || 0;
+              var overLimit = limitAmt && la > limitAmt;
+              var programLabel = isFHA ? "FHA" : "Conforming";
+              return React.createElement(React.Fragment, null,
+                React.createElement(Select, {
+                  label: "County (" + programLabel + " Limit Reference)",
+                  value: pcCounty,
+                  onChange: setPcCounty,
+                  infoTip: programLabel + " loan limits vary by county and unit count. Select your county to verify your loan amount qualifies.",
+                  options: [
+                    { value: "", label: "— Select County —" },
+                    ...countyNames.map(function(n) { return { value: n, label: n }; })
+                  ]
+                }),
+                limitAmt && React.createElement("div", {
+                  style: {
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    marginTop: -4, marginBottom: 6, padding: "8px 12px", borderRadius: 7,
+                    background: overLimit ? "#FEF2F2" : "#F0FDF4",
+                    border: "1px solid " + (overLimit ? "#FECACA" : "#86EFAC"),
+                    fontSize: 13, fontFamily: font,
+                  }
+                },
+                  React.createElement("span", { style: { color: overLimit ? "#DC2626" : "#16a34a", fontWeight: 600 } },
+                    overLimit
+                      ? "⚠️ Exceeds " + programLabel + " " + unitLabel + " limit for " + pcCounty
+                      : "✓ Within " + programLabel + " " + unitLabel + " limit for " + pcCounty
+                  ),
+                  React.createElement("span", { style: { color: overLimit ? "#DC2626" : "#15803d", fontWeight: 700 } },
+                    "$" + limitAmt.toLocaleString("en-US")
+                  )
+                )
+              );
+            })()}
             {(() => {
               const la = parseFloat(loanAmount) || 0;
-              const conformingLimit = CONFORMING_LIMITS.baseline;
-              const fhaLimit = FHA_LIMITS.floor;
+              const unitKey = propType === "duplex" ? "u2" : propType === "3plex" ? "u3" : propType === "4plex" ? "u4" : "u1";
+              // Use county-specific limit when available, else fall back to national baseline
+              const countyConvEntry  = pcCounty ? ((window.CONFORMING_COUNTY_LIMITS || {})[pcState] || {})[pcCounty] : null;
+              const countyFhaEntry   = pcCounty ? ((window.FHA_COUNTY_LIMITS        || {})[pcState] || {})[pcCounty] : null;
+              const conformingLimit  = countyConvEntry ? countyConvEntry[unitKey] : CONFORMING_LIMITS.baseline;
+              const fhaLimit         = countyFhaEntry  ? countyFhaEntry[unitKey]  : FHA_LIMITS.floor;
+              const countyKnown      = !!pcCounty;
               const warnings = [];
               if (isConvType && la > conformingLimit) {
-                warnings.push({ color: "#d97706", bg: "#fffbeb", border: "#fcd34d", icon: "⚠️", text: `Loan amount exceeds the conforming limit of ${fmt(conformingLimit)}. This is a Jumbo loan — different rates and guidelines apply.` });
+                warnings.push({ color: "#d97706", bg: "#fffbeb", border: "#fcd34d", icon: "⚠️", text: `Loan amount exceeds the ${countyKnown ? pcCounty + " conforming" : "standard conforming"} limit of ${fmt(conformingLimit)}. This is a Jumbo loan — different rates and guidelines apply.` });
               }
               if (loanProgram === "fha" && la > fhaLimit) {
-                warnings.push({ color: "#dc2626", bg: "#fef2f2", border: "#fca5a5", icon: "⚠️", text: `Loan amount may exceed the FHA limit for this county. FHA limits vary by county — confirm with your Loan Officer or check HUD's official lookup tool:`, link: "https://entp.hud.gov/idapp/html/hicostlook.cfm" });
+                warnings.push({ color: "#dc2626", bg: "#fef2f2", border: "#fca5a5", icon: "⚠️", text: countyKnown ? `Loan amount exceeds the FHA limit for ${pcCounty} (${fmt(fhaLimit)}).` : `Loan amount may exceed the FHA limit for this county. Select a county above to verify.` });
               }
               if (isConvType && la > conformingLimit * 0.95 && la <= conformingLimit) {
-                warnings.push({ color: "#2563eb", bg: "#eff6ff", border: "#93c5fd", icon: "ℹ️", text: `Loan amount is within 5% of the conforming limit (${fmt(conformingLimit)}). Consider staying below to avoid jumbo pricing.` });
+                warnings.push({ color: "#2563eb", bg: "#eff6ff", border: "#93c5fd", icon: "ℹ️", text: `Loan amount is within 5% of the ${countyKnown ? pcCounty + " conforming" : "standard conforming"} limit (${fmt(conformingLimit)}). Consider staying below to avoid jumbo pricing.` });
               }
               if (loanProgram === "fha" && la > fhaLimit * 0.95 && la <= fhaLimit) {
-                warnings.push({ color: "#2563eb", bg: "#eff6ff", border: "#93c5fd", icon: "ℹ️", text: `Loan amount is approaching the FHA limit for this area. FHA limits vary by county — verify with your Loan Officer or check HUD's official lookup tool:`, link: "https://entp.hud.gov/idapp/html/hicostlook.cfm" });
+                warnings.push({ color: "#2563eb", bg: "#eff6ff", border: "#93c5fd", icon: "ℹ️", text: `Loan amount is approaching the FHA limit${countyKnown ? " for " + pcCounty : " for this area"} (${fmt(fhaLimit)}).` });
+              }
+
+              // ── Conventional 2-4 unit LTV limits (Fannie Mae eligibility matrix) ──
+              // 2-unit primary:     85% purchase / rate-term,  75% cash-out
+              // 2-unit investment:  75% purchase / rate-term,  70% cash-out
+              // 3-4 unit primary:   75% purchase / rate-term,  70% cash-out
+              // 3-4 unit investment: 70% purchase / rate-term, 65% cash-out
+              // 2nd home not eligible for 2-4 unit
+              if (isConvType && ["duplex","3plex","4plex"].includes(propType)) {
+                var ltv = calc ? calc.ltv : (la > 0 && (parseFloat(homePrice)||0) > 0 ? la / parseFloat(homePrice) * 100 : 0);
+                var isCashOut = purpose === "cash_out" || purpose === "cashout";
+                var is2Unit   = propType === "duplex";
+                var isInv     = occupancy === "investment";
+                var isPrimary = occupancy === "primary";
+                var maxLTV;
+                if (occupancy === "secondary") {
+                  warnings.push({ color: "#dc2626", bg: "#fef2f2", border: "#fca5a5", icon: "⚠️", text: "2–4 unit properties are not eligible as second homes for conventional financing. Must be primary residence or investment." });
+                  maxLTV = null;
+                } else if (is2Unit && isPrimary)  maxLTV = isCashOut ? 75 : 85;
+                else if (is2Unit && isInv)         maxLTV = isCashOut ? 70 : 75;
+                else if (!is2Unit && isPrimary)    maxLTV = isCashOut ? 70 : 75;
+                else if (!is2Unit && isInv)        maxLTV = isCashOut ? 65 : 70;
+                if (maxLTV && ltv > maxLTV + 0.01) {
+                  var unitStr = propType === "duplex" ? "2-unit" : propType === "3plex" ? "3-unit" : "4-unit";
+                  var occStr  = isPrimary ? "primary" : "investment";
+                  var txStr   = isCashOut ? "cash-out refi" : "purchase / rate-term refi";
+                  warnings.push({ color: "#dc2626", bg: "#fef2f2", border: "#fca5a5", icon: "⚠️", text: `LTV of ${ltv.toFixed(1)}% exceeds the ${maxLTV}% maximum for a ${unitStr} ${occStr} ${txStr} (Fannie Mae). Down payment or loan amount needs adjustment.` });
+                } else if (maxLTV && ltv > maxLTV - 3 && ltv <= maxLTV + 0.01) {
+                  var unitStr2 = propType === "duplex" ? "2-unit" : propType === "3plex" ? "3-unit" : "4-unit";
+                  warnings.push({ color: "#d97706", bg: "#fffbeb", border: "#fcd34d", icon: "ℹ️", text: `LTV of ${ltv.toFixed(1)}% is near the ${maxLTV}% Fannie Mae limit for this ${unitStr2} ${occupancy} property. Verify final numbers carefully.` });
+                }
               }
               return warnings.length > 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 2, marginBottom: 4 }}>
@@ -1598,6 +1682,9 @@ function PaymentCalculator({ isInternal, user }) {
             </div>
             {s2Enabled === "true" && (
               <div style={{ padding: 18 }}>
+                <div style={{ marginBottom: 14, padding: "9px 12px", borderRadius: 7, background: `${c.blue}10`, border: `1px solid ${c.blue}33`, fontSize: 12, color: c.gray, fontFamily: font, lineHeight: 1.6 }}>
+                  💡 <strong style={{ color: c.navy }}>Heads up:</strong> The 2nd lien fields here are additive — they don't change your 1st lien. Make sure the <strong>Loan Amount</strong> above reflects only the 1st lien balance, not the combined total.
+                </div>
                 <Select label="2nd Lien Term" value={s2Term} onChange={setS2Term} options={[
                   { value: "", label: "— Select —" },
                   { value: "balloon", label: "30/15 Balloon" },
@@ -1609,6 +1696,17 @@ function PaymentCalculator({ isInternal, user }) {
                 {s2Term === "balloon" && (
                   <div style={{ fontSize: 12, color: c.gray, fontFamily: font, marginTop: -8, marginBottom: 12, lineHeight: 1.5 }}>
                     Amortized over 30 yrs · Full balance due at Month 180 (Year 15)
+                  </div>
+                )}
+                {/* Interest-Only toggle */}
+                <Toggle
+                  label="Interest-Only Payments"
+                  checked={!!s2IO}
+                  onChange={v => setS2IO(v)}
+                />
+                {s2IO && (
+                  <div style={{ fontSize: 12, color: c.blue, fontFamily: font, marginTop: -6, marginBottom: 10, lineHeight: 1.5, fontStyle: "italic" }}>
+                    Payment = interest only · principal balance does not reduce
                   </div>
                 )}
                 {/* 2nd Lien Amount — dual % and $ fields (mirrors Down Payment) */}
@@ -1832,7 +1930,7 @@ function PaymentCalculator({ isInternal, user }) {
           </SectionCard>
 
           {/* ═══ HOME INSURANCE ═══ */}
-          <SectionCard title="HOME INSURANCE" accent={c.blue} style={{ maxWidth: 640 }} infoTip="Annual homeowners insurance as a percentage of home value, included in your PITI payment when escrowed. A common estimate is 0.5–1.0% annually depending on location, coverage level, and provider. Always get an actual quote — rates vary significantly by property and insurer.">
+          <SectionCard title={insOverridden ? "HOME INSURANCE" : "HOME INSURANCE · Default"} accent={c.blue} style={{ maxWidth: 640 }} infoTip="Annual homeowners insurance as a percentage of home value, included in your PITI payment when escrowed. A common estimate is 0.5–1.0% annually depending on location, coverage level, and provider. Always get an actual quote — rates vary significantly by property and insurer.">
             {(() => {
               const hp = parseFloat(homePrice) || 0;
               const rate = Math.max(0, parseFloat(homeInsuranceRate) || 0);
@@ -1877,11 +1975,26 @@ function PaymentCalculator({ isInternal, user }) {
                       <span style={{ padding: "10px 12px 10px 0", color: c.gray, fontSize: 13, fontWeight: 500, fontFamily: font }}>% / yr</span>
                     </div>
                   </div>
-                  {(insDollarStored || monthly > 0) && (
-                    <div style={{ fontSize: 12, color: c.grayLight || c.gray, fontFamily: font, marginBottom: 10, textAlign: "right" }}>
-                      {fmt(Math.round((parseFloat(insDollarStored) || monthly) * 12))} / year
-                    </div>
-                  )}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                    {(insDollarStored || monthly > 0) ? (
+                      <div style={{ fontSize: 12, color: c.grayLight || c.gray, fontFamily: font }}>
+                        {fmt(Math.round((parseFloat(insDollarStored) || monthly) * 12))} / year
+                      </div>
+                    ) : <div />}
+                    {insOverridden && (
+                      <button
+                        onClick={function() {
+                          setHomeInsuranceRate(STATE_INS_RATES[pcState] != null ? String(STATE_INS_RATES[pcState]) : "0.700");
+                          setInsDollarStored("");
+                          setInsMode("rate");
+                          setInsOverridden(false);
+                        }}
+                        style={{ fontSize: 11, color: c.blue, background: "none", border: "none", cursor: "pointer", fontFamily: font, padding: 0, textDecoration: "underline" }}
+                      >
+                        × Reset to default
+                      </button>
+                    )}
+                  </div>
                   {rate > 0 && rate < 0.25 && (
                     <div style={{ marginBottom: 8, fontSize: 12, color: "#b45309", fontFamily: font, lineHeight: 1.4, background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 5, padding: "6px 10px" }}>
                       Homeowners insurance is required on all mortgage loans. Minimum floored at <strong>0.25%</strong> of home value.
@@ -1988,8 +2101,29 @@ function PaymentCalculator({ isInternal, user }) {
           {/* ── MORTGAGE INSURANCE ── */}
           {showMISection && (() => {
             const _miInt = !!isInternal;
+            // Detect blank FICO scores (stored as "" or "0" — falls back to 740 in rate lookup)
+            const ficoBlank   = !ficoScore || ficoScore === "0";
+            const coBlank     = borrowerCount !== "1" && (!coBorroFico || coBorroFico === "0");
+            const b3Blank     = parseInt(borrowerCount) >= 3 && (!b3Fico || b3Fico === "0");
+            const b4Blank     = parseInt(borrowerCount) >= 4 && (!b4Fico || b4Fico === "0");
+            const anyFicoBlank = ficoBlank || coBlank || b3Blank || b4Blank;
+            const isConvPMISection = isConvType && loanProgram !== "jumbo" && calc.ltv > 80;
             return (
             <div style={{ marginTop: 0 }}>
+              {/* FICO assumption warning — only relevant for conventional PMI (FHA/VA rates don't use FICO) */}
+              {isConvPMISection && anyFicoBlank && (
+                <div style={{ marginBottom: 8, padding: "9px 14px", borderRadius: 8, background: "#fffbeb", border: "1px solid #fcd34d", display: "flex", alignItems: "flex-start", gap: 10, fontFamily: font }}>
+                  <span style={{ fontSize: 16, flexShrink: 0 }}>⚠️</span>
+                  <div style={{ fontSize: 12, color: "#92400e", lineHeight: 1.5 }}>
+                    <strong>Credit score not entered</strong> — PMI rate is calculated using a <strong>740 FICO</strong> assumption.
+                    {ficoBlank && " Borrower 1 score is blank."}
+                    {coBlank   && " Co-borrower score is blank."}
+                    {b3Blank   && " Borrower 3 score is blank."}
+                    {b4Blank   && " Borrower 4 score is blank."}
+                    {" "}Enter actual scores in the Credit Profile section for an accurate rate. PMI pricing is highly sensitive to FICO — the rate can vary significantly.
+                  </div>
+                </div>
+              )}
               {/* Borrower-facing MI summary */}
               <SectionCard title={miSectionTitle} accent={miSectionAccent}>
                 {loanProgram === "va" && (
@@ -2088,9 +2222,10 @@ function PaymentCalculator({ isInternal, user }) {
                 const adjParams = { ltv: ltv2, fico: qualifyingFico, termYears: termYrs2, isMultiBorrower: isMultiBorr, highDTI, isCashOut: isCashOut2, occupancy, reducedCoverage: useReducedMIFinal };
                 const enactR  = lookupPMICompany("enact",  adjParams);
                 const essentR = lookupPMICompany("essent", adjParams);
-                const cheapest = (enactR !== null && essentR !== null)
-                  ? (enactR <= essentR ? "Enact" : "Essent")
-                  : enactR !== null ? "Enact" : essentR !== null ? "Essent" : null;
+                const archR   = lookupPMICompany("arch",   adjParams);
+                const coRates = [{ label: "Enact",  rate: enactR }, { label: "Essent", rate: essentR }, { label: "Arch", rate: archR }];
+                const validRates = coRates.filter(c => c.rate !== null);
+                const cheapest = validRates.length > 0 ? validRates.reduce((a, b) => a.rate <= b.rate ? a : b).label : null;
                 return (
                   <SectionCard title="MORTGAGE INSURANCE (INTERNAL)" accent={c.blue}>
                     <div>
@@ -2185,20 +2320,24 @@ function PaymentCalculator({ isInternal, user }) {
                           </div>
                         )}
                         <div style={{ fontSize: 12, fontWeight: 700, color: c.blue, fontFamily: font, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>Company Rates (Adjusted)</div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                          {[{ label: "Enact MI", rate: enactR }, { label: "Essent MI", rate: essentR }].map(co => (
-                            <div key={co.label} style={{ padding: 8, borderRadius: 8, background: c.bgAlt || "#f5f5f5", textAlign: "center", border: cheapest === co.label.split(" ")[0] ? `1.5px solid ${c.green}` : `1px solid ${c.border}` }}>
-                              <div style={{ fontSize: 12, fontWeight: 600, color: c.textSecondary || c.gray, fontFamily: font }}>{co.label}{cheapest === co.label.split(" ")[0] ? " ✓" : ""}</div>
-                              <div style={{ fontSize: 20, fontWeight: 800, color: co.rate !== null ? c.green : c.gray, fontFamily: font }}>{co.rate !== null ? `${(co.rate * 100).toFixed(2)}%` : "N/A"}</div>
-                              {co.rate !== null && <div style={{ fontSize: 12, color: c.textSecondary || c.gray }}>{fmt2(la2 * co.rate / 12)}/mo</div>}
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                          {[{ label: "Enact", rate: enactR }, { label: "Essent", rate: essentR }, { label: "Arch MI", rate: archR }].map(co => (
+                            <div key={co.label} style={{ padding: 8, borderRadius: 8, background: c.bgAlt || "#f5f5f5", textAlign: "center", border: cheapest === co.label ? `1.5px solid ${c.green}` : `1px solid ${c.border}` }}>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: c.textSecondary || c.gray, fontFamily: font }}>{co.label}{cheapest === co.label ? " ✓" : ""}</div>
+                              <div style={{ fontSize: 18, fontWeight: 800, color: co.rate !== null ? c.green : c.gray, fontFamily: font }}>{co.rate !== null ? `${(co.rate * 100).toFixed(2)}%` : "N/A"}</div>
+                              {co.rate !== null && <div style={{ fontSize: 11, color: c.textSecondary || c.gray }}>{fmt2(la2 * co.rate / 12)}/mo</div>}
                             </div>
                           ))}
                         </div>
-                        {enactR !== null && essentR !== null && (
-                          <div style={{ fontSize: 12, textAlign: "center", marginTop: 6, color: c.textSecondary || c.gray, fontFamily: font }}>
-                            Cheapest: <strong style={{ color: c.green }}>{cheapest}</strong> · saves {fmt2(Math.abs((enactR - essentR) * la2 / 12))}/mo
-                          </div>
-                        )}
+                        {validRates.length > 1 && cheapest && (function() {
+                          var cheapestRate = validRates.find(function(r) { return r.label === cheapest; }).rate;
+                          var secondRate   = validRates.filter(function(r) { return r.label !== cheapest; }).reduce(function(a, b) { return a.rate < b.rate ? a : b; }).rate;
+                          return (
+                            <div style={{ fontSize: 12, textAlign: "center", marginTop: 6, color: c.textSecondary || c.gray, fontFamily: font }}>
+                              Cheapest: <strong style={{ color: c.green }}>{cheapest}</strong> · saves {fmt2(Math.abs((cheapestRate - secondRate) * la2 / 12))}/mo vs next
+                            </div>
+                          );
+                        })()}
                       </div>
                     )}
                   </SectionCard>
@@ -2317,10 +2456,9 @@ function PaymentCalculator({ isInternal, user }) {
                     const params = { ltv: targetLTV, fico: qualifyingFico, termYears: termYrs3, isMultiBorrower: isMultiBorr, highDTI, isCashOut: isCashOut3, occupancy, reducedCoverage: useReducedMIFinal };
                     const eR = lookupPMICompany("enact",  params);
                     const sR = lookupPMICompany("essent", params);
-                    let cheapR = null;
-                    if (eR !== null && sR !== null) cheapR = Math.min(eR, sR);
-                    else if (eR !== null) cheapR = eR;
-                    else if (sR !== null) cheapR = sR;
+                    const aR = lookupPMICompany("arch",   params);
+                    const allR = [eR, sR, aR].filter(r => r !== null);
+                    const cheapR = allR.length > 0 ? Math.min(...allR) : null;
                     if (cheapR !== null) { monthlyPMI = targetLA * cheapR / 12; }
                     else { const info = lookupPMI(params); if (info && info.rate != null) monthlyPMI = targetLA * info.rate / 12; }
                   }
@@ -3022,7 +3160,9 @@ function PaymentCalculator({ isInternal, user }) {
                   <div style={{ fontSize: 10, fontWeight: 700, color: c.navy, fontFamily: font, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8, paddingBottom: 4, borderBottom: `2px solid ${c.navy}33` }}>1st Lien</div>
                 )}
                 <ExpandableChart title="Balance Paydown">
-                  <BalanceCurveChart years={amortYears} />
+                  <BalanceCurveChart years={amortYears}
+                    homePrice={parseFloat(homePrice) || 0}
+                    showPMILines={isConvType && loanProgram !== "jumbo" && calc.ltv > 75} />
                 </ExpandableChart>
               </div>
               {s2AmortYears.length > 0 && (

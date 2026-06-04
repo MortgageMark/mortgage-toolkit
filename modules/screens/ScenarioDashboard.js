@@ -109,6 +109,9 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
   const setGroupFilter = setGroupFilterProp !== undefined ? setGroupFilterProp : setGroupFilterInternal;
   const [searchTerm, setSearchTerm] = useState("");
   const [showNewForm, setShowNewForm] = useState(false);
+  const [showActivityReport, setShowActivityReport] = useState(false);
+  const [activityData, setActivityData] = useState(null);
+  const [activityLoading, setActivityLoading] = useState(false);
 
   // New scenario form fields
   const [newUid, setNewUid] = useState("");
@@ -1733,6 +1736,75 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
           </div>
         )}
 
+
+        {/* ── Activity Report button (internal only) ─────────────── */}
+        {user.isInternal && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12, marginTop: -8 }}>
+            <button
+              onClick={async function() {
+                setShowActivityReport(true);
+                setActivityLoading(true);
+                try {
+                  var supabase = window._supabaseClient;
+                  if (!supabase) return;
+                  var since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+                  // Fetch audit log for all scenarios in the last 30 days
+                  var { data: logs } = await supabase
+                    .from("scenario_audit_log")
+                    .select("scenario_id, user_id, action, note, created_at")
+                    .gte("created_at", since)
+                    .order("created_at", { ascending: false });
+                  // Fetch PQ letters in the last 30 days
+                  var { data: letters } = await supabase
+                    .from("pq_letters")
+                    .select("scenario_id, created_at")
+                    .gte("created_at", since)
+                    .order("created_at", { ascending: false });
+                  // Fetch PQ shares in the last 30 days
+                  var { data: shares } = await supabase
+                    .from("pq_letter_shares")
+                    .select("scenario_id, realtor_name, sent_at")
+                    .gte("sent_at", since)
+                    .order("sent_at", { ascending: false });
+                  // Group by scenario_id
+                  var byScenario = {};
+                  (logs || []).forEach(function(l) {
+                    if (!byScenario[l.scenario_id]) byScenario[l.scenario_id] = { views: 0, lastSeen: null, actions: [], letterCount: 0, shareCount: 0 };
+                    var s = byScenario[l.scenario_id];
+                    if (l.action === "viewed") {
+                      s.views++;
+                      if (!s.lastSeen || l.created_at > s.lastSeen) s.lastSeen = l.created_at;
+                      if (!s.lastViewer) s.lastViewer = l.note || "";
+                    } else {
+                      s.actions.push(l.action);
+                      if (!s.lastSeen || l.created_at > s.lastSeen) s.lastSeen = l.created_at;
+                    }
+                  });
+                  (letters || []).forEach(function(l) {
+                    if (!byScenario[l.scenario_id]) byScenario[l.scenario_id] = { views: 0, lastSeen: null, actions: [], letterCount: 0, shareCount: 0 };
+                    byScenario[l.scenario_id].letterCount++;
+                    if (!byScenario[l.scenario_id].lastSeen || l.created_at > byScenario[l.scenario_id].lastSeen) byScenario[l.scenario_id].lastSeen = l.created_at;
+                  });
+                  (shares || []).forEach(function(l) {
+                    if (!byScenario[l.scenario_id]) byScenario[l.scenario_id] = { views: 0, lastSeen: null, actions: [], letterCount: 0, shareCount: 0 };
+                    byScenario[l.scenario_id].shareCount++;
+                  });
+                  // Match to scenarios we have loaded
+                  var rows = scenarios.map(function(sc) {
+                    var d = byScenario[sc.id] || { views: 0, lastSeen: null, actions: [], letterCount: 0, shareCount: 0 };
+                    return { scenario: sc, ...d };
+                  }).filter(function(r) { return r.lastSeen; })
+                    .sort(function(a, b) { return (b.lastSeen || "").localeCompare(a.lastSeen || ""); });
+                  setActivityData(rows);
+                } catch(e) { setActivityData([]); }
+                setActivityLoading(false);
+              }}
+              style={{ fontSize: 12, fontWeight: 700, padding: "6px 14px", borderRadius: 7, border: "1px solid #e2e8f0", background: "#fff", color: "#1e3a5f", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+            >
+              📊 Activity Report (30 days)
+            </button>
+          </div>
+        )}
 
         {/* ── New Scenario Form ────────────────────────────────────── */}
         {showNewForm && (
@@ -3575,6 +3647,87 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
       )}
 
     </div>
+
+    {/* ── Activity Report Modal ─────────────────────────────────────────── */}
+    {showActivityReport && ReactDOM.createPortal(
+      <div
+        onClick={function(e) { if (e.target === e.currentTarget) setShowActivityReport(false); }}
+        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9000, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 20px", overflowY: "auto" }}
+      >
+        <div style={{ background: "#fff", borderRadius: 14, width: "100%", maxWidth: 860, boxShadow: "0 8px 40px rgba(0,0,0,0.2)", fontFamily: "'Inter', system-ui, sans-serif" }}>
+          {/* Header */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 24px", borderBottom: "1px solid #e2e8f0" }}>
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "#1e3a5f" }}>📊 Activity Report — Last 30 Days</div>
+              <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>Scenarios with client or partner activity. Sorted by most recently active.</div>
+            </div>
+            <button onClick={function() { setShowActivityReport(false); }} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#94a3b8", padding: "0 4px" }}>✕</button>
+          </div>
+
+          {/* Body */}
+          <div style={{ padding: "16px 24px 24px" }}>
+            {activityLoading ? (
+              <div style={{ textAlign: "center", padding: "40px 0", color: "#64748b", fontSize: 14 }}>Loading activity data…</div>
+            ) : !activityData || activityData.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "40px 0", color: "#94a3b8", fontSize: 14 }}>
+                No activity found in the last 30 days. Activity is logged when clients open their scenarios or PQ letters are generated.
+              </div>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ borderBottom: "2px solid #e2e8f0" }}>
+                    {["Contact", "Scenario", "Last Seen", "Views (30d)", "PQ Letters", "PQ Sent", "Other Actions"].map(function(h) {
+                      return <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b" }}>{h}</th>;
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {activityData.map(function(row, i) {
+                    var sc = row.scenario;
+                    var contact = sc.contact_id ? (contactsMap && contactsMap[sc.contact_id]) : null;
+                    var contactName = contact ? [contact.first_name, contact.last_name].filter(Boolean).join(" ") : (sc.clientName || "—");
+                    var lastSeen = row.lastSeen ? new Date(row.lastSeen) : null;
+                    var now = new Date();
+                    var diffMs = lastSeen ? now - lastSeen : null;
+                    var diffLabel = diffMs == null ? "—"
+                      : diffMs < 60*60*1000 ? "< 1 hour ago"
+                      : diffMs < 24*60*60*1000 ? Math.floor(diffMs/3600000) + "h ago"
+                      : diffMs < 7*24*60*60*1000 ? Math.floor(diffMs/86400000) + "d ago"
+                      : lastSeen.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                    var isHot = diffMs && diffMs < 3*24*60*60*1000;
+                    var uniqueActions = [...new Set(row.actions)].filter(function(a) { return a !== "viewed"; });
+                    return (
+                      <tr key={sc.id} style={{ borderBottom: "1px solid #f1f5f9", background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                        <td style={{ padding: "10px 12px", fontWeight: 600, color: "#1e3a5f" }}>{contactName}</td>
+                        <td style={{ padding: "10px 12px", color: "#374151" }}>{sc.clientName || sc.name || "—"}</td>
+                        <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                          <span style={{ fontWeight: isHot ? 700 : 400, color: isHot ? "#dc2626" : "#374151" }}>
+                            {isHot ? "🔥 " : ""}{diffLabel}
+                          </span>
+                        </td>
+                        <td style={{ padding: "10px 12px", textAlign: "center", fontWeight: 700, color: row.views > 0 ? "#1e3a5f" : "#94a3b8" }}>
+                          {row.views > 0 ? row.views : "—"}
+                        </td>
+                        <td style={{ padding: "10px 12px", textAlign: "center", color: row.letterCount > 0 ? "#16a34a" : "#94a3b8", fontWeight: row.letterCount > 0 ? 700 : 400 }}>
+                          {row.letterCount > 0 ? "✓ " + row.letterCount : "—"}
+                        </td>
+                        <td style={{ padding: "10px 12px", textAlign: "center", color: row.shareCount > 0 ? "#2563eb" : "#94a3b8", fontWeight: row.shareCount > 0 ? 700 : 400 }}>
+                          {row.shareCount > 0 ? "✓ " + row.shareCount : "—"}
+                        </td>
+                        <td style={{ padding: "10px 12px", color: "#64748b", fontSize: 12 }}>
+                          {uniqueActions.length > 0 ? uniqueActions.slice(0, 3).join(", ") : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      </div>,
+      document.body
+    )}
   );
 }
 

@@ -271,6 +271,11 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
           await resolvePendingSharesForUser(user.email, user.id);
         }
 
+        // Flag new LO signups so App.js can show the setup prompt
+        if (isInternal) {
+          try { sessionStorage.setItem("mtk_new_lo_signup", "1"); } catch(e) {}
+        }
+
         onLogin({
           id: user.id,
           name: displayName,
@@ -811,7 +816,16 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
 
       // Footer
       React.createElement("div", {
-        style: { textAlign: "center", marginTop: 20, fontSize: 11, color: "#94A3B0", fontFamily: font }
+        style: { textAlign: "center", marginTop: 20, fontSize: 12, color: "#94A3B0", fontFamily: font }
+      },
+        "Need help? ",
+        React.createElement("a", {
+          href: "mailto:help@homeloantoolkit.com?subject=Home Loan Toolkit Support",
+          style: { color: "#60A5FA", textDecoration: "none" }
+        }, "help@homeloantoolkit.com")
+      ),
+      React.createElement("div", {
+        style: { textAlign: "center", marginTop: 6, fontSize: 11, color: "#94A3B0", fontFamily: font }
       }, "\u00A9 " + new Date().getFullYear() + " Mortgage Mark \u00B7 NMLS #729612"),
       React.createElement("div", {
         style: { textAlign: "center", marginTop: 6, fontSize: 10, color: "#C0CDD6", fontFamily: font, letterSpacing: "0.05em" }

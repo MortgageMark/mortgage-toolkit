@@ -370,6 +370,19 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
   const [defTitleSearch,  setDefTitleSearch]  = useLocalStorage("fs_def_title",   "");
   const [defHomeWarranty, setDefHomeWarranty] = useLocalStorage("fs_def_hw",      "");
 
+  // ── Finalized state ────────────────────────────────────────────────────────
+  // When finalized: SAMPLE watermark is removed for clients; LO can unfinalize to edit
+  const [fsFinalized, setFsFinalized] = useLocalStorage("fs_finalized", false);
+
+  function handleFinalize() {
+    setFsFinalized(true);
+    setTimeout(() => window.dispatchEvent(new Event("mtk_save_scenario")), 100);
+  }
+  function handleUnfinalize() {
+    setFsFinalized(false);
+    setTimeout(() => window.dispatchEvent(new Event("mtk_save_scenario")), 100);
+  }
+
   // ── Derived values ─────────────────────────────────────────────────────────
   // Survey is active if either the Fee Sheet toggle or the Refi Analyzer toggle is on
   // ownerExistingSurvey (refi) mirrors sellerExistingSurvey (purchase) — hides cost, shows T-47
@@ -1073,8 +1086,56 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
     }
   }
 
+  // Client sees SAMPLE unless LO has finalized
+  const showSample = !isInternal && !fsFinalized;
+
   return (
-    <div>
+    <div style={{ position: "relative" }}>
+
+      {/* ── SAMPLE watermark (client view, not finalized) ── */}
+      {showSample && (
+        <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+          <div style={{ fontSize: 120, fontWeight: 900, color: "rgba(220,38,38,0.10)", transform: "rotate(-35deg)", userSelect: "none", whiteSpace: "nowrap", letterSpacing: "0.1em" }}>
+            SAMPLE
+          </div>
+        </div>
+      )}
+
+      {/* ── Client notice banner ── */}
+      {showSample && (
+        <div style={{ marginBottom: 12, padding: "10px 16px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, fontSize: 13, color: "#991B1B", fontFamily: font, fontWeight: 600 }}>
+          ⚠️ This fee estimate has not been reviewed and finalized by your Loan Officer. Numbers are subject to change.
+        </div>
+      )}
+
+      {/* ── Finalized banner (client view) ── */}
+      {!isInternal && fsFinalized && (
+        <div style={{ marginBottom: 12, padding: "10px 16px", background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: 8, fontSize: 13, color: "#166534", fontFamily: font, fontWeight: 600 }}>
+          ✓ This fee estimate has been reviewed and finalized by your Loan Officer.
+        </div>
+      )}
+
+      {/* ── LO Finalize / Unfinalize controls ── */}
+      {isInternal && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, marginBottom: 12 }}>
+          {fsFinalized ? (
+            <>
+              <span style={{ fontSize: 13, color: "#16a34a", fontWeight: 700, fontFamily: font }}>✓ Fee Sheet Finalized</span>
+              <button onClick={handleUnfinalize} style={{ fontSize: 12, padding: "5px 14px", borderRadius: 7, border: "1px solid #e2e8f0", background: "#fff", color: "#64748b", cursor: "pointer", fontFamily: font, fontWeight: 600 }}>
+                Unfinalize (Resume Editing)
+              </button>
+            </>
+          ) : (
+            <>
+              <span style={{ fontSize: 12, color: "#94a3b8", fontFamily: font }}>Clients see SAMPLE until you finalize.</span>
+              <button onClick={handleFinalize} style={{ fontSize: 13, padding: "7px 18px", borderRadius: 7, border: "none", background: "#1e3a5f", color: "#fff", cursor: "pointer", fontFamily: font, fontWeight: 700 }}>
+                ✓ Finalize Fee Sheet
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       <div className="mtk-grid-2" style={{ display:"grid", gridTemplateColumns:"1fr 1.5fr", gap:16 }}>
 
         {/* ── LEFT COLUMN ─────────────────────────────────────────────────── */}

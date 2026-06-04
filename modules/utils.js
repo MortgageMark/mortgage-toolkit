@@ -220,7 +220,7 @@ function lookupPMI({ ltv, fico, termYears, occupancy, isFixed, isCashOut, isMult
 
 // line 548
 function lookupPMICompany(company, { ltv, fico, termYears, isMultiBorrower = false, highDTI = false, isCashOut = false, occupancy = "primary", reducedCoverage = false } = {}) {
-  const data = company === "enact" ? PMI_ENACT : PMI_ESSENT;
+  const data = company === "enact" ? PMI_ENACT : company === "arch" ? PMI_ARCH : PMI_ESSENT;
   if (ltv <= 80 || fico < 620) return null;
   const fi = ficoIndex(fico);
   const table = termYears > 20 ? data.over20 : data.under20;

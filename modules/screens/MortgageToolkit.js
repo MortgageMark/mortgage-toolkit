@@ -1082,6 +1082,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
   const [loNMLS]    = useLocalStorage("pq_lonmls",  "");
   const [loTitle]   = useLocalStorage("pq_lotitle", "");
   const [loCell]    = useLocalStorage("pq_locell",  "");
+  const [coNMLS]    = useLocalStorage("pq_cnmls",   "");
 
   const btnStyle = { padding: "6px 12px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.1)", color: "#fff", fontSize: 13, cursor: "pointer", fontFamily: font, display: "flex", alignItems: "center", gap: 4 };
 
@@ -1795,23 +1796,27 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
           </button>
         </div>
 
-        {/* ── Disclaimer Footer ── */}
-        <div style={{
-          marginTop: 24,
-          background: "rgba(10, 34, 56, 0.94)",
-          borderTop: "1px solid rgba(255,255,255,0.10)",
-          padding: "6px 20px",
-          textAlign: "center",
-          fontSize: 12,
-          color: "rgba(255,255,255,0.68)",
-          fontFamily: font,
-          lineHeight: 1.55,
-        }}>
-          Not a commitment to lend. All loans subject to credit approval and underwriting.
-          Rates shown are estimates only and subject to change without notice.{" "}
-          Mark Pfeiffer | NMLS #729612 | CMG Home Loans | NMLS #1820 | Equal Housing Lender |{" "}
-          NMLS Consumer Access: www.nmlsconsumeraccess.org
-        </div>
+        {/* ── Disclaimer Footer ── dynamic LO info; falls back to company-only if no LO set ── */}
+        {(function() {
+          var parts = [];
+          if (loName)          parts.push(loName);
+          if (loNMLS)          parts.push("NMLS #" + loNMLS);
+          if (brandName)       parts.push(brandName);
+          if (coNMLS)          parts.push("NMLS #" + coNMLS);
+          parts.push("Equal Housing Lender");
+          return (
+            <div style={{
+              marginTop: 24, background: "rgba(10, 34, 56, 0.94)",
+              borderTop: "1px solid rgba(255,255,255,0.10)", padding: "6px 20px",
+              textAlign: "center", fontSize: 12, color: "rgba(255,255,255,0.68)",
+              fontFamily: font, lineHeight: 1.55,
+            }}>
+              Not a commitment to lend. All loans subject to credit approval and underwriting.
+              Rates shown are estimates only and subject to change without notice.{" "}
+              {parts.join(" | ")} | NMLS Consumer Access: www.nmlsconsumeraccess.org
+            </div>
+          );
+        })()}
 
       </div>
 

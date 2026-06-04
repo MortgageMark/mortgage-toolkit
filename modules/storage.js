@@ -83,6 +83,8 @@ const BLANK_SCENARIO_FIELDS = [
   "pq_dti","pq_co","pq_lo","pq_bpts","pq_bcd",
   // Seller Net Sheet
   "sns_price","sns_mort1",
+  // Fee Sheet finalized flag — always resets on new scenario
+  "fs_finalized",
   // Budget Planner
   "bud_income","bud_mort","bud_tax","bud_ins","bud_util","bud_car",
   "bud_carins","bud_groc","bud_child","bud_student","bud_cc","bud_subs","bud_ent","bud_save","bud_other",
@@ -142,6 +144,7 @@ function restoreCalculatorData(data) {
       "pc_2nd_term":    "",
       "pc_2nd_amt":     "",
       "pc_2nd_mode":    "pct",
+      "pc_2nd_io":      false,
       "sns_comm":       "6",    // Realtor commission defaults to 6%
     };
     Object.keys(NEW_SCENARIO_DEFAULTS).forEach(function(k) {

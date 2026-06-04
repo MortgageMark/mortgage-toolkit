@@ -108,6 +108,7 @@ function AmortizationSchedule() {
   const [pcHomePrice] = useLocalStorage("pc_hp", "400000");
   const [pcAppr] = useLocalStorage("pc_appr", "3.5");
   const [pcPurpose] = useLocalStorage("pc_purpose", "purchase");
+  const [pcProg]    = useLocalStorage("pc_prog", "conventional");
 
   // 2nd lien reads (piggyback — from Payment Calculator)
   const [s2Enabled] = useLocalStorage("pc_2nd_enabled", "false");
@@ -1058,7 +1059,9 @@ function AmortizationSchedule() {
             {s2On && s2Sched && (
               <div style={{ fontSize: 10, fontWeight: 700, color: navy, fontFamily: font, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8, paddingBottom: 6, borderBottom: `2px solid ${navy}33` }}>1st Lien</div>
             )}
-            <BalanceCurveChart years={enhanced.years} />
+            <BalanceCurveChart years={enhanced.years}
+              homePrice={parseFloat(pcHomePrice) || 0}
+              showPMILines={["conventional","homeready","homeposs","hfa_fannie","hfa_freddie"].includes(pcProg) && pcProg !== "jumbo"} />
           </div>
           {s2On && s2Sched && (
             <div>

@@ -50,7 +50,7 @@ function propagateSharedValues() {
     writeLS("mc_hp", hp);
     writeLS("rvb_price", hp);
     writeLS("hel_value", hp);
-    writeLS("sns_price", hp);
+    // sns_price intentionally NOT synced — Seller Net Sheet sales price is standalone
     writeLS("cce_price", parseFloat(hp) || 0);
     // pq_pp (Max Purchase Price) is intentionally NOT synced from pc_hp —
     // it's an LO-set authorization ceiling, independent of the PC home price.

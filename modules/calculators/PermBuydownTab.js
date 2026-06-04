@@ -17,12 +17,14 @@ function PermBuydownTab({ isInternal }) {
   const border = c.border || "#D1D9E6";
 
   // Read-only from Payment Calculator
-  const [pcRate] = useLocalStorage("pc_rate", "");
-  const [pcLA]   = useLocalStorage("pc_la",   "");
-  const [pcTerm] = useLocalStorage("pc_term", "30");
-  const [pcHP]   = useLocalStorage("pc_hp",   "");
-  const [pcDP]   = useLocalStorage("pc_dp",   "");
-  const [pcProg] = useLocalStorage("pc_prog", "conventional");
+  const [pcRate]       = useLocalStorage("pc_rate",      "");
+  const [pcLA]         = useLocalStorage("pc_la",        "");
+  const [pcTerm]       = useLocalStorage("pc_term",      "30");
+  const [pcHP]         = useLocalStorage("pc_hp",        "");
+  const [pcDP]         = useLocalStorage("pc_dp",        "");
+  const [pcProg]       = useLocalStorage("pc_prog",      "conventional");
+  const [pcLoanType]   = useLocalStorage("pc_lt",        "fixed");
+  const [pcArmYears]   = useLocalStorage("pc_armfy",     "5");
 
   // Interest Rates tab — use program-specific market rate as the current rate
   const [irConvRate]  = useLocalStorage("ir_market",       "");
@@ -37,8 +39,59 @@ function PermBuydownTab({ isInternal }) {
                : prog === "nonqm" ? (irNonqmRate || irConvRate)
                : irConvRate; // conventional, jumbo, everything else
   // Use IR tab rate when available; fall back to Payment Calculator rate
-  const currentRate = (irRate && parseFloat(irRate) > 0) ? irRate : pcRate;
-  const [pcOcc]  = useLocalStorage("pc_occ",  "primary");
+  const baseIRRate  = (irRate && parseFloat(irRate) > 0) ? irRate : pcRate;
+
+  // ── LLPA adjustment (conventional only) ─────────────────────────────────
+  const [pcFico]   = useLocalStorage("pc_fico",   "740");
+  const [pcHP]     = useLocalStorage("pc_hp",     "0");
+  const [pcPurp]   = useLocalStorage("pc_purpose","purchase");
+  const [pcOcc]    = useLocalStorage("pc_occ",    "primary");
+  const [irSteps]  = useLocalStorage("ir_steps",  {});
+
+  const llpaAdjustedRate = React.useMemo(function() {
+    var isConv = prog === "conventional" || prog === "homeready" || prog === "homeposs";
+    if (!isConv || !window.lookupLLPA) return parseFloat(baseIRRate) || 0;
+    var fico   = parseInt(pcFico) || 740;
+    var la_    = parseFloat(pcLA)  || 0;
+    var hp_    = parseFloat(pcHP)  || 0;
+    var ltv    = (hp_ > 0 && la_ > 0) ? Math.round(la_ / hp_ * 1000) / 10 : 75;
+    var txType = pcPurp === "purchase" ? "purchase"
+               : pcPurp === "cashout"  ? "cashout"
+               : "lcor";
+    // LLPAs don't apply to non-primary investment in this simple adjustment
+    var actualLLPA   = window.lookupLLPA(fico, ltv, txType);
+    var baselineLLPA = window.LLPA_BASELINE != null ? window.LLPA_BASELINE : 0.375;
+    var delta        = actualLLPA - baselineLLPA; // positive = worse borrower, rate goes up
+    if (Math.abs(delta) < 0.01) return parseFloat(baseIRRate) || 0;
+    // Convert points delta to rate using step costs; fall back to 4 pts per 1%
+    var steps    = irSteps && typeof irSteps === "object" ? irSteps : {};
+    var stepVals = Object.values(steps).map(Number).filter(function(v) { return v > 0; });
+    var avgStep  = stepVals.length > 0 ? stepVals.reduce(function(a,b){return a+b;},0) / stepVals.length : 0.25;
+    // avgStep = points per 0.125% increment; rateAdj = delta / avgStep * 0.125
+    var rateAdj  = (delta / avgStep) * 0.125;
+    // Round to nearest 0.125%
+    rateAdj = Math.round(rateAdj / 0.125) * 0.125;
+    return Math.max(0, (parseFloat(baseIRRate) || 0) + rateAdj);
+  }, [baseIRRate, pcFico, pcLA, pcHP, pcPurp, prog, irSteps]);
+
+  var llpaDelta = (function() {
+    var isConv = prog === "conventional" || prog === "homeready" || prog === "homeposs";
+    if (!isConv || !window.lookupLLPA) return 0;
+    var fico  = parseInt(pcFico) || 740;
+    var la_   = parseFloat(pcLA) || 0;
+    var hp_   = parseFloat(pcHP) || 0;
+    var ltv   = (hp_ > 0 && la_ > 0) ? Math.round(la_ / hp_ * 1000) / 10 : 75;
+    var txType = pcPurp === "purchase" ? "purchase" : pcPurp === "cashout" ? "cashout" : "lcor";
+    return window.lookupLLPA(fico, ltv, txType) - (window.LLPA_BASELINE != null ? window.LLPA_BASELINE : 0.375);
+  })();
+
+  // ARM adjustment: 10yr = -0.125%, 7yr = -0.250%, 5yr = -0.375% vs 30yr fixed
+  var armAdj = 0;
+  if (pcLoanType === "arm") {
+    var armYrs = parseInt(pcArmYears) || 5;
+    armAdj = armYrs >= 10 ? -0.125 : armYrs >= 7 ? -0.250 : -0.375;
+  }
+  const currentRate = String(Math.max(0, (llpaAdjustedRate || parseFloat(baseIRRate) || 0) + armAdj));
   const [dtiTax] = useLocalStorage("dti_tax", "0");
   const [dtiIns] = useLocalStorage("dti_ins", "0");
   const [dtiPMI] = useLocalStorage("dti_pmi", "0");
@@ -179,6 +232,32 @@ function PermBuydownTab({ isInternal }) {
           📋 Loan data is pulled live from the <strong>Payment Calculator</strong> tab — update values there to refresh this view.
         </div>
       </div>
+
+      {/* Rate adjustment note (LLPA + ARM) */}
+      {(function() {
+        var isConv   = prog === "conventional" || prog === "homeready" || prog === "homeposs";
+        var hasLLPA  = isConv && Math.abs(llpaDelta) >= 0.01;
+        var hasARM   = pcLoanType === "arm" && armAdj !== 0;
+        if (!hasLLPA && !hasARM) return null;
+        var finalRate = parseFloat(currentRate) || 0;
+        var baseStr   = parseFloat(baseIRRate).toFixed(3) + "%";
+        var finalStr  = finalRate.toFixed(3) + "%";
+        var totalAdj  = finalRate - parseFloat(baseIRRate);
+        var isUp      = totalAdj > 0.001;
+        var parts = [];
+        if (hasLLPA) parts.push(Math.abs(llpaDelta).toFixed(3) + " pts LLPA " + (llpaDelta > 0 ? "above" : "below") + " baseline");
+        if (hasARM)  parts.push(Math.abs(armAdj).toFixed(3) + "% ARM discount (" + parseInt(pcArmYears) + "-yr)");
+        return React.createElement("div", {
+          style: { marginBottom: 12, padding: "9px 14px", borderRadius: 8, fontSize: 12, fontFamily: c.font || "inherit",
+            background: isUp ? (isDark ? "#2D1A00" : "#FFFBEB") : (isDark ? "#0A1F12" : "#F0FDF4"),
+            border: "1px solid " + (isUp ? "#FCD34D" : "#86EFAC"),
+            color: isUp ? (isDark ? "#FCD34D" : "#92400E") : (isDark ? "#4ADE80" : "#166534"),
+            lineHeight: 1.5 }
+        },
+          React.createElement("strong", null, isUp ? "⚠️ " : "✓ "),
+          "IR Tab " + baseStr + " → " + finalStr + " (" + (totalAdj >= 0 ? "+" : "") + totalAdj.toFixed(3) + "%) · " + parts.join(", ") + "."
+        );
+      })()}
 
       {/* Loan summary card */}
       {(() => {

@@ -29,12 +29,12 @@ function DonutChart({ data, size = 160, thickness = 24, centerLabel, centerValue
   );
 }
 
-function BalanceCurveChart({ years }) {
+function BalanceCurveChart({ years, homePrice, showPMILines }) {
   const c = useThemeColors();
   const [hov, setHov] = React.useState(null);
   const uidRef = React.useRef("bg" + Math.random().toString(36).slice(2, 6));
   if (!years || years.length < 2) return null;
-  const W = 480, H = 180;
+  const W = 480, H = 200;  // extra height for labels
   const pad = { t: 16, r: 16, b: 28, l: 56 };
   const w = W - pad.l - pad.r, h = H - pad.t - pad.b;
   const maxBal = years[0].endBalance + years[0].principal;
@@ -47,6 +47,23 @@ function BalanceCurveChart({ years }) {
   const gridY = [0, 0.25, 0.5, 0.75, 1];
   const uid = uidRef.current;
   const fmtD = v => "$" + Math.round(v).toLocaleString();
+
+  // PMI removal threshold lines (conventional only)
+  const hp = parseFloat(homePrice) || 0;
+  const pmiLines = (showPMILines && hp > 0) ? [
+    { pct: 0.80, label: "80% — Request PMI removal", color: "#f97316", dash: "5 3" },
+    { pct: 0.78, label: "78% — Auto cancellation",   color: "#dc2626", dash: "3 3" },
+    { pct: 0.75, label: "75% — Appraisal removal",   color: "#16a34a", dash: "5 3" },
+  ].map(t => {
+    const threshold = hp * t.pct;
+    if (threshold > maxBal) return null;  // threshold above starting balance — never applies
+    const yPos = pad.t + (1 - threshold / maxBal) * h;
+    // Find the year balance first drops below threshold
+    const crossIdx = years.findIndex(d => d.endBalance <= threshold);
+    const crossPt = crossIdx >= 0 ? pts2[crossIdx + 1] : null;
+    return { ...t, threshold, yPos, crossPt, crossIdx };
+  }).filter(Boolean) : [];
+
 
   const handleMouseMove = (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -79,6 +96,27 @@ function BalanceCurveChart({ years }) {
       })}
       <path d={area} fill={`url(#${uid})`} />
       <path d={line} fill="none" stroke={c.blue || COLORS.blue} strokeWidth="2.5" strokeLinejoin="round" />
+
+      {/* PMI removal threshold lines */}
+      {pmiLines.map((t, i) => (
+        <g key={"pmi" + i}>
+          {/* Dashed threshold line */}
+          <line x1={pad.l} y1={t.yPos} x2={pad.l + w} y2={t.yPos}
+            stroke={t.color} strokeWidth="1.2" strokeDasharray={t.dash} opacity="0.8" />
+          {/* Label on the right */}
+          <text x={pad.l + w - 2} y={t.yPos - 3} textAnchor="end" fontSize="7.5"
+            fill={t.color} fontFamily={font} fontWeight="600">{t.label}</text>
+          {/* Crossover marker — dot where the balance curve crosses the threshold */}
+          {t.crossPt && (
+            <g>
+              <circle cx={t.crossPt.x} cy={t.yPos} r="4" fill={t.color} stroke="#fff" strokeWidth="1.5" />
+              <text x={t.crossPt.x} y={t.yPos + 14} textAnchor="middle" fontSize="7.5"
+                fill={t.color} fontFamily={font} fontWeight="700">Yr {t.crossIdx + 1}</text>
+            </g>
+          )}
+        </g>
+      ))}
+
       {pts2.length > 1 && hov === null && <circle cx={pts2[pts2.length - 1].x} cy={pts2[pts2.length - 1].y} r="4" fill={c.blue || COLORS.blue} />}
       <text x={pad.l} y={H - 4} fontSize="8" fill={c.gray || COLORS.gray} fontFamily={font}>Year 1</text>
       <text x={pad.l + w} y={H - 4} textAnchor="end" fontSize="8" fill={c.gray || COLORS.gray} fontFamily={font}>Year {years.length}</text>

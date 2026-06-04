@@ -566,3 +566,18 @@ function LLPATab() {
 }
 
 window.LLPATab = LLPATab;
+
+// ── Public LLPA lookup (used by builder buydown tabs) ───────────────────────
+// transType: "purchase" | "lcor" | "cashout"
+// Returns the LLPA in points (e.g. 0.875 = 0.875% of loan amount)
+window.lookupLLPA = function(fico, ltv, transType) {
+  var ficoRow = getFicoRow(fico || 740);
+  var isCashOut = transType === "cashout" || transType === "cash_out";
+  var isLcor    = transType === "lcor" || transType === "rate_term_refi";
+  var ltvCol    = getLtvCol(ltv || 75, isCashOut);
+  var grid      = isCashOut ? CASHOUT_GRID : isLcor ? LCOR_GRID : PURCHASE_GRID;
+  return (grid[ficoRow] && grid[ficoRow][ltvCol] != null) ? grid[ficoRow][ltvCol] : 0;
+};
+
+// Standard baseline: 740 FICO, 75% LTV, purchase (what the IR tab rate represents)
+window.LLPA_BASELINE = window.lookupLLPA(740, 75, "purchase"); // 0.375

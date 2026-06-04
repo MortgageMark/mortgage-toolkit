@@ -990,6 +990,7 @@ function App() {
   const [showTasksContacts,    setShowTasksContacts]    = React.useState(false);
   const [showChangePassword,   setShowChangePassword]   = React.useState(false);
   const [showLoginSettings,    setShowLoginSettings]    = React.useState(false);
+  const [showLoSetupPrompt,    setShowLoSetupPrompt]    = React.useState(false);
   const [sidebarPinned,        setSidebarPinned]        = React.useState(true);
   const [mobileSidebarOpen,    setMobileSidebarOpen]    = React.useState(false);
   const [isMobile,             setIsMobile]             = React.useState(window.innerWidth < 768);
@@ -1423,6 +1424,20 @@ function App() {
     setLoggedInUser(null);
   };
 
+  // Detect new LO signup → show setup prompt and open their contact card
+  React.useEffect(function() {
+    if (!loggedInUser || !loggedInUser.isInternal) return;
+    var isNewSignup = false;
+    try { isNewSignup = sessionStorage.getItem("mtk_new_lo_signup") === "1"; } catch(e) {}
+    if (!isNewSignup) return;
+    try { sessionStorage.removeItem("mtk_new_lo_signup"); } catch(e) {}
+    // Small delay so the dashboard finishes rendering first
+    setTimeout(function() {
+      setShowLoSetupPrompt(true);
+      handleOpenMyProfile();
+    }, 800);
+  }, [loggedInUser && loggedInUser.id]);
+
   // Open the LO's own contact card (for internal users to edit their NMLS / PQ info)
   const handleOpenMyProfile = async () => {
     if (!loggedInUser || !supabase) return;
@@ -1481,6 +1496,11 @@ function App() {
       localStorage.setItem("mtk_active_scenario", JSON.stringify(scenario));
       scenarioSnapshotRef.current = calcData;
       setActiveScenario(scenario);
+
+      // ── Log borrower/partner scenario view for activity report ───────────
+      if (loggedInUser && !loggedInUser.isInternal && scenario.id && writeAuditLog) {
+        writeAuditLog(scenario.id, "viewed", {}, loggedInUser.name || loggedInUser.email || "Client");
+      }
 
       // ── Auto-populate PQ LO from My Team lender or assigned LO ──────────
       // Only for internal users who have a linked contact on the scenario
@@ -1871,6 +1891,32 @@ function App() {
   return (
     <React.Fragment>
       {!disclaimerAcked && <DisclaimerModal onAck={handleAckDisclaimer} />}
+
+      {/* ── New LO Setup Prompt ── */}
+      {showLoSetupPrompt && (
+        <div
+          onClick={function(e) { if (e.target === e.currentTarget) setShowLoSetupPrompt(false); }}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+        >
+          <div style={{ background: "#fff", borderRadius: 16, maxWidth: 460, width: "100%", padding: "32px 28px", fontFamily: "'Inter', system-ui, sans-serif", boxShadow: "0 8px 40px rgba(0,0,0,0.2)", textAlign: "center" }}>
+            <div style={{ fontSize: 44, marginBottom: 12 }}>👋</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: "#1e3a5f", marginBottom: 10 }}>Welcome to Home Loan Toolkit!</div>
+            <div style={{ fontSize: 15, color: "#475569", lineHeight: 1.6, marginBottom: 24 }}>
+              Before you start, please complete your <strong>contact card</strong>. Your name, NMLS number, phone, email, and logos are used to generate Pre-Qualification letters for your clients.
+            </div>
+            <div style={{ background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: 10, padding: "12px 16px", marginBottom: 24, fontSize: 13, color: "#166534", textAlign: "left", lineHeight: 1.6 }}>
+              📋 <strong>What to fill in:</strong><br />
+              Title · NMLS # · Company · Phone · Email · Address · Company Logo · Team Logo
+            </div>
+            <button
+              onClick={function() { setShowLoSetupPrompt(false); }}
+              style={{ width: "100%", padding: "12px 0", background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif" }}
+            >
+              Got it — take me to my contact card
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Global fixed sidebar (internal users, non-scenario screens) ── */}
 

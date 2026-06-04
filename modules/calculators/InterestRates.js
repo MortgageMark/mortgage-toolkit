@@ -300,6 +300,16 @@ function InterestRates() {
         </div>
       </div>
 
+      {/* ── ARM pricing note ───────────────────────────────────────────────── */}
+      <div style={{ background: (isDark ? "#1A2530" : "#EFF6FF"), border: "1px solid " + (isDark ? "#2A3F55" : "#BFDBFE"), borderRadius: 8, padding: "10px 16px", marginBottom: 16, fontSize: 12, color: isDark ? "#93C5FD" : "#1E40AF", fontFamily: font, lineHeight: 1.6 }}>
+        ℹ️ <strong>ARM rate adjustments</strong> — the rates below represent <strong>30-year fixed</strong> pricing. When an ARM is selected in the Payment Calculator, the builder buydown tabs automatically apply these offsets to the current rate:
+        <span style={{ display: "inline-flex", gap: 16, marginLeft: 10 }}>
+          <span><strong>10-yr ARM:</strong> −0.125%</span>
+          <span><strong>7-yr ARM:</strong> −0.250%</span>
+          <span><strong>5-yr ARM:</strong> −0.375%</span>
+        </span>
+      </div>
+
       {/* ── Quick Rate Entry ───────────────────────────────────────────────── */}
       <div style={{ background: c.bg || "#fff", border: "1px solid " + border, borderRadius: 10, padding: "16px 20px", marginBottom: 24 }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: c.textSecondary || "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 14 }}>

@@ -250,6 +250,15 @@ function AppHeader({
             </button>
 
             <hr style={divider} />
+            <a
+              href="mailto:help@homeloantoolkit.com?subject=Home Loan Toolkit Support"
+              style={{ ...dropItem, textDecoration: "none", display: "block" }}
+              onClick={() => setShowProfile(false)}
+            >
+              ❓ Help &amp; Support
+            </a>
+
+            <hr style={divider} />
             <button
               style={{ ...dropItem, color: "#dc2626" }}
               onClick={() => { setShowProfile(false); onLogout(); }}

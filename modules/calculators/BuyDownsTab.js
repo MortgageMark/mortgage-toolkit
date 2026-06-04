@@ -27,6 +27,44 @@ function BuyDownsTab() {
   const [pcDP]   = useLocalStorage("pc_dp",   "");
   const [pcProg] = useLocalStorage("pc_prog", "conventional");
   const [pcOcc]  = useLocalStorage("pc_occ",  "primary");
+  const [pcFico]     = useLocalStorage("pc_fico",    "740");
+  const [pcPurp]     = useLocalStorage("pc_purpose", "purchase");
+  const [pcLoanType] = useLocalStorage("pc_lt",      "fixed");
+  const [pcArmYears] = useLocalStorage("pc_armfy",   "5");
+
+  // Interest Rates tab — prefer program-specific market rate over Payment Calc rate
+  const [irConvRate]  = useLocalStorage("ir_market",       "");
+  const [irFhaRate]   = useLocalStorage("ir_fha_market",   "");
+  const [irVaRate]    = useLocalStorage("ir_va_market",    "");
+  const [irUsdaRate]  = useLocalStorage("ir_usda_market",  "");
+  const [irNonqmRate] = useLocalStorage("ir_nonqm_market", "");
+  const [irSteps]     = useLocalStorage("ir_steps",        {});
+  const prog_ = (pcProg || "conventional").toLowerCase();
+  const irRate_ = prog_ === "fha"   ? irFhaRate
+                : prog_ === "usda"  ? (irUsdaRate  || irFhaRate)
+                : prog_ === "va"    ? irVaRate
+                : prog_ === "nonqm" ? (irNonqmRate || irConvRate)
+                : irConvRate;
+  const baseIRRate_ = (irRate_ && parseFloat(irRate_) > 0) ? parseFloat(irRate_) : (parseFloat(pcRate) || 0);
+
+  // LLPA adjustment (conventional only)
+  const llpaResult_ = React.useMemo(function() {
+    var isConv = ["conventional","homeready","homeposs","hfa_fannie","hfa_freddie"].includes(prog_);
+    if (!isConv || !window.lookupLLPA || !baseIRRate_) return { rate: baseIRRate_, delta: 0 };
+    var fico     = parseInt(pcFico) || 740;
+    var la_      = parseFloat(pcLA)  || 0;
+    var hp_      = parseFloat(pcHP)  || 0;
+    var ltv      = (hp_ > 0 && la_ > 0) ? Math.round(la_ / hp_ * 1000) / 10 : 75;
+    var txType   = pcPurp === "purchase" ? "purchase" : pcPurp === "cashout" ? "cashout" : "lcor";
+    var actual   = window.lookupLLPA(fico, ltv, txType);
+    var baseline = window.LLPA_BASELINE != null ? window.LLPA_BASELINE : 0.375;
+    var delta    = actual - baseline;
+    if (Math.abs(delta) < 0.01) return { rate: baseIRRate_, delta: 0 };
+    var stepVals = Object.values(irSteps && typeof irSteps === "object" ? irSteps : {}).map(Number).filter(function(v){return v>0;});
+    var avgStep  = stepVals.length > 0 ? stepVals.reduce(function(a,b){return a+b;},0)/stepVals.length : 0.25;
+    var rateAdj  = Math.round((delta / avgStep) * 0.125 / 0.125) * 0.125;
+    return { rate: Math.max(0, baseIRRate_ + rateAdj), delta: delta };
+  }, [baseIRRate_, pcFico, pcLA, pcHP, pcPurp, prog_, irSteps]);
 
   // Monthly non-PI components
   const [dtiTax] = useLocalStorage("dti_tax", "0");
@@ -37,7 +75,13 @@ function BuyDownsTab() {
   const [selectedProgId, setSelectedProgId] = useLocalStorage("byd_prog", "21");
   const [showFullTable, setShowFullTable]   = useState(false);
 
-  const noteRate  = parseFloat(pcRate) || 0;
+  // ARM adjustment: 10yr = -0.125%, 7yr = -0.250%, 5yr = -0.375% vs 30yr fixed
+  var armAdj_ = 0;
+  if (pcLoanType === "arm") {
+    var armYrs_ = parseInt(pcArmYears) || 5;
+    armAdj_ = armYrs_ >= 10 ? -0.125 : armYrs_ >= 7 ? -0.250 : -0.375;
+  }
+  const noteRate  = Math.max(0, (llpaResult_.rate || parseFloat(pcRate) || 0) + armAdj_);
   const la        = parseFloat(pcLA)   || 0;
   const term      = parseInt(pcTerm)   || 30;
   const hp        = parseFloat(pcHP)   || 0;
@@ -167,6 +211,30 @@ function BuyDownsTab() {
           Pulled live from the Payment Calculator — update values there to refresh.
         </div>
       </div>
+      {/* Rate adjustment note (LLPA + ARM) */}
+      {(function() {
+        var delta    = llpaResult_.delta;
+        var isConv   = ["conventional","homeready","homeposs","hfa_fannie","hfa_freddie"].includes(prog_);
+        var hasLLPA  = isConv && Math.abs(delta) >= 0.01;
+        var hasARM   = pcLoanType === "arm" && armAdj_ !== 0;
+        if (!hasLLPA && !hasARM) return null;
+        var totalAdj = noteRate - baseIRRate_;
+        var isUp     = totalAdj > 0.001;
+        var parts = [];
+        if (hasLLPA) parts.push(Math.abs(delta).toFixed(3) + " pts LLPA " + (delta > 0 ? "above" : "below") + " baseline");
+        if (hasARM)  parts.push(Math.abs(armAdj_).toFixed(3) + "% ARM discount (" + parseInt(pcArmYears) + "-yr)");
+        return React.createElement("div", {
+          style: { marginBottom: 12, padding: "9px 14px", borderRadius: 8, fontSize: 12,
+            background: isUp ? (isDark ? "#2D1A00" : "#FFFBEB") : (isDark ? "#0A1F12" : "#F0FDF4"),
+            border: "1px solid " + (isUp ? "#FCD34D" : "#86EFAC"),
+            color: isUp ? (isDark ? "#FCD34D" : "#92400E") : (isDark ? "#4ADE80" : "#166534"),
+            lineHeight: 1.5 }
+        },
+          React.createElement("strong", null, isUp ? "⚠️ " : "✓ "),
+          "IR Tab " + baseIRRate_.toFixed(3) + "% → " + noteRate.toFixed(3) + "% (" + (totalAdj >= 0 ? "+" : "") + totalAdj.toFixed(3) + "%) · " + parts.join(", ") + "."
+        );
+      })()}
+
       <div style={{ marginBottom: 22, padding: "12px 18px", background: isDark ? "#0D1820" : "#F5F8FA", borderRadius: 10, border: "1px solid " + border, display: "inline-block", minWidth: 260 }}>
         {[
           hp > 0    ? { label: "Purchase Price",  value: "$" + hp.toLocaleString("en-US") } : null,
