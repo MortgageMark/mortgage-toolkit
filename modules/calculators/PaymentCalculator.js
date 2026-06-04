@@ -1204,6 +1204,65 @@ function PaymentCalculator({ isInternal, user }) {
           {/* ── PROPERTY INFO ── */}
           <SectionCard title="PROPERTY INFO" accent={c.blue}>
             <Select label="State (where the property is located)" value={pcState} onChange={setPcState} options={STATE_LIST.map(s => ({ value: s.value, label: s.label }))} />
+
+            {/* County — always shown; limit badge only for FHA/conventional */}
+            {(function() {
+              var isFHAorConv = loanProgram === "fha" || isConvType;
+              // Always use whichever county database is available for the dropdown list
+              var countySource = loanProgram === "fha"
+                ? (window.FHA_COUNTY_LIMITS || window.CONFORMING_COUNTY_LIMITS || {})
+                : (window.CONFORMING_COUNTY_LIMITS || window.FHA_COUNTY_LIMITS || {});
+              // For the limit badge, use the program-specific database
+              var limitDB2    = loanProgram === "fha" ? (window.FHA_COUNTY_LIMITS || {}) : (window.CONFORMING_COUNTY_LIMITS || {});
+              var countyData2 = (limitDB2[pcState] || {});
+              var countyNames2 = Object.keys((countySource[pcState] || {})).sort();
+              var unitKey2    = propType === "duplex" ? "u2" : propType === "3plex" ? "u3" : propType === "4plex" ? "u4" : "u1";
+              var countyEntry2 = pcCounty ? countyData2[pcCounty] : null;
+              var limitAmt2   = countyEntry2 ? countyEntry2[unitKey2] : null;
+              var floorAmt    = loanProgram === "fha"
+                ? (window.FHA_LIMITS ? window.FHA_LIMITS.floor : 541287)
+                : (window.CONFORMING_LIMITS ? window.CONFORMING_LIMITS.baseline : 806500);
+              var la2         = parseFloat(loanAmount) || 0;
+              var over2       = limitAmt2 && la2 > limitAmt2;
+              var programLabel2 = loanProgram === "fha" ? "FHA" : "Conforming";
+
+              var countyOptions = [{ value: "", label: "— Select County (optional) —" }]
+                .concat(countyNames2.map(function(n) {
+                  var label = n.replace(/ County$/i, "").replace(/ Parish$/i, "").replace(/ Borough$/i, "").replace(/ Municipality$/i, "").replace(/ Census Area$/i, "").replace(/ Municipio$/i, "");
+                  return { value: n, label: label };
+                }));
+
+              return React.createElement(React.Fragment, null,
+                React.createElement(Select, {
+                  label: "County (loan limit reference)",
+                  value: pcCounty,
+                  onChange: setPcCounty,
+                  infoTip: "Used only to show the loan limit for your county — it doesn't affect your payment calculation. Leave blank if you're searching a wide area or don't know the county yet. If your loan is well under the floor shown, you don't need to worry about this.",
+                  options: countyOptions,
+                }),
+                isFHAorConv && React.createElement("div", {
+                  style: {
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    marginTop: -4, marginBottom: 6, padding: "7px 12px", borderRadius: 7,
+                    background: over2 ? "#FEF2F2" : limitAmt2 ? "#F0FDF4" : "#F8FAFC",
+                    border: "1px solid " + (over2 ? "#FECACA" : limitAmt2 ? "#86EFAC" : "#E2E8F0"),
+                    fontSize: 12, fontFamily: font,
+                  }
+                },
+                  React.createElement("span", { style: { color: over2 ? "#DC2626" : limitAmt2 ? "#16a34a" : "#64748b", fontWeight: 500 } },
+                    over2
+                      ? "⚠️ Exceeds " + programLabel2 + " limit for " + pcCounty
+                      : limitAmt2
+                        ? "✓ Within " + programLabel2 + " limit — " + pcCounty
+                        : "📍 Select a county to verify — floor is"
+                  ),
+                  React.createElement("span", { style: { color: over2 ? "#DC2626" : limitAmt2 ? "#15803d" : "#64748b", fontWeight: 700 } },
+                    "$" + (limitAmt2 || floorAmt).toLocaleString("en-US")
+                  )
+                )
+              );
+            })()}
+
             <Select label="Occupancy" value={occupancy} onChange={setOccupancy} infoTip={"💡 Occupancy affects your rate and down payment requirements:\n\n• Primary: Best rates, lowest down payment minimums. You must live here as your main home.\n• Vacation/2nd Home: Slightly higher rate. Must be 50+ miles from primary, can't be a rental.\n• Investment: Highest rate (+0.5–1%), typically requires 15–25% down. Rental income can help qualify."} options={[
               { value: "", label: "— Select —" },
               { value: "primary", label: "Owner Occupied" },
@@ -1244,54 +1303,7 @@ function PaymentCalculator({ isInternal, user }) {
               </div>
             )}
 
-            {/* County selector + loan limit badge — FHA and Conventional */}
-            {(loanProgram === "fha" || isConvType) && (function() {
-              var isFHA  = loanProgram === "fha";
-              // Access county limit data — read directly each render so it's always current
-              var fhaLimits  = window.FHA_COUNTY_LIMITS        || {};
-              var convLimits = window.CONFORMING_COUNTY_LIMITS || {};
-              var limitDB = isFHA ? fhaLimits : convLimits;
-              var countyData = limitDB[pcState] || {};
-              var countyNames = Object.keys(countyData).sort();
-              // Pick unit tier based on property type
-              var unitKey = propType === "duplex" ? "u2" : propType === "3plex" ? "u3" : propType === "4plex" ? "u4" : "u1";
-              var unitLabel = propType === "duplex" ? "2-unit" : propType === "3plex" ? "3-unit" : propType === "4plex" ? "4-unit" : "1-unit";
-              var countyEntry = pcCounty && countyData[pcCounty] ? countyData[pcCounty] : null;
-              var limitAmt = countyEntry ? countyEntry[unitKey] : null;
-              var la = parseFloat(loanAmount) || 0;
-              var overLimit = limitAmt && la > limitAmt;
-              var programLabel = isFHA ? "FHA" : "Conforming";
-              return React.createElement(React.Fragment, null,
-                React.createElement(Select, {
-                  label: "County (" + programLabel + " Limit Reference)",
-                  value: pcCounty,
-                  onChange: setPcCounty,
-                  infoTip: programLabel + " loan limits vary by county and unit count. Select your county to verify your loan amount qualifies.",
-                  options: [
-                    { value: "", label: "— Select County —" },
-                    ...countyNames.map(function(n) { return { value: n, label: n }; })
-                  ]
-                }),
-                limitAmt && React.createElement("div", {
-                  style: {
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    marginTop: -4, marginBottom: 6, padding: "8px 12px", borderRadius: 7,
-                    background: overLimit ? "#FEF2F2" : "#F0FDF4",
-                    border: "1px solid " + (overLimit ? "#FECACA" : "#86EFAC"),
-                    fontSize: 13, fontFamily: font,
-                  }
-                },
-                  React.createElement("span", { style: { color: overLimit ? "#DC2626" : "#16a34a", fontWeight: 600 } },
-                    overLimit
-                      ? "⚠️ Exceeds " + programLabel + " " + unitLabel + " limit for " + pcCounty
-                      : "✓ Within " + programLabel + " " + unitLabel + " limit for " + pcCounty
-                  ),
-                  React.createElement("span", { style: { color: overLimit ? "#DC2626" : "#15803d", fontWeight: 700 } },
-                    "$" + limitAmt.toLocaleString("en-US")
-                  )
-                )
-              );
-            })()}
+            {/* County field moved to Property Info section (above Occupancy) */}
             {(() => {
               const la = parseFloat(loanAmount) || 0;
               const unitKey = propType === "duplex" ? "u2" : propType === "3plex" ? "u3" : propType === "4plex" ? "u4" : "u1";
@@ -1549,6 +1561,36 @@ function PaymentCalculator({ isInternal, user }) {
                 })()}
               </div>
             )}
+            {/* County limit badge under loan amount */}
+            {(loanProgram === "fha" || isConvType) && (function() {
+              var isFHAla = loanProgram === "fha";
+              var limitDBla = isFHAla ? (window.FHA_COUNTY_LIMITS || {}) : (window.CONFORMING_COUNTY_LIMITS || {});
+              var countyEntryLa = pcCounty ? (limitDBla[pcState] || {})[pcCounty] : null;
+              var unitKeyLa = propType === "duplex" ? "u2" : propType === "3plex" ? "u3" : propType === "4plex" ? "u4" : "u1";
+              var limitAmtLa = countyEntryLa ? countyEntryLa[unitKeyLa] : null;
+              var floorAmtLa = isFHAla ? (window.FHA_LIMITS ? window.FHA_LIMITS.floor : 541287) : (window.CONFORMING_LIMITS ? window.CONFORMING_LIMITS.baseline : 806500);
+              var laVal = parseFloat(loanAmount) || 0;
+              var overLa = limitAmtLa && laVal > limitAmtLa;
+              var progLabelLa = isFHAla ? "FHA" : "Conforming";
+              return React.createElement("div", {
+                style: {
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  marginTop: 4, marginBottom: 4, padding: "7px 12px", borderRadius: 7,
+                  background: overLa ? "#FEF2F2" : limitAmtLa ? "#F0FDF4" : "#F8FAFC",
+                  border: "1px solid " + (overLa ? "#FECACA" : limitAmtLa ? "#86EFAC" : "#E2E8F0"),
+                  fontSize: 12, fontFamily: font,
+                }
+              },
+                React.createElement("span", { style: { color: overLa ? "#DC2626" : limitAmtLa ? "#16a34a" : "#64748b", fontWeight: 500 } },
+                  overLa      ? "⚠️ Exceeds " + progLabelLa + " limit for " + pcCounty
+                  : limitAmtLa ? "✓ Within " + progLabelLa + " limit — " + pcCounty
+                  : "📍 Select a county to verify — floor is"
+                ),
+                React.createElement("span", { style: { color: overLa ? "#DC2626" : limitAmtLa ? "#15803d" : "#64748b", fontWeight: 700 } },
+                  "$" + (limitAmtLa || floorAmtLa).toLocaleString("en-US")
+                )
+              );
+            })()}
             {purpose === "purchase" && (() => {
               const dp = parseFloat(downPaymentPct) || 0;
               const dpWarnings = [];
@@ -3017,6 +3059,36 @@ function PaymentCalculator({ isInternal, user }) {
                   { value: "conservative", label: "Conservative" },
                 ]} />
                 <LabeledInput label="Loan Amount" prefix="$" value={loanAmount} onChange={(v) => { if (parseFloat(String(v).replace(/,/g,'')) > 99999999) return; setLoanAmount(v); }} useCommas infoTip="The amount you're borrowing — typically the purchase price minus your down payment. For a refinance, this is your current payoff balance or the new loan amount. Keep in mind that financed fees (like the VA funding fee or FHA upfront MIP) may be added to this." />
+                {/* County limit badge near loan amount — always shows for FHA/conventional */}
+                {(loanProgram === "fha" || isConvType) && (function() {
+                  var isFHA2 = loanProgram === "fha";
+                  var limitDB2 = isFHA2 ? (window.FHA_COUNTY_LIMITS || {}) : (window.CONFORMING_COUNTY_LIMITS || {});
+                  var countyEntry2 = pcCounty ? (limitDB2[pcState] || {})[pcCounty] : null;
+                  var unitKey2 = propType === "duplex" ? "u2" : propType === "3plex" ? "u3" : propType === "4plex" ? "u4" : "u1";
+                  var limitAmt2 = countyEntry2 ? countyEntry2[unitKey2] : null;
+                  var floorAmt2 = isFHA2 ? (window.FHA_LIMITS ? window.FHA_LIMITS.floor : 541287) : (window.CONFORMING_LIMITS ? window.CONFORMING_LIMITS.baseline : 806500);
+                  var la2 = parseFloat(loanAmount) || 0;
+                  var over2 = limitAmt2 && la2 > limitAmt2;
+                  var progLabel2 = isFHA2 ? "FHA" : "Conforming";
+                  return React.createElement("div", {
+                    style: {
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      marginTop: -4, marginBottom: 6, padding: "7px 12px", borderRadius: 7,
+                      background: over2 ? "#FEF2F2" : limitAmt2 ? "#F0FDF4" : "#F8FAFC",
+                      border: "1px solid " + (over2 ? "#FECACA" : limitAmt2 ? "#86EFAC" : "#E2E8F0"),
+                      fontSize: 12, fontFamily: font,
+                    }
+                  },
+                    React.createElement("span", { style: { color: over2 ? "#DC2626" : limitAmt2 ? "#16a34a" : "#64748b", fontWeight: 500 } },
+                      over2    ? "⚠️ Exceeds " + progLabel2 + " limit for " + pcCounty
+                      : limitAmt2 ? "✓ Within " + progLabel2 + " limit — " + pcCounty
+                      : "📍 Select a county above to verify — floor is"
+                    ),
+                    React.createElement("span", { style: { color: over2 ? "#DC2626" : limitAmt2 ? "#15803d" : "#64748b", fontWeight: 700 } },
+                      "$" + (limitAmt2 || floorAmt2).toLocaleString("en-US")
+                    )
+                  );
+                })()}
                 {(() => {
                   const hp = parseFloat(String(homePrice).replace(/,/g,'')) || 0;
                   const la = parseFloat(String(loanAmount).replace(/,/g,'')) || 0;

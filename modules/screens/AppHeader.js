@@ -235,9 +235,11 @@ function AppHeader({
             <button
               style={dropItem}
               onClick={() => {
-                var next = appLang === "es" ? "en" : "es";
+                // Always read fresh from localStorage — never trust stale React state
+                var currentLang = "en";
+                try { var _cl = localStorage.getItem("app_lang"); if (_cl) { try { currentLang = JSON.parse(_cl); } catch(e) { currentLang = _cl; } } } catch(e) {}
+                var next = currentLang === "es" ? "en" : "es";
                 try { localStorage.setItem("app_lang", JSON.stringify(next)); } catch(e) {}
-                // Save active scenario so we restore it after reload
                 try {
                   var _scen = localStorage.getItem("active_scenario");
                   if (_scen && _scen !== "null") sessionStorage.setItem("mtk_lang_scenario", _scen);

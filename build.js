@@ -148,6 +148,7 @@ function build() {
     'altaEndorsements.js',
     'texasTitleEndorsements.js',
     'modules/images/mortgage-mark-logo.png',
+    'modules/fha-county-limits.js',
   ];
   for (const f of STATIC_FILES) {
     const src = path.join(ROOT, f);

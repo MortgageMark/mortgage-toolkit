@@ -370,8 +370,7 @@ function TransactionTeamTab({ contact, contacts, loProfiles, isInternal, isPartn
     var website   = c.lo_website || "";
     var row = function(icon, href, text) {
       if (!text) return null;
-      return React.createElement("a", { href: href, target: href && href.startsWith("http") ? "_blank" : undefined, rel: "noopener noreferrer", style: { display: "flex", alignItems: "center", gap: 10, fontSize: 15, color: "#0C4160", textDecoration: "none", fontFamily: f, padding: "3px 0" } },
-        React.createElement("span", { style: { fontSize: 16, width: 22, textAlign: "center", flexShrink: 0 } }, icon),
+      return React.createElement("a", { href: href, target: href && href.startsWith("http") ? "_blank" : undefined, rel: "noopener noreferrer", style: { display: "flex", alignItems: "center", fontSize: 15, color: "#0C4160", textDecoration: "none", fontFamily: f, padding: "3px 0" } },
         React.createElement("span", null, text)
       );
     };
@@ -413,8 +412,8 @@ function TransactionTeamTab({ contact, contacts, loProfiles, isInternal, isPartn
           ),
           data.company && React.createElement("div", { style: { fontSize: 12, color: "#64748b", fontFamily: f } }, data.company),
           React.createElement("div", { style: { display: "flex", gap: 14, marginTop: 4, flexWrap: "wrap" } },
-            data.phone && React.createElement("a", { href: "tel:" + data.phone.replace(/\D/g,""), style: { fontSize: 12, color: "#0C4160", textDecoration: "none", fontFamily: f } }, "📞 " + fmtPhone(data.phone)),
-            data.email && React.createElement("a", { href: "mailto:" + data.email, style: { fontSize: 12, color: "#0C4160", textDecoration: "none", fontFamily: f } }, "✉️ " + data.email)
+            data.phone && React.createElement("a", { href: "tel:" + data.phone.replace(/\D/g,""), style: { fontSize: 12, color: "#0C4160", textDecoration: "none", fontFamily: f } }, fmtPhone(data.phone)),
+            data.email && React.createElement("a", { href: "mailto:" + data.email, style: { fontSize: 12, color: "#0C4160", textDecoration: "none", fontFamily: f } }, data.email)
           )
         ),
         React.createElement("div", { style: { display: "flex", gap: 6, flexShrink: 0, flexDirection: "column", alignItems: "flex-end" } },
@@ -541,8 +540,8 @@ function TransactionTeamTab({ contact, contacts, loProfiles, isInternal, isPartn
                 ),
                 bCompany && React.createElement("div", { style: { fontSize: 12, color: "#64748b", fontFamily: f } }, bCompany),
                 React.createElement("div", { style: { display: "flex", gap: 14, marginTop: 4, flexWrap: "wrap" } },
-                  bPhone && React.createElement("a", { href: "tel:" + bPhone.replace(/\D/g,""), style: { fontSize: 12, color: "#0C4160", textDecoration: "none", fontFamily: f } }, "📞 " + dp(bPhone)),
-                  bEmail && React.createElement("a", { href: "mailto:" + bEmail, style: { fontSize: 12, color: "#0C4160", textDecoration: "none", fontFamily: f } }, "✉️ " + bEmail)
+                  bPhone && React.createElement("a", { href: "tel:" + bPhone.replace(/\D/g,""), style: { fontSize: 12, color: "#0C4160", textDecoration: "none", fontFamily: f } }, dp(bPhone)),
+                  bEmail && React.createElement("a", { href: "mailto:" + bEmail, style: { fontSize: 12, color: "#0C4160", textDecoration: "none", fontFamily: f } }, bEmail)
                 )
               ),
               creatorBuilderContact && onSelectContact && React.createElement("button", {
@@ -569,8 +568,8 @@ function TransactionTeamTab({ contact, contacts, loProfiles, isInternal, isPartn
                 ),
                 loCompany && React.createElement("div", { style: { fontSize: 12, color: "#64748b", fontFamily: f } }, loCompany),
                 React.createElement("div", { style: { display: "flex", gap: 14, marginTop: 4, flexWrap: "wrap" } },
-                  loPhone && React.createElement("a", { href: "tel:" + loPhone.replace(/\D/g,""), style: { fontSize: 12, color: "#0C4160", textDecoration: "none", fontFamily: f } }, "📞 " + d(loPhone)),
-                  loEmail && React.createElement("a", { href: "mailto:" + loEmail, style: { fontSize: 12, color: "#0C4160", textDecoration: "none", fontFamily: f } }, "✉️ " + loEmail)
+                  loPhone && React.createElement("a", { href: "tel:" + loPhone.replace(/\D/g,""), style: { fontSize: 12, color: "#0C4160", textDecoration: "none", fontFamily: f } }, d(loPhone)),
+                  loEmail && React.createElement("a", { href: "mailto:" + loEmail, style: { fontSize: 12, color: "#0C4160", textDecoration: "none", fontFamily: f } }, loEmail)
                 )
               ),
               assignedLoContact && onSelectContact && React.createElement("button", {
@@ -674,6 +673,10 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
   const [loContacts,  setLoContacts]  = useState([]);
   const [cdBranches,  setCdBranches]  = useState([]);
   const isBusiness = contact.contact_type === "business";
+  // True when the logged-in LO is viewing their own contact card
+  const isOwnProfile = isInternal && user && isBusiness && (
+    contact.email_work === user.email || contact.email_personal === user.email || contact.email === user.email
+  );
   useEffectCD(function() {
     if (!supabaseCD || !isAdmin || !isBusiness) return;
     // Fetch all business contacts for team lead picker
@@ -1299,15 +1302,16 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
           } : undefined}
         >
 
-        {/* Tab bar + Create Login + Edit button — always visible regardless of active tab */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", marginBottom: "12px" }}>
-          {/* Left: Contact Info / My Team / Internal Notes tabs */}
-          <div style={{ display: "flex", gap: "2px", background: "#e2e8f0", borderRadius: "10px", padding: "3px" }}>
+        {/* Tab bar + Create Login + Edit button — all on one row */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
+          {/* Row 1: tabs + buttons together */}
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <div style={{ display: "flex", gap: "2px", background: "#e2e8f0", borderRadius: "10px", padding: "3px", flex: 1 }}>
             <button
               onClick={function () { if (onSetView) onSetView("contact"); }}
               style={{
                 padding: "5px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600,
-                border: "none", cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif",
+                border: "none", cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif", flex: 1, whiteSpace: "nowrap",
                 background: activeView === "contact" ? "#ffffff" : "transparent",
                 color:      activeView === "contact" ? "#1e3a5f"  : "#64748b",
                 boxShadow:  activeView === "contact" ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
@@ -1320,7 +1324,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
               onClick={function () { if (onSetView) onSetView("network"); }}
               style={{
                 padding: "5px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600,
-                border: "none", cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif",
+                border: "none", cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif", flex: 1, whiteSpace: "nowrap",
                 background: activeView === "network" ? "#ffffff" : "transparent",
                 color:      activeView === "network" ? "#1e3a5f"  : "#64748b",
                 boxShadow:  activeView === "network" ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
@@ -1347,7 +1351,8 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
               </button>
             )}
           </div>
-          {/* Buttons — Edit is on both tabs; Create Login is Contact Info tab only */}
+          </div>{/* end tabs pill */}
+          {/* Buttons — same row as tabs, right side */}
           {!editMode && (
             <div style={{ display: "flex", gap: "8px", alignItems: "center", flexShrink: 0 }}>
               {/* Create Login / Login Active — Contact Info tab only */}
@@ -1400,7 +1405,8 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
               )}
             </div>
           )}
-        </div>
+          </div>{/* end row */}
+        </div>{/* end column wrapper */}
 
         {activeView === "contact" && (
           <React.Fragment>
@@ -2001,7 +2007,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
         {/* ═══════════════════════════════════════════════════════════════════ */}
         <div style={sectionStyle}>{cardNum(3)}
           <div style={sectionTitleStyle}>Notes (Internal)</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: "24px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobileCD ? "1fr" : "1fr 1.4fr", gap: isMobileCD ? "14px" : "24px" }}>
 
             {/* ── Left: Follow-up fields ── */}
             <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
@@ -2553,11 +2559,11 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
         {/* ═══════════════════════════════════════════════════════════════════ */}
         {/* LO / PARTNER PROFILE (business contacts, admin only)              */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        {isBusiness && isAdmin && (
+        {isBusiness && (isAdmin || isOwnProfile) && (
           <div style={{ ...sectionStyle, borderLeft: "4px solid #0C4160" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
               <div style={{ ...sectionTitleStyle, margin: 0, flex: 1 }}>LO / Partner Profile</div>
-              <span style={{ fontSize: 12, color: "#94a3b8", fontStyle: "italic" }}>Admin only · used on PQ letters &amp; team assignments</span>
+              <span style={{ fontSize: 12, color: "#94a3b8", fontStyle: "italic" }}>{isAdmin ? "Admin only · " : ""}Used on PQ letters &amp; team assignments</span>
             </div>
 
             {editMode ? (
@@ -2743,7 +2749,6 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
           </React.Fragment>
         )}
 
-      </div>
       </div>
       </div>
 

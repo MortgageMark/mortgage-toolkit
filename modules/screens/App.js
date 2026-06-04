@@ -2010,24 +2010,7 @@ function App() {
                 Home Loan Toolkit
               </span>
             )}
-            {isMobile ? (
-              /* Profile avatar in top-right corner on mobile */
-              <div
-                style={{
-                  width: 32, height: 32, borderRadius: "50%",
-                  background: "linear-gradient(135deg, #3b82f6, #1d4ed8)",
-                  border: "2px solid rgba(255,255,255,0.3)",
-                  color: "#fff", fontSize: 12, fontWeight: 700,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  flexShrink: 0, cursor: "default",
-                  fontFamily: "'Inter', system-ui, sans-serif",
-                }}
-              >
-                {loggedInUser && loggedInUser.name
-                  ? loggedInUser.name.trim().split(/\s+/).map(function(w) { return w[0]; }).join("").slice(0,2).toUpperCase()
-                  : "?"}
-              </div>
-            ) : (
+            {!isMobile && (
               <button
                 onClick={function() { setSidebarPinned(function(p) { return !p; }); }}
                 title={sidebarPinned ? "Collapse sidebar" : "Expand sidebar"}
@@ -2077,6 +2060,12 @@ function App() {
                 if (isMobile) setMobileSidebarOpen(false);
               }, "📋");
             })()}
+
+            {/* ── Activity Report (internal only) ── */}
+            {isInternal && sidebarNavBtn("Activity Report", false, function() {
+              if (window._openActivityReport) window._openActivityReport();
+              if (isMobile) setMobileSidebarOpen(false);
+            }, "📊")}
 
             {/* ── TEAM section (admin only) ── */}
             {loggedInUser && loggedInUser.role === "admin" && (

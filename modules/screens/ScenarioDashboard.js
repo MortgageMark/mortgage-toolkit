@@ -103,6 +103,8 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
     return (tr && tr[str]) ? tr[str] : str;
   };
   const [scenarios, setScenarios] = useLocalStorage("scenarios", []);
+  // Keep window ref in sync so _openActivityReport can access latest scenarios
+  React.useEffect(function() { window._sdScenarios = scenarios; }, [scenarios]);
   const [groupFilterInternal, setGroupFilterInternal] = useState("active");
   // Use controlled value from App.js sidebar if provided, otherwise internal state
   const groupFilter    = groupFilterProp    !== undefined ? groupFilterProp    : groupFilterInternal;
@@ -112,6 +114,47 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
   const [showActivityReport, setShowActivityReport] = useState(false);
   const [activityData, setActivityData] = useState(null);
   const [activityLoading, setActivityLoading] = useState(false);
+
+  // Expose opener so App.js sidebar can trigger it
+  React.useEffect(function() {
+    window._openActivityReport = async function() {
+      setShowActivityReport(true);
+      setActivityLoading(true);
+      try {
+        var supabase = window._supabaseClient;
+        if (!supabase) return;
+        var since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+        var { data: logs }    = await supabase.from("scenario_audit_log").select("scenario_id, user_id, action, note, created_at").gte("created_at", since).order("created_at", { ascending: false });
+        var { data: letters } = await supabase.from("pq_letters").select("scenario_id, created_at").gte("created_at", since).order("created_at", { ascending: false });
+        var { data: shares }  = await supabase.from("pq_letter_shares").select("scenario_id, realtor_name, sent_at").gte("sent_at", since).order("sent_at", { ascending: false });
+        var byScenario = {};
+        (logs || []).forEach(function(l) {
+          if (!byScenario[l.scenario_id]) byScenario[l.scenario_id] = { views: 0, lastSeen: null, actions: [], letterCount: 0, shareCount: 0 };
+          var s = byScenario[l.scenario_id];
+          if (l.action === "viewed") { s.views++; if (!s.lastSeen || l.created_at > s.lastSeen) s.lastSeen = l.created_at; }
+          else { s.actions.push(l.action); if (!s.lastSeen || l.created_at > s.lastSeen) s.lastSeen = l.created_at; }
+        });
+        (letters || []).forEach(function(l) {
+          if (!byScenario[l.scenario_id]) byScenario[l.scenario_id] = { views: 0, lastSeen: null, actions: [], letterCount: 0, shareCount: 0 };
+          byScenario[l.scenario_id].letterCount++;
+          if (!byScenario[l.scenario_id].lastSeen || l.created_at > byScenario[l.scenario_id].lastSeen) byScenario[l.scenario_id].lastSeen = l.created_at;
+        });
+        (shares || []).forEach(function(l) {
+          if (!byScenario[l.scenario_id]) byScenario[l.scenario_id] = { views: 0, lastSeen: null, actions: [], letterCount: 0, shareCount: 0 };
+          byScenario[l.scenario_id].shareCount++;
+        });
+        var scenariosCopy = window._sdScenarios || [];
+        var rows = scenariosCopy.map(function(sc) {
+          var d = byScenario[sc.id] || { views: 0, lastSeen: null, actions: [], letterCount: 0, shareCount: 0 };
+          return Object.assign({ scenario: sc }, d);
+        }).filter(function(r) { return r.lastSeen; })
+          .sort(function(a, b) { return (b.lastSeen || "").localeCompare(a.lastSeen || ""); });
+        setActivityData(rows);
+      } catch(e) { setActivityData([]); }
+      setActivityLoading(false);
+    };
+    return function() { window._openActivityReport = null; };
+  }, []);
 
   // New scenario form fields
   const [newUid, setNewUid] = useState("");
@@ -1624,7 +1667,9 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                 {/* Language toggle */}
                 <button
                   onClick={function() {
-                    var next = appLang === "es" ? "en" : "es";
+                    var currentLang = "en";
+                    try { var _cl = localStorage.getItem("app_lang"); if (_cl) { try { currentLang = JSON.parse(_cl); } catch(e) { currentLang = _cl; } } } catch(e) {}
+                    var next = currentLang === "es" ? "en" : "es";
                     try { localStorage.setItem("app_lang", JSON.stringify(next)); } catch(e) {}
                     setTimeout(function() { window.location.reload(); }, 50);
                   }}
@@ -1695,7 +1740,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
           )}
         </div>
 
-        {/* ── Pipeline Metrics Strip (internal only) ──────────────── */}
+        {/* ── Pipeline Metrics Strip + Activity Report (internal only) ── */}
         {user.isInternal && (
           <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
             {[
@@ -1733,76 +1778,6 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                 </div>
               );
             })}
-          </div>
-        )}
-
-
-        {/* ── Activity Report button (internal only) ─────────────── */}
-        {user.isInternal && (
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12, marginTop: -8 }}>
-            <button
-              onClick={async function() {
-                setShowActivityReport(true);
-                setActivityLoading(true);
-                try {
-                  var supabase = window._supabaseClient;
-                  if (!supabase) return;
-                  var since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-                  // Fetch audit log for all scenarios in the last 30 days
-                  var { data: logs } = await supabase
-                    .from("scenario_audit_log")
-                    .select("scenario_id, user_id, action, note, created_at")
-                    .gte("created_at", since)
-                    .order("created_at", { ascending: false });
-                  // Fetch PQ letters in the last 30 days
-                  var { data: letters } = await supabase
-                    .from("pq_letters")
-                    .select("scenario_id, created_at")
-                    .gte("created_at", since)
-                    .order("created_at", { ascending: false });
-                  // Fetch PQ shares in the last 30 days
-                  var { data: shares } = await supabase
-                    .from("pq_letter_shares")
-                    .select("scenario_id, realtor_name, sent_at")
-                    .gte("sent_at", since)
-                    .order("sent_at", { ascending: false });
-                  // Group by scenario_id
-                  var byScenario = {};
-                  (logs || []).forEach(function(l) {
-                    if (!byScenario[l.scenario_id]) byScenario[l.scenario_id] = { views: 0, lastSeen: null, actions: [], letterCount: 0, shareCount: 0 };
-                    var s = byScenario[l.scenario_id];
-                    if (l.action === "viewed") {
-                      s.views++;
-                      if (!s.lastSeen || l.created_at > s.lastSeen) s.lastSeen = l.created_at;
-                      if (!s.lastViewer) s.lastViewer = l.note || "";
-                    } else {
-                      s.actions.push(l.action);
-                      if (!s.lastSeen || l.created_at > s.lastSeen) s.lastSeen = l.created_at;
-                    }
-                  });
-                  (letters || []).forEach(function(l) {
-                    if (!byScenario[l.scenario_id]) byScenario[l.scenario_id] = { views: 0, lastSeen: null, actions: [], letterCount: 0, shareCount: 0 };
-                    byScenario[l.scenario_id].letterCount++;
-                    if (!byScenario[l.scenario_id].lastSeen || l.created_at > byScenario[l.scenario_id].lastSeen) byScenario[l.scenario_id].lastSeen = l.created_at;
-                  });
-                  (shares || []).forEach(function(l) {
-                    if (!byScenario[l.scenario_id]) byScenario[l.scenario_id] = { views: 0, lastSeen: null, actions: [], letterCount: 0, shareCount: 0 };
-                    byScenario[l.scenario_id].shareCount++;
-                  });
-                  // Match to scenarios we have loaded
-                  var rows = scenarios.map(function(sc) {
-                    var d = byScenario[sc.id] || { views: 0, lastSeen: null, actions: [], letterCount: 0, shareCount: 0 };
-                    return { scenario: sc, ...d };
-                  }).filter(function(r) { return r.lastSeen; })
-                    .sort(function(a, b) { return (b.lastSeen || "").localeCompare(a.lastSeen || ""); });
-                  setActivityData(rows);
-                } catch(e) { setActivityData([]); }
-                setActivityLoading(false);
-              }}
-              style={{ fontSize: 12, fontWeight: 700, padding: "6px 14px", borderRadius: 7, border: "1px solid #e2e8f0", background: "#fff", color: "#1e3a5f", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
-            >
-              📊 Activity Report (30 days)
-            </button>
           </div>
         )}
 

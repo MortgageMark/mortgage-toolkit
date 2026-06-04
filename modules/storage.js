@@ -238,10 +238,13 @@ async function fetchScenariosFromSupabase() {
   } catch(e) {}
 
   const ADMIN_ROLES = ["super_admin", "admin", "branch_admin"];
-  const canSeeAll = ADMIN_ROLES.includes(role);
+  const isInternal  = role === "internal";
+  const canSeeAll   = ADMIN_ROLES.includes(role);
 
   let query = supabase.from("scenarios").select("*").order("updated_at", { ascending: false });
-  if (!canSeeAll) query = query.eq("user_id", user.id);
+  // Admins + internal LOs: rely on RLS to scope correctly (team + partners + assigned contacts)
+  // Borrowers/partners: restrict client-side to own scenarios for performance
+  if (!canSeeAll && !isInternal) query = query.eq("user_id", user.id);
 
   const { data, error } = await query;
   if (error || !data) return { data: data || [], error };
@@ -471,11 +474,13 @@ async function fetchContactsFromSupabase() {
   } catch(e) {}
 
   const ADMIN_ROLES = ["super_admin", "admin", "branch_admin"];
-  const isAdmin = ADMIN_ROLES.includes(role);
+  const isAdmin    = ADMIN_ROLES.includes(role);
+  const isInternalUser = role === "internal";
 
   let query = supabase.from("contacts").select("*").order("updated_at", { ascending: false });
-  // Non-admins see contacts they created OR contacts assigned to them as LO
-  if (!isAdmin) query = query.or(`created_by_user_id.eq.${user.id},assigned_lo_id.eq.${user.id}`);
+  // Admins + internal LOs: rely on RLS to scope correctly (team + partners + assigned)
+  // Borrowers/partners: restrict client-side for performance
+  if (!isAdmin && !isInternalUser) query = query.or(`created_by_user_id.eq.${user.id},assigned_lo_id.eq.${user.id}`);
 
   const { data, error } = await query;
   return { data: data || [], error };

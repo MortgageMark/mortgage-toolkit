@@ -103,7 +103,7 @@ const INTERNAL_MODULE_IDS = ["builder", "buydowns", "permbuyd", "targetpmt", "bb
 
 // All tabs that a borrower could potentially see (base set + grantable extras).
 // Used by the "Client sees" strip so the LO can tell at a glance what's shared.
-const CLIENT_TAB_IDS = ["payment", "fees", "breakeven", "amort", "recast", "dti", "prequal", "sellernet", "rentvsbuy", "refi", "refi-analysis", "compare", "contactlender"];
+// CLIENT_TAB_IDS removed — replaced by enabledModules system
 
 // Primary tabs shown to clients even when locked (so they can discover & request access)
 const CLIENT_PRIMARY_TABS = ["payment", "amort", "recast", "dti", "fees", "compare", "prequal", "sellernet"];
@@ -683,6 +683,8 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
   const [headerContact, setHeaderContact] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [navCollapsed, setNavCollapsed] = useLocalStorage("app_nav_collapsed", false);
+  // On mobile the sidebar is always full-width overlay — never collapse labels
+  const isNavCollapsed = isMobile ? false : navCollapsed;
   const [showLenderPanel,  setShowLenderPanel]  = useState(false);
   const [notesOpen,        setNotesOpen]        = useState(false);
   const [sidebarNotes,     setSidebarNotes]     = useState([]);
@@ -1409,32 +1411,32 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                 <button onClick={() => setSidebarOpen(false)} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 7, padding: "6px 12px", color: "#fff", fontSize: 16, cursor: "pointer" }}>&#10005;</button>
               </div>
             )}
-            {/* Desktop: profile row + collapse/expand toggle */}
-            {!isMobile && (
-              <React.Fragment>
-                {/* Profile circle row — always visible, mirrors Dashboard sidebar */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: navCollapsed ? "center" : "space-between", padding: navCollapsed ? "10px 0" : "14px 14px 12px", borderBottom: "1px solid rgba(255,255,255,0.12)", flexShrink: 0, gap: 10 }}>
-                  {!navCollapsed && (
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: font }}>
-                        {user && (user.name || user.email) || ""}
-                      </div>
-                      {user && user.role && (
-                        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: font, textTransform: "capitalize" }}>
-                          {user.role}
-                        </div>
-                      )}
+            {/* Profile row — shown on both desktop and mobile */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: (isMobile || !navCollapsed) ? "space-between" : "center", padding: (isMobile || !navCollapsed) ? "14px 14px 12px" : "10px 0", borderBottom: "1px solid rgba(255,255,255,0.12)", flexShrink: 0, gap: 10 }}>
+              {(isMobile || !navCollapsed) && (
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: font }}>
+                    {user && (user.name || user.email) || ""}
+                  </div>
+                  {user && user.role && (
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: font, textTransform: "capitalize" }}>
+                      {user.role}
                     </div>
                   )}
-                  {window.AppHeader && React.createElement(window.AppHeader, {
-                    user: user, darkMode: darkMode, setDarkMode: setDarkMode,
-                    userRole: userRole, setUserRole: isInternal ? setUserRole : null,
-                    onLogout: onLogout, isInternal: isInternal,
-                    isAdmin: !!(user && user.role === "admin"),
-                    onContactInfo: onContactInfo,
-                    onLoginSettings: onLoginSettings,
-                  })}
                 </div>
+              )}
+              {window.AppHeader && React.createElement(window.AppHeader, {
+                user: user, darkMode: darkMode, setDarkMode: setDarkMode,
+                userRole: userRole, setUserRole: isInternal ? setUserRole : null,
+                onLogout: onLogout, isInternal: isInternal,
+                isAdmin: !!(user && user.role === "admin"),
+                onContactInfo: onContactInfo,
+                onLoginSettings: onLoginSettings,
+              })}
+            </div>
+            {/* Collapse/expand toggle — desktop only */}
+            {!isMobile && (
+              <React.Fragment>
                 {/* Collapse/expand toggle */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: navCollapsed ? "center" : "space-between", padding: "12px 10px 4px" }}>
                   {!navCollapsed && (
@@ -1467,32 +1469,32 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                 return (
                 <button onClick={onClick} style={{
                   display: "flex", alignItems: "center", width: "100%",
-                  padding: navCollapsed ? "10px 0" : "10px 18px 10px 15px",
-                  justifyContent: navCollapsed ? "center" : "flex-start",
+                  padding: isNavCollapsed ? "10px 0" : "10px 18px 10px 15px",
+                  justifyContent: isNavCollapsed ? "center" : "flex-start",
                   background: isActive ? "rgba(255,255,255,0.18)" : "transparent",
                   color: isActive ? "#fff" : (locked ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.6)"),
                   border: "none",
-                  borderLeft: navCollapsed ? "none" : (isActive ? "3px solid rgba(255,255,255,0.9)" : "3px solid transparent"),
+                  borderLeft: isNavCollapsed ? "none" : (isActive ? "3px solid rgba(255,255,255,0.9)" : "3px solid transparent"),
                   cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: font,
                   transition: "all 0.15s", whiteSpace: "nowrap", overflow: "hidden",
                 }}>
-                  <span style={{ fontSize: navCollapsed ? 17 : 14, marginRight: navCollapsed ? 0 : 8, lineHeight: 1, flexShrink: 0, opacity: locked ? 0.4 : 1 }}>{icon}</span>
-                  {!navCollapsed && label}
-                  {!navCollapsed && locked && (
+                  <span style={{ fontSize: isNavCollapsed ? 17 : 14, marginRight: isNavCollapsed ? 0 : 8, lineHeight: 1, flexShrink: 0, opacity: locked ? 0.4 : 1 }}>{icon}</span>
+                  {!isNavCollapsed && label}
+                  {!isNavCollapsed && locked && (
                     <span style={{ fontSize: 11, marginLeft: "auto", opacity: 0.5, flexShrink: 0 }}>🔒</span>
                   )}
-                  {!navCollapsed && !locked && isInternal && isClientVisible === false && (
+                  {!isNavCollapsed && !locked && isInternal && isClientVisible === false && (
                     <span title="Hidden from client" style={{ fontSize: 13, fontWeight: 900, color: "#F87171", marginLeft: "auto", flexShrink: 0, lineHeight: 1 }}>*</span>
                   )}
                 </button>
                 );
               };
-              const sectionHead = (label) => navCollapsed
+              const sectionHead = (label) => isNavCollapsed
                 ? <div style={{ margin: "6px 10px", borderTop: "1px solid rgba(255,255,255,0.15)" }} />
                 : <div style={{ padding: "14px 15px 4px", fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)", fontFamily: font }}>{label}</div>;
               return (
                 <React.Fragment>
-                  {!navCollapsed && <div style={{ height: 6 }} />}
+                  {!isNavCollapsed && <div style={{ height: 6 }} />}
                   {/* ── Contacts + Scenarios shortcuts ── */}
                   {effectiveIsInternal && onOpenContact && navBtn(false, () => { onOpenContact(null); setSidebarOpen(false); }, <span style={{filter:"grayscale(1) invert(1) opacity(0.7)"}}>👥</span>, "People")}
                   {/* Vendor Contacts tab hidden — uncomment to restore: */}
@@ -1500,7 +1502,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                   {onBackToScenarios && navBtn(false, () => { onBackToScenarios(); setSidebarOpen(false); }, "🗂️", "Scenarios")}
                   {isInternal && activeScenario && activeScenario.contact_id && onOpenContact && navBtn(false, () => { onOpenContact(activeScenario.contact_id); setSidebarOpen(false); }, React.createElement("span", { style: { filter: "grayscale(1) invert(1) opacity(0.7)" } }, "👤"), "Contact")}
                   {isInternal && activeScenario && activeScenario.contact_id && navBtn(false, () => { setNotesOpen(true); setSidebarOpen(false); }, "📝", "Notes")}
-                  {(!isInternal || onOpenContact || onBackToScenarios) && !navCollapsed && (
+                  {(!isInternal || onOpenContact || onBackToScenarios) && !isNavCollapsed && (
                     <div style={{ margin: "6px 15px 2px", borderBottom: "1px solid rgba(255,255,255,0.12)" }} />
                   )}
                   {sectionHead(t("Toolkit"))}
@@ -1509,7 +1511,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                   )}
                   {internalMods.length > 0 && (
                     <React.Fragment>
-                      {!navCollapsed && <div style={{ height: 4 }} />}
+                      {!isNavCollapsed && <div style={{ height: 4 }} />}
                       {sectionHead(t("Internal"))}
                       {internalMods.map(m =>
                         navBtn(activeModule === m.id, () => { setActiveModule(m.id); setSidebarOpen(false); }, m.icon, t(m.label), enabledModules.includes(m.id), m.id)
@@ -1541,17 +1543,17 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                     }}
                     style={{
                       display: "flex", alignItems: "center", width: "100%",
-                      padding: navCollapsed ? "10px 0" : "9px 18px 9px 15px",
+                      padding: isNavCollapsed ? "10px 0" : "9px 18px 9px 15px",
                       background: showLivePanel ? "rgba(255,255,255,0.10)" : "transparent",
                       color: showLivePanel ? "#fff" : "rgba(255,255,255,0.65)",
                       border: "none", cursor: "pointer",
                       fontSize: 13, fontWeight: 600, fontFamily: font,
-                      justifyContent: navCollapsed ? "center" : "flex-start",
+                      justifyContent: isNavCollapsed ? "center" : "flex-start",
                       gap: 8, transition: "all 0.15s",
                     }}
                   >
                     <span style={{ position: "relative", display: "inline-flex", flexShrink: 0 }}>
-                      <span style={{ fontSize: navCollapsed ? 17 : 14, lineHeight: 1 }}>📡</span>
+                      <span style={{ fontSize: isNavCollapsed ? 17 : 14, lineHeight: 1 }}>📡</span>
                       <span style={{
                         position: "absolute", top: -2, right: -3,
                         width: 7, height: 7, borderRadius: "50%",
@@ -1560,43 +1562,13 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                         transition: "background 0.3s",
                       }} />
                     </span>
-                    {!navCollapsed && <span>Live Session</span>}
+                    {!isNavCollapsed && <span>Live Session</span>}
                   </button>
                 </div>
               );
             })()}
 
-            {/* ── Profile — pinned to bottom of sidebar ── */}
-            {!isSharedView && AppHeader && (
-              <div style={{
-                flexShrink: 0,
-                borderTop: "1px solid rgba(255,255,255,0.12)",
-                padding: navCollapsed ? "10px 0" : "8px 14px",
-                display: "flex", alignItems: "center",
-                justifyContent: navCollapsed ? "center" : "flex-start",
-                background: headerBg,
-              }}>
-                <AppHeader
-                  user={user}
-                  darkMode={darkMode}
-                  setDarkMode={setDarkMode}
-                  userRole={userRole}
-                  setUserRole={isAdmin && isInternal ? setUserRole : null}
-                  onContacts={onOpenContact ? function() { onOpenContact(null); } : null}
-                  onScenarios={onBackToScenarios || null}
-                  onMyProfile={onOpenProfile || null}
-                  onContactInfo={onContactInfo || null}
-                  onLoginSettings={onLoginSettings || null}
-                  onTeam={isAdmin && onTeam ? onTeam : null}
-                  onTemplates={function() { setSettingsInitialTab(null); setSettingsOpen(true); }}
-                  onWarnings={isInternal ? function() { setSettingsInitialTab("warnings"); setSettingsOpen(true); } : null}
-                  onModules={isInternal ? function() { setActiveModule("__modules__"); } : null}
-                  onLogout={onLogout}
-                  isInternal={isInternal}
-                  isAdmin={isAdmin}
-                />
-              </div>
-            )}
+            {/* Profile moved to top of sidebar — no bottom duplicate */}
           </div>
         )}
 
