@@ -238,13 +238,12 @@ async function fetchScenariosFromSupabase() {
   } catch(e) {}
 
   const ADMIN_ROLES = ["super_admin", "admin", "branch_admin"];
-  const isInternal  = role === "internal";
   const canSeeAll   = ADMIN_ROLES.includes(role);
 
   let query = supabase.from("scenarios").select("*").order("updated_at", { ascending: false });
-  // Admins + internal LOs: rely on RLS to scope correctly (team + partners + assigned contacts)
-  // Borrowers/partners: restrict client-side to own scenarios for performance
-  if (!canSeeAll && !isInternal) query = query.eq("user_id", user.id);
+  // Non-admins always filter client-side to their own scenarios.
+  // RLS provides server-side enforcement; this is a defence-in-depth client filter.
+  if (!canSeeAll) query = query.eq("user_id", user.id);
 
   const { data, error } = await query;
   if (error || !data) return { data: data || [], error };
@@ -475,12 +474,11 @@ async function fetchContactsFromSupabase() {
 
   const ADMIN_ROLES = ["super_admin", "admin", "branch_admin"];
   const isAdmin    = ADMIN_ROLES.includes(role);
-  const isInternalUser = role === "internal";
 
   let query = supabase.from("contacts").select("*").order("updated_at", { ascending: false });
-  // Admins + internal LOs: rely on RLS to scope correctly (team + partners + assigned)
-  // Borrowers/partners: restrict client-side for performance
-  if (!isAdmin && !isInternalUser) query = query.or(`created_by_user_id.eq.${user.id},assigned_lo_id.eq.${user.id}`);
+  // Non-admins always filter client-side for defence-in-depth.
+  // LOs see contacts they created OR are assigned to as LO.
+  if (!isAdmin) query = query.or(`created_by_user_id.eq.${user.id},assigned_lo_id.eq.${user.id}`);
 
   const { data, error } = await query;
   return { data: data || [], error };
@@ -598,7 +596,31 @@ async function saveContactToSupabase({
     return { data, error };
   } else {
     payload.created_by_user_id = user.id;
-    payload.creator_id         = user.id; // default: logged-in admin is the creator
+    payload.creator_id         = user.id;
+    // Auto-assign LO: if internal user creates a contact and no assigned_lo_id is set,
+    // link it to themselves so the My Team tab shows the correct Lender.
+    // For builders/realtors: look up their own assigned_lo_id and inherit it.
+    if (!payload.assigned_lo_id) {
+      var roleForAssign = "borrower";
+      try {
+        var cachedRole = sessionStorage.getItem("mtk_user_role");
+        if (cachedRole) roleForAssign = cachedRole;
+        else {
+          var { data: rp } = await supabase.from("profiles").select("role, assigned_lo_id").eq("id", user.id).single();
+          if (rp) {
+            roleForAssign = rp.role || "borrower";
+            // Builder/Realtor: inherit their own LO assignment
+            if ((roleForAssign === "builder" || roleForAssign === "realtor") && rp.assigned_lo_id) {
+              payload.assigned_lo_id = rp.assigned_lo_id;
+            }
+          }
+        }
+        // Internal LO: assign themselves
+        if (roleForAssign === "internal" || roleForAssign === "admin") {
+          payload.assigned_lo_id = user.id;
+        }
+      } catch(e) {}
+    }
     const { data, error } = await supabase
       .from("contacts").insert(payload).select().single();
     return { data, error };

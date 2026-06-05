@@ -258,7 +258,7 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
     if (selectedContact) {
       var nm = ((selectedContact.first_name || "") + " " + (selectedContact.last_name || "")).trim();
       var badge = selectedContact.contact_category || selectedContact.contact_type || "";
-      onContactSelected({ name: nm || "Contact", badge: badge });
+      onContactSelected({ id: selectedContact.id, name: nm || "Contact", badge: badge });
     } else {
       onContactSelected(null);
     }

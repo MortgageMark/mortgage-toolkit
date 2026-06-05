@@ -151,7 +151,7 @@ function AppHeader({
                 style={dropItem}
                 onClick={() => { onContactInfo(); setShowProfile(false); }}
               >
-                📋 My Profile &amp; NMLS
+                👤 My Profile
               </button>
             )}
 

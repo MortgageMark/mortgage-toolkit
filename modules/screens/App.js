@@ -980,6 +980,21 @@ function App() {
   const [activeScenario, setActiveScenario] = useLocalStorage("active_scenario", null);
   const scenarioSnapshotRef = useRef(null); // before-snapshot for audit diffing
   const [authLoading, setAuthLoading] = React.useState(true);
+
+  // ── URL Routing helpers ───────────────────────────────────────────────────
+  function parseRoute(path) {
+    var cm = (path || window.location.pathname).match(/^\/contacts\/([^\/]+)/);
+    var sm = (path || window.location.pathname).match(/^\/scenarios\/([^\/]+)/);
+    if (cm) return { type: "contact", id: cm[1] };
+    if (sm) return { type: "scenario", id: sm[1] };
+    return null;
+  }
+  function navPush(path) {
+    try { window.history.pushState({ path: path }, "", path); } catch(e) {}
+  }
+  function navReplace(path) {
+    try { window.history.replaceState({ path: path }, "", path); } catch(e) {}
+  }
   const [showContacts, setShowContacts] = React.useState(false);
   const [pendingContactId, setPendingContactId] = React.useState(null);
   const [showProfileSetup, setShowProfileSetup] = React.useState(false);
@@ -988,6 +1003,7 @@ function App() {
   const [showUsers,            setShowUsers]            = React.useState(false);
   const [showTasksScenarios,   setShowTasksScenarios]   = React.useState(false);
   const [showTasksContacts,    setShowTasksContacts]    = React.useState(false);
+  const [showActivityReport,   setShowActivityReport]   = React.useState(false);
   const [showChangePassword,   setShowChangePassword]   = React.useState(false);
   const [showLoginSettings,    setShowLoginSettings]    = React.useState(false);
   const [showLoSetupPrompt,    setShowLoSetupPrompt]    = React.useState(false);
@@ -1087,6 +1103,26 @@ function App() {
     setDisclaimerAcked(true);
   };
 
+  // ── Browser back/forward routing ─────────────────────────────────────────
+  useEffect(function() {
+    function handlePopState() {
+      var route = parseRoute(window.location.pathname);
+      if (!route) {
+        // Back to root — close contact/scenario
+        setShowContacts(false); setPendingContactId(null);
+        setActiveScenario({ none: true }); restoreCalculatorData({});
+      } else if (route.type === "contact") {
+        setPendingContactId(route.id); setShowContacts(true);
+        setActiveScenario({ none: true }); restoreCalculatorData({});
+      } else if (route.type === "scenario") {
+        // Just store — the ScenarioDashboard will pick it up
+        try { sessionStorage.setItem("mtk_pending_scenario_id", route.id); } catch(e) {}
+      }
+    }
+    window.addEventListener("popstate", handlePopState);
+    return function() { window.removeEventListener("popstate", handlePopState); };
+  }, []);
+
   // ── Supabase session restoration on mount ──────────────────────────
   useEffect(function() {
     let cancelled = false;
@@ -1123,6 +1159,16 @@ function App() {
             };
             setLoggedInUser(restoredUser);
             setActiveScenario(null); // always land on Scenario Dashboard after session restore
+
+            // ── Deep-link routing on page load ──
+            var initialRoute = parseRoute(window.location.pathname);
+            if (initialRoute && initialRoute.type === "contact") {
+              setPendingContactId(initialRoute.id);
+              setShowContacts(true);
+            } else if (initialRoute && initialRoute.type === "scenario") {
+              // Store for post-load scenario fetch (handled below in normal flow)
+              try { sessionStorage.setItem("mtk_pending_scenario_id", initialRoute.id); } catch(e) {}
+            }
 
             // Log session activity (daily dedup, fire-and-forget)
             if (window.logUserSession) window.logUserSession(restoredUser);
@@ -1387,6 +1433,16 @@ function App() {
       return;
     }
 
+    // ── Deep-link redirect after login ────────────────────────────────────
+    var loginRoute = parseRoute(window.location.pathname);
+    if (loginRoute && loginRoute.type === "contact") {
+      setPendingContactId(loginRoute.id);
+      setShowContacts(true);
+      navReplace("/contacts/" + loginRoute.id);
+    } else if (loginRoute && loginRoute.type === "scenario") {
+      try { sessionStorage.setItem("mtk_pending_scenario_id", loginRoute.id); } catch(e) {}
+    }
+
     // ── Normal login flow ──────────────────────────────────────────────────
     // Only open contact card on first signup (flag set in LoginScreen during signUp flow)
     // On regular logins, go straight to Scenario Dashboard
@@ -1473,7 +1529,9 @@ function App() {
       localStorage.setItem("mtk_active_scenario", JSON.stringify({ none: true }));
       scenarioSnapshotRef.current = null;
       setActiveScenario({ none: true });
+      navPush("/");
     } else {
+      if (scenario.id) navPush("/scenarios/" + scenario.id);
       const calcData = scenario.calculatorData || {};
       restoreCalculatorData(calcData);
       // DEFINITIVE FIX: expose calcData on window so BuilderTab's useState initializer
@@ -1647,6 +1705,7 @@ function App() {
   // ─────────────────────────────────────────────────────────────────────────
 
   const handleBackToScenarios = () => {
+    navPush("/");
     if (activeScenario && activeScenario.id) {
       saveScenarioData(activeScenario.id);
 
@@ -1733,6 +1792,13 @@ function App() {
         onClose={function() { setShowLoginSettings(false); }}
       />
     );
+  } else if (showActivityReport && isInternal) {
+    pageContent = (
+      <ActivityReportPage
+        user={loggedInUser}
+        onBack={function() { setShowActivityReport(false); }}
+      />
+    );
   } else if (showUsers) {
     pageContent = (
       <UsersPanel
@@ -1771,7 +1837,7 @@ function App() {
         onTasksScenarios={isInternal ? function() { setShowTasksContacts(false); setShowTasksScenarios(true); } : null}
         activeView={contactView}
         onSetView={setContactView}
-        onContactSelected={setActiveContactInfo}
+        onContactSelected={function(info) { setActiveContactInfo(info); if (info && info.id) navPush("/contacts/" + info.id); else navPush("/contacts"); }}
         pageTitle="Tasks: Contacts"
       />
     );
@@ -1783,7 +1849,7 @@ function App() {
         typeFilter={typeFilter}
         setTypeFilter={setTypeFilter}
         initialContactId={pendingContactId}
-        onBack={function() { setShowContacts(false); setPendingContactId(null); }}
+        onBack={function() { setShowContacts(false); setPendingContactId(null); navPush("/"); }}
         onLogout={handleLogout}
         onSelectScenario={function(scenario) {
           setShowContacts(false);
@@ -1794,7 +1860,7 @@ function App() {
         onTasksContacts={isInternal ? function() { setShowContacts(false); setShowTasksContacts(true); } : null}
         activeView={contactView}
         onSetView={setContactView}
-        onContactSelected={setActiveContactInfo}
+        onContactSelected={function(info) { setActiveContactInfo(info); if (info && info.id) navPush("/contacts/" + info.id); else navPush("/contacts"); }}
       />
     );
   } else if (showDashboard && activeScenario === null) {
@@ -2055,25 +2121,29 @@ function App() {
               setShowTasksScenarios(false);
               setShowTasksContacts(false);
               setShowUsers(false);
+              setShowActivityReport(false);
               setPendingContactId(null);
               if (isMobile) setMobileSidebarOpen(false);
             }, "👤")}
             {(function() {
-              const active = !showContacts && !showTasksScenarios && !showTasksContacts && groupFilter === "active";
+              const active = !showContacts && !showTasksScenarios && !showTasksContacts && !showActivityReport && groupFilter === "active";
               return sidebarNavBtn(t("Scenarios"), active, function() {
                 setGroupFilter("active");
                 setShowContacts(false);
                 setShowTasksScenarios(false);
                 setShowTasksContacts(false);
                 setShowUsers(false);
+                setShowActivityReport(false);
                 if (activeScenario !== null) { handleBackToScenarios(); }
                 if (isMobile) setMobileSidebarOpen(false);
               }, "📋");
             })()}
 
             {/* ── Activity Report (internal only) ── */}
-            {isInternal && sidebarNavBtn("Activity Report", false, function() {
-              if (window._openActivityReport) window._openActivityReport();
+            {isInternal && sidebarNavBtn("Activity Report", showActivityReport, function() {
+              setShowActivityReport(true);
+              setShowContacts(false); setShowUsers(false);
+              setShowTasksScenarios(false); setShowTasksContacts(false);
               if (isMobile) setMobileSidebarOpen(false);
             }, "📊")}
 

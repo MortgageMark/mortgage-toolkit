@@ -105,7 +105,7 @@ function ReferralPickerCD({ value, onChange, contacts, excludeId }) {
     <div style={{ position: "relative" }}>
       <input
         type="text"
-        placeholder="Click to browse or type to search..."
+        placeholder=""
         style={pickerFieldStyle}
         value={search}
         onChange={function(e) { setSearch(e.target.value); }}
@@ -189,11 +189,11 @@ function HdrCell({ label, value, width }) {
 // All entries stored in network_links JSONB as an array; multiple per role allowed.
 
 const TEAM_ROLES = [
-  { key: "builder",   label: "Builder",   icon: "🏠", color: "#f97316" },
-  { key: "realtor",   label: "Realtor",   icon: "🏡", color: "#7c3aed" },
-  { key: "lender",    label: "Lender",    icon: "🏦", color: "#0C4160" },
-  { key: "insurance", label: "Insurance", icon: "🛡️", color: "#0891b2" },
-  { key: "title",     label: "Title",     icon: "📄", color: "#16a34a" },
+  { key: "builder",   label: "Builder",   color: "#f97316" },
+  { key: "realtor",   label: "Realtor",   color: "#7c3aed" },
+  { key: "lender",    label: "Lender",    color: "#16a34a" },
+  { key: "insurance", label: "Insurance", color: "#0891b2" },
+  { key: "title",     label: "Title",     color: "#475569" },
 ];
 
 function TransactionTeamTab({ contact, contacts, loProfiles, isInternal, isPartner, user, onSelectContact, onNetworkPatched }) {
@@ -206,12 +206,22 @@ function TransactionTeamTab({ contact, contacts, loProfiles, isInternal, isPartn
   if (contact.assigned_lo_id && loProfiles && loProfiles.length) {
     assignedLoProfile = loProfiles.find(function(p) { return p.id === contact.assigned_lo_id; }) || null;
   }
+  // Fall back to the currently logged-in user if no assigned LO
+  if (!assignedLoProfile && isInternal && user && loProfiles && loProfiles.length) {
+    assignedLoProfile = loProfiles.find(function(p) { return p.id === user.id; }) || null;
+  }
   // Try to find the LO's contact card by email match (for phone number)
   var assignedLoContact = null;
   if (assignedLoProfile && assignedLoProfile.email && contacts && contacts.length) {
     var loEmailLower = assignedLoProfile.email.toLowerCase();
     assignedLoContact = contacts.find(function(c) {
       return (c.email_work || c.email_personal || "").toLowerCase() === loEmailLower;
+    }) || null;
+  }
+  // Also try matching by user.id on contact's created_by / auth_user_id if email match missed
+  if (!assignedLoContact && isInternal && user && contacts && contacts.length) {
+    assignedLoContact = contacts.find(function(c) {
+      return c.auth_user_id === user.id;
     }) || null;
   }
 
@@ -370,7 +380,7 @@ function TransactionTeamTab({ contact, contacts, loProfiles, isInternal, isPartn
     var website   = c.lo_website || "";
     var row = function(icon, href, text) {
       if (!text) return null;
-      return React.createElement("a", { href: href, target: href && href.startsWith("http") ? "_blank" : undefined, rel: "noopener noreferrer", style: { display: "flex", alignItems: "center", fontSize: 15, color: "#0C4160", textDecoration: "none", fontFamily: f, padding: "3px 0" } },
+      return React.createElement("a", { href: href, target: href && href.startsWith("http") ? "_blank" : undefined, rel: "noopener noreferrer", style: { display: "flex", alignItems: "center", fontSize: 12, color: "#0C4160", textDecoration: "none", fontFamily: f, padding: "2px 0" } },
         React.createElement("span", null, text)
       );
     };
@@ -381,7 +391,7 @@ function TransactionTeamTab({ contact, contacts, loProfiles, isInternal, isPartn
           React.createElement("button", {
             onClick: onOpen || undefined,
             disabled: !onOpen,
-            style: { fontSize: 17, fontWeight: 700, color: onOpen ? "#2563eb" : "#1e293b", fontFamily: f, cursor: onOpen ? "pointer" : "default", textDecoration: onOpen ? "underline" : "none", background: "none", border: "none", padding: 0, textAlign: "left", lineHeight: 1.3 }
+            style: { fontSize: 13, fontWeight: 600, color: onOpen ? "#2563eb" : "#1e293b", fontFamily: f, cursor: onOpen ? "pointer" : "default", textDecoration: onOpen ? "underline" : "none", background: "none", border: "none", padding: 0, textAlign: "left", lineHeight: 1.3 }
           }, name),
           sourceBadge && React.createElement("span", { style: { fontSize: 11, fontWeight: 700, color: "#fff", background: sourceBadge.color, borderRadius: 4, padding: "2px 7px", fontFamily: f } }, sourceBadge.label)
         ),
@@ -389,10 +399,10 @@ function TransactionTeamTab({ contact, contacts, loProfiles, isInternal, isPartn
       ),
       // Single column details
       React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 2 } },
-        company  && React.createElement("div", { style: { fontSize: 15, color: "#374151", fontFamily: f } }, company),
-        teamName && React.createElement("div", { style: { fontSize: 15, color: "#64748b", fontFamily: f } }, teamName),
-        address  && React.createElement("div", { style: { fontSize: 15, color: "#64748b", fontFamily: f } }, address),
-        (workPhone || cellPhone || workEmail || website) && React.createElement("div", { style: { height: 8 } }),
+        company  && React.createElement("div", { style: { fontSize: 12, color: "#374151", fontFamily: f } }, company),
+        teamName && React.createElement("div", { style: { fontSize: 12, color: "#64748b", fontFamily: f } }, teamName),
+        address  && React.createElement("div", { style: { fontSize: 12, color: "#64748b", fontFamily: f } }, address),
+        (workPhone || cellPhone || workEmail || website) && React.createElement("div", { style: { height: 4 } }),
         row("📞", workPhone ? "tel:" + workPhone.replace(/\D/g,"") : null, workPhone ? fmtPhone(workPhone) + " (work)" : ""),
         row("📱", cellPhone ? "tel:" + cellPhone.replace(/\D/g,"") : null, cellPhone ? fmtPhone(cellPhone) + " (cell)" : ""),
         row("✉️", workEmail ? "mailto:" + workEmail : null, workEmail),
@@ -502,7 +512,6 @@ function TransactionTeamTab({ contact, contacts, loProfiles, isInternal, isPartn
         // Role header bar
         React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 14px", background: hasAny ? role.color + "0f" : "#f8fafc" } },
           React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
-            React.createElement("span", { style: { fontSize: 16 } }, role.icon),
             React.createElement("span", { style: { fontSize: 13, fontWeight: 700, color: role.color, fontFamily: f, textTransform: "uppercase", letterSpacing: "0.05em" } }, role.label)
           ),
           React.createElement("div", { style: { display: "flex", gap: 6 } },
@@ -535,7 +544,7 @@ function TransactionTeamTab({ contact, contacts, loProfiles, isInternal, isPartn
             React.createElement("div", { style: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 } },
               React.createElement("div", { style: { flex: 1 } },
                 React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6, marginBottom: 2 } },
-                  React.createElement("button", { onClick: creatorBuilderContact && onSelectContact ? function() { onSelectContact(creatorBuilderContact); } : undefined, disabled: !(creatorBuilderContact && onSelectContact), style: { fontSize: 14, fontWeight: 700, color: creatorBuilderContact && onSelectContact ? "#2563eb" : "#1e293b", fontFamily: f, cursor: creatorBuilderContact && onSelectContact ? "pointer" : "default", textDecoration: creatorBuilderContact && onSelectContact ? "underline" : "none", background: "none", border: "none", padding: 0, textAlign: "left" } }, bName),
+                  React.createElement("button", { onClick: creatorBuilderContact && onSelectContact ? function() { onSelectContact(creatorBuilderContact); } : undefined, disabled: !(creatorBuilderContact && onSelectContact), style: { fontSize: 13, fontWeight: 600, color: creatorBuilderContact && onSelectContact ? "#2563eb" : "#1e293b", fontFamily: f, cursor: creatorBuilderContact && onSelectContact ? "pointer" : "default", textDecoration: creatorBuilderContact && onSelectContact ? "underline" : "none", background: "none", border: "none", padding: 0, textAlign: "left" } }, bName),
                   React.createElement("span", { style: { fontSize: 10, fontWeight: 700, color: "#fff", background: "#f97316", borderRadius: 4, padding: "1px 6px", fontFamily: f } }, "Created By")
                 ),
                 bCompany && React.createElement("div", { style: { fontSize: 12, color: "#64748b", fontFamily: f } }, bCompany),
@@ -563,7 +572,7 @@ function TransactionTeamTab({ contact, contacts, loProfiles, isInternal, isPartn
             React.createElement("div", { style: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 } },
               React.createElement("div", { style: { flex: 1 } },
                 React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6, marginBottom: 2 } },
-                  React.createElement("button", { onClick: assignedLoContact && onSelectContact ? function() { onSelectContact(assignedLoContact); } : undefined, disabled: !(assignedLoContact && onSelectContact), style: { fontSize: 14, fontWeight: 700, color: assignedLoContact && onSelectContact ? "#2563eb" : "#1e293b", fontFamily: f, cursor: assignedLoContact && onSelectContact ? "pointer" : "default", textDecoration: assignedLoContact && onSelectContact ? "underline" : "none", background: "none", border: "none", padding: 0, textAlign: "left" } }, loName),
+                  React.createElement("button", { onClick: assignedLoContact && onSelectContact ? function() { onSelectContact(assignedLoContact); } : undefined, disabled: !(assignedLoContact && onSelectContact), style: { fontSize: 13, fontWeight: 600, color: assignedLoContact && onSelectContact ? "#2563eb" : "#1e293b", fontFamily: f, cursor: assignedLoContact && onSelectContact ? "pointer" : "default", textDecoration: assignedLoContact && onSelectContact ? "underline" : "none", background: "none", border: "none", padding: 0, textAlign: "left" } }, loName),
                   React.createElement("span", { style: { fontSize: 10, fontWeight: 700, color: "#fff", background: "#0C4160", borderRadius: 4, padding: "1px 6px", fontFamily: f } }, "Assigned LO")
                 ),
                 loCompany && React.createElement("div", { style: { fontSize: 12, color: "#64748b", fontFamily: f } }, loCompany),
@@ -638,6 +647,264 @@ function TransactionTeamTab({ contact, contacts, loProfiles, isInternal, isPartn
   );
 }
 
+// ── AddressAutocomplete ───────────────────────────────────────────────────────
+// Free address search using Nominatim (OpenStreetMap) — no API key needed
+function AddressAutocomplete({ onSelect, font }) {
+  const [query,    setQuery]    = React.useState("");
+  const [results,  setResults]  = React.useState([]);
+  const [loading,  setLoading]  = React.useState(false);
+  const [open,     setOpen]     = React.useState(false);
+  const debounceRef = React.useRef(null);
+  const f = font || "'Inter', system-ui, sans-serif";
+
+  function handleInput(e) {
+    var val = e.target.value;
+    setQuery(val);
+    setOpen(false);
+    clearTimeout(debounceRef.current);
+    if (val.trim().length < 4) { setResults([]); return; }
+    debounceRef.current = setTimeout(function() {
+      setLoading(true);
+      fetch("https://nominatim.openstreetmap.org/search?q=" + encodeURIComponent(val) +
+        "&format=json&addressdetails=1&countrycodes=us&limit=6",
+        { headers: { "Accept-Language": "en-US" } })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          setResults(data || []);
+          setOpen(true);
+          setLoading(false);
+        })
+        .catch(function() { setLoading(false); });
+    }, 400);
+  }
+
+  function pick(item) {
+    var a = item.address || {};
+    var street = [a.house_number, a.road].filter(Boolean).join(" ");
+    var city   = a.city || a.town || a.village || a.hamlet || a.county || "";
+    var state  = a.state_code ? a.state_code.toUpperCase() : (a.state || "");
+    var zip    = (a.postcode || "").split("-")[0]; // strip ZIP+4
+    setQuery(street ? street + ", " + city + ", " + state + " " + zip : item.display_name);
+    setOpen(false);
+    setResults([]);
+    onSelect({ street, city, state, zip });
+  }
+
+  return React.createElement("div", { style: { position: "relative", marginBottom: 12 } },
+    React.createElement("label", { style: { fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 4, fontFamily: f } },
+      "🔍 Search Address"
+    ),
+    React.createElement("input", {
+      type: "text", value: query,
+      onChange: handleInput,
+      onFocus: function() { if (results.length > 0) setOpen(true); },
+      onBlur: function() { setTimeout(function() { setOpen(false); }, 200); },
+      placeholder: "Start typing an address…",
+      style: { width: "100%", padding: "9px 12px", border: "1.5px solid #cbd5e1", borderRadius: 8,
+        fontSize: 14, fontFamily: f, outline: "none", boxSizing: "border-box",
+        background: "#f8fafc" }
+    }),
+    loading && React.createElement("div", { style: { fontSize: 12, color: "#94a3b8", fontFamily: f, marginTop: 4 } }, "Searching…"),
+    open && results.length > 0 && React.createElement("div", {
+      style: { position: "absolute", top: "100%", left: 0, right: 0, zIndex: 999,
+        background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8,
+        boxShadow: "0 8px 24px rgba(0,0,0,0.12)", marginTop: 2, maxHeight: 240, overflowY: "auto" }
+    },
+      results.map(function(item, i) {
+        var a = item.address || {};
+        var line1 = [a.house_number, a.road].filter(Boolean).join(" ");
+        var line2 = [a.city || a.town || a.village, a.state_code, (a.postcode||"").split("-")[0]].filter(Boolean).join(", ");
+        return React.createElement("div", {
+          key: i,
+          onMouseDown: function() { pick(item); },
+          style: { padding: "10px 14px", cursor: "pointer", borderBottom: i < results.length - 1 ? "1px solid #f1f5f9" : "none",
+            fontFamily: f, fontSize: 13 },
+          onMouseEnter: function(e) { e.currentTarget.style.background = "#f0f4f8"; },
+          onMouseLeave: function(e) { e.currentTarget.style.background = "#fff"; }
+        },
+          React.createElement("div", { style: { fontWeight: 600, color: "#1e293b" } }, line1 || item.display_name.split(",")[0]),
+          line2 && React.createElement("div", { style: { fontSize: 12, color: "#64748b", marginTop: 2 } }, line2)
+        );
+      })
+    )
+  );
+}
+
+// ── ActivityNotesPanel ────────────────────────────────────────────────────────
+// Right-panel notes feed with type (Call / Left Message / Note), author, timestamp
+const NOTE_TYPES = [
+  { value: "call",    label: "Call",     icon: "📞", color: "#16a34a" },
+  { value: "leftmsg", label: "Message",  icon: "📱", color: "#d97706" },
+  { value: "note",    label: "Note",     icon: "📝", color: "#1e3a5f" },
+];
+// Encode type into body: "call|body text"
+function encodeNote(type, body) { return type + "|" + body; }
+function decodeNote(raw) {
+  var sep = raw.indexOf("|");
+  if (sep < 0) return { type: "note", body: raw };
+  var t = raw.slice(0, sep);
+  if (["note","call","leftmsg"].includes(t)) return { type: t, body: raw.slice(sep + 1) };
+  return { type: "note", body: raw };
+}
+
+// A note is "long" if it has > 160 chars or multiple lines
+function isLongNote(body) {
+  return body.length > 160 || body.indexOf("\n") >= 0;
+}
+const COLLAPSED_MAX_HEIGHT = 72; // px
+
+function ActivityNotesPanel({ contactId, userName, font, isMobile, width }) {
+  const [notes,       setNotes]       = React.useState([]);
+  const [loading,     setLoading]     = React.useState(true);
+  const [noteText,    setNoteText]    = React.useState("");
+  const [noteType,    setNoteType]    = React.useState("note");
+  const [saving,      setSaving]      = React.useState(false);
+  const [expandedIds, setExpandedIds] = React.useState(new Set());
+  const [allExpanded, setAllExpanded] = React.useState(false);
+  const f = font || "'Inter', system-ui, sans-serif";
+  const addFn   = window.addContactNoteToSupabase;
+  const fetchFn = window.fetchContactNotesFromSupabase;
+
+  function toggleNote(id) {
+    setExpandedIds(function(prev) {
+      var next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  function expandAll(noteList) {
+    setExpandedIds(new Set((noteList || notes).map(function(n) { return n.id; })));
+    setAllExpanded(true);
+  }
+  function collapseAll() {
+    setExpandedIds(new Set());
+    setAllExpanded(false);
+  }
+
+  React.useEffect(function() {
+    if (!contactId || !fetchFn) { setLoading(false); return; }
+    fetchFn(contactId).then(function(res) {
+      setNotes(res.data || []);
+      setLoading(false);
+    });
+  }, [contactId]);
+
+  async function handleSubmit() {
+    if (!noteText.trim() || saving || !addFn) return;
+    setSaving(true);
+    var body = encodeNote(noteType, noteText.trim());
+    var res = await addFn({ contactId, body });
+    if (!res.error && res.data) {
+      setNotes(function(prev) { return [res.data, ...prev]; });
+      setNoteText("");
+    }
+    setSaving(false);
+  }
+
+  var panelStyle = isMobile
+    ? { padding: "16px 16px 32px", fontFamily: f }
+    : { width: width || 700, flexShrink: 0, height: "100%", overflowY: "auto",
+        borderLeft: "1px solid #e2e8f0", background: "#fff", padding: "20px 16px",
+        fontFamily: f, display: "flex", flexDirection: "column" };
+
+  return React.createElement("div", { style: panelStyle },
+    // Header
+    React.createElement("div", { style: { fontWeight: 800, fontSize: 15, color: "#1e3a5f", marginBottom: 14, letterSpacing: "-0.01em" } }, "Activity Notes"),
+
+    // Note type selector
+    React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 10 } },
+      NOTE_TYPES.map(function(t) {
+        var active = noteType === t.value;
+        return React.createElement("button", {
+          key: t.value,
+          onClick: function() { setNoteType(t.value); },
+          style: { flex: 1, padding: "6px 4px", fontSize: 12, fontWeight: 700, fontFamily: f,
+            border: "1.5px solid " + (active ? t.color : "#e2e8f0"),
+            borderRadius: 7, cursor: "pointer",
+            background: active ? t.color : "#fff",
+            color: active ? "#fff" : "#64748b",
+            transition: "all 0.15s" }
+        }, t.icon + " " + t.label);
+      })
+    ),
+
+    // Text area
+    React.createElement("textarea", {
+      value: noteText,
+      onChange: function(e) { setNoteText(e.target.value); },
+      onKeyDown: function(e) { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSubmit(); },
+      placeholder: "Add a note… (Ctrl+Enter to submit)",
+      rows: 3,
+      style: { width: "100%", padding: "9px 11px", border: "1.5px solid #e2e8f0", borderRadius: 8,
+        fontSize: 13, fontFamily: f, resize: "vertical", outline: "none", boxSizing: "border-box",
+        marginBottom: 8, lineHeight: 1.5, minHeight: 72 }
+    }),
+    React.createElement("button", {
+      onClick: handleSubmit,
+      disabled: !noteText.trim() || saving,
+      style: { width: "100%", padding: "8px 0", background: !noteText.trim() || saving ? "#e2e8f0" : "#1e3a5f",
+        color: !noteText.trim() || saving ? "#94a3b8" : "#fff", border: "none", borderRadius: 8,
+        fontSize: 13, fontWeight: 700, fontFamily: f, cursor: !noteText.trim() || saving ? "default" : "pointer",
+        marginBottom: 16 }
+    }, saving ? "Saving…" : "Add Note"),
+
+    // Expand / Collapse All — only shown when there are long notes
+    notes.some(function(n) { return isLongNote(decodeNote(n.body || "").body); }) && React.createElement("div", {
+      style: { display: "flex", justifyContent: "flex-end", marginBottom: 8 }
+    },
+      React.createElement("button", {
+        onClick: function() { allExpanded ? collapseAll() : expandAll(); },
+        style: { fontSize: 11, fontWeight: 700, color: "#64748b", background: "none", border: "none", cursor: "pointer", fontFamily: f, padding: 0, textDecoration: "underline" }
+      }, allExpanded ? "↑ Collapse All" : "↓ Expand All")
+    ),
+
+    // Divider
+    React.createElement("div", { style: { height: 1, background: "#f1f5f9", marginBottom: 12 } }),
+
+    // Feed
+    loading
+      ? React.createElement("div", { style: { fontSize: 13, color: "#94a3b8", textAlign: "center", padding: "20px 0" } }, "Loading…")
+      : notes.length === 0
+        ? React.createElement("div", { style: { fontSize: 13, color: "#94a3b8", textAlign: "center", padding: "20px 0" } }, "No notes yet.")
+        : React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 12, flex: 1, overflowY: isMobile ? "visible" : "auto" } },
+            notes.map(function(n) {
+              var decoded = decodeNote(n.body || "");
+              var typeMeta = NOTE_TYPES.find(function(t) { return t.value === decoded.type; }) || NOTE_TYPES[0];
+              var author = (n.profiles && n.profiles.display_name) || "";
+              var ts = n.created_at ? new Date(n.created_at) : null;
+              var tsLabel = ts ? ts.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" }) + " " + ts.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "";
+              var isLong     = isLongNote(decoded.body);
+              var isExpanded = expandedIds.has(n.id);
+              return React.createElement("div", {
+                key: n.id,
+                style: { background: "#f8fafc", borderRadius: 8, padding: "10px 12px", borderLeft: "3px solid " + typeMeta.color }
+              },
+                React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" } },
+                  React.createElement("span", { style: { fontSize: 11, fontWeight: 700, color: "#fff", background: typeMeta.color, borderRadius: 4, padding: "2px 8px" } }, typeMeta.icon + " " + typeMeta.label),
+                  React.createElement("span", { style: { fontSize: 11, color: "#64748b", fontWeight: 600 } },
+                    (author ? author + " · " : "") + tsLabel
+                  )
+                ),
+                React.createElement("div", {
+                  style: {
+                    fontSize: 13, color: "#1e293b", lineHeight: 1.55,
+                    whiteSpace: "pre-wrap", wordBreak: "break-word",
+                    overflow: "hidden",
+                    maxHeight: isLong && !isExpanded ? COLLAPSED_MAX_HEIGHT + "px" : "none",
+                    maskImage: isLong && !isExpanded ? "linear-gradient(to bottom, black 60%, transparent 100%)" : "none",
+                    WebkitMaskImage: isLong && !isExpanded ? "linear-gradient(to bottom, black 60%, transparent 100%)" : "none",
+                  }
+                }, decoded.body),
+                isLong && React.createElement("button", {
+                  onClick: function() { toggleNote(n.id); },
+                  style: { marginTop: 4, fontSize: 11, fontWeight: 700, color: typeMeta.color, background: "none", border: "none", cursor: "pointer", fontFamily: f, padding: 0 }
+                }, isExpanded ? "↑ Show less" : "↓ Read more")
+              );
+            })
+          )
+  );
+}
+
 function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onLogout, onSelectScenario, contacts, onSelectContact, onScenarios, onTasksScenarios, onTasksContacts, activeView, onSetView }) {
   const isInternal = !!(user && user.isInternal);
   const isAdmin    = !!(user && user.role === "admin");
@@ -651,9 +918,38 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
     window.addEventListener("resize", onResize);
     return function() { window.removeEventListener("resize", onResize); };
   }, []);
+
+  // Draggable right panel width
+  const [rightPanelWidth, setRightPanelWidth] = React.useState(function() {
+    try { var s = localStorage.getItem("cd_notes_width"); return s ? parseInt(s) : 700; } catch(e) { return 700; }
+  });
+  const isDraggingRef = React.useRef(false);
+  function startDrag(e) {
+    isDraggingRef.current = true;
+    var startX = e.clientX;
+    var startW = rightPanelWidth;
+    function onMove(ev) {
+      if (!isDraggingRef.current) return;
+      var delta = startX - ev.clientX; // drag left = wider
+      var newW = Math.max(280, Math.min(900, startW + delta));
+      setRightPanelWidth(newW);
+      try { localStorage.setItem("cd_notes_width", String(newW)); } catch(ex) {}
+    }
+    function onUp() {
+      isDraggingRef.current = false;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    }
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }
   const cols2  = isMobileCD ? "1fr" : "1fr 1fr";
   const cols3  = isMobileCD ? "1fr" : "1fr 1fr 1fr";
   const gap2   = isMobileCD ? "12px" : "24px";
+  // Applied to the RIGHT column div of any two-column section on mobile
+  const rightColStyle = isMobileCD
+    ? { borderTop: "1px solid #cbd5e1", paddingTop: 14, marginTop: 8 }
+    : {};
 
   // ── LO profiles for Assigned LO dropdown ─────────────────────────────────
   const [loProfiles, setLoProfiles] = useState([]);
@@ -730,12 +1026,28 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
     phone_cell: contact.phone_cell || contact.phone || "",
     phone_work: contact.phone_work || "",
     phone_home: contact.phone_home || "",
-    phone_best: contact.phone_best || "",
+    phone_best: contact.phone_best || (function() {
+      var phones = [contact.phone_cell || contact.phone, contact.phone_work, contact.phone_home].filter(Boolean);
+      if (phones.length === 1) {
+        if (contact.phone_cell || contact.phone) return "Cell";
+        if (contact.phone_work) return "Work";
+        if (contact.phone_home) return "Home";
+      }
+      return "";
+    })(),
     // Email (fall back to legacy email field for existing records)
     email_personal: contact.email_personal || contact.email || "",
     email_work:     contact.email_work     || "",
     email_other:    contact.email_other    || "",
-    email_best:     contact.email_best     || "",
+    email_best:     contact.email_best     || (function() {
+      var emails = [contact.email_personal || contact.email, contact.email_work, contact.email_other].filter(Boolean);
+      if (emails.length === 1) {
+        if (contact.email_personal || contact.email) return "Personal";
+        if (contact.email_work) return "Work";
+        if (contact.email_other) return "Other";
+      }
+      return "";
+    })(),
     // Notes + follow-up
     notes:       contact.notes       || "",
     note_quick:  contact.note_quick  || "",
@@ -748,6 +1060,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
     address1_zip:    contact.address1_zip    || contact.zip     || "",
     address1_state:  contact.address1_state  || contact.state   || "",
     address1_type:   contact.address1_type   || "Home",
+    mailing_address_primary: contact.mailing_address_primary || "address1",
     // Address 2
     address2_street: contact.address2_street || "",
     address2_city:   contact.address2_city   || "",
@@ -801,6 +1114,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
 
   // Portal account creation
   const [showPerson2,    setShowPerson2]    = useState(!!(contact.first_name2 || contact.last_name2 || contact.nickname2));
+  const [mobileTab,      setMobileTab]      = useState("contact"); // tracks active mobile tab highlight
   const [photoUploading, setPhotoUploading] = useState(false);
   const [copiedRefLink,    setCopiedRefLink]    = useState(false);
   const [partnerStatus,    setPartnerStatus]    = useState(null); // null | 'pending' | 'active'
@@ -1181,7 +1495,14 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
     background: "#fff", borderRadius: "12px",
     boxShadow: "0 1px 3px rgba(0,0,0,0.07)", padding: "20px",
     marginBottom: "16px", position: "relative",
+    maxWidth: "640px",
   };
+  // Double-click anywhere on a card opens edit mode
+  const cardDoubleClick = (isInternal && !editMode) ? function(e) {
+    var tag = e.target.tagName;
+    if (tag === "BUTTON" || tag === "A" || tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+    setEditMode(true); setSaveError(null);
+  } : null;
   const cardNum = (n) => (
     <span style={{
       position: "absolute", bottom: "10px", right: "14px",
@@ -1198,13 +1519,40 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
     textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "10px",
   };
 
+  // Live phone formatter — formats as digits are entered: (972) 829-8639
+  function liveFormatPhone(raw) {
+    var digits = (raw || "").replace(/\D/g, "");
+    // Strip leading 1 for display
+    if (digits.length === 11 && digits[0] === "1") digits = digits.slice(1);
+    if (digits.length === 0)  return "";
+    if (digits.length <= 3)   return "(" + digits;
+    if (digits.length <= 6)   return "(" + digits.slice(0,3) + ") " + digits.slice(3);
+    return "(" + digits.slice(0,3) + ") " + digits.slice(3,6) + "-" + digits.slice(6,10);
+  }
+  function handlePhoneChange(field, e) {
+    var input = e.target;
+    var raw = input.value;
+    var cursorPos = input.selectionStart;
+    var oldDigitsBefore = (raw.slice(0, cursorPos).replace(/\D/g, "")).length;
+    var newFormatted = liveFormatPhone(raw);
+    handleFieldChange(field, newFormatted);
+    // Restore cursor: find position after oldDigitsBefore digits in new formatted string
+    requestAnimationFrame(function() {
+      var count = 0;
+      var newPos = newFormatted.length;
+      for (var i = 0; i < newFormatted.length; i++) {
+        if (/\d/.test(newFormatted[i])) { count++; }
+        if (count === oldDigitsBefore && /\d/.test(newFormatted[i])) { newPos = i + 1; break; }
+      }
+      try { input.setSelectionRange(newPos, newPos); } catch(ex) {}
+    });
+  }
   function handlePhoneBlur(field) {
-    const raw = editForm[field] || "";
-    const digits = raw.replace(/\D/g, "");
+    // Already formatted live — just clean up edge cases
+    var raw = editForm[field] || "";
+    var digits = raw.replace(/\D/g, "");
     if (digits.length === 10)
-      handleFieldChange(field, `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`);
-    else if (digits.length === 11 && digits[0] === "1")
-      handleFieldChange(field, `(${digits.slice(1,4)}) ${digits.slice(4,7)}-${digits.slice(7)}`);
+      handleFieldChange(field, "(" + digits.slice(0,3) + ") " + digits.slice(3,6) + "-" + digits.slice(6));
   }
 
   const bestPhone = (() => {
@@ -1289,66 +1637,115 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
       {/* ── Body row: inline sidebar (internal) + content ────────── */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
 
-        {/* ── Content scroll area ─────────────────────────────────── */}
-        <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", background: "#f1f5f9" }}>
+        {/* ── Content scroll area (wrapped in column on mobile so tab bar sits above) ── */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: "#f1f5f9" }}>
+
+        {/* ── MOBILE FROZEN TAB BAR — lives OUTSIDE the scroll div so it never scrolls away ── */}
+        {isMobileCD && (
+          <div id="cd-content-top" style={{
+            flexShrink: 0, zIndex: 50, background: "#f1f5f9",
+            padding: "10px 12px 6px", borderBottom: "1px solid #e2e8f0",
+            display: "flex", flexDirection: "column", gap: "8px",
+          }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "8px" }}>
+          <div style={{ display: "flex", gap: "2px", background: "#e2e8f0", borderRadius: "10px", padding: "3px", width: "fit-content" }}>
+            {isInternal && (
+              <button onClick={function() {
+                setMobileTab("scenarios");
+                if (onSetView) onSetView("contact");
+                var el = document.getElementById("cd-scenarios-section"); if (el) el.scrollIntoView({ behavior: "auto" });
+              }} style={{ padding: "5px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600, border: "none", cursor: "pointer", whiteSpace: "nowrap", fontFamily: "'Inter', system-ui, sans-serif", background: mobileTab === "scenarios" ? "#ffffff" : "transparent", color: mobileTab === "scenarios" ? "#1e3a5f" : "#64748b", boxShadow: mobileTab === "scenarios" ? "0 1px 3px rgba(0,0,0,0.12)" : "none" }}>
+                Scenarios
+              </button>
+            )}
+            <button onClick={function() {
+              setMobileTab("team");
+              var el = document.getElementById("cd-team-section"); if (el) el.scrollIntoView({ behavior: "auto" });
+            }} style={{ padding: "5px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif", whiteSpace: "nowrap", background: mobileTab === "team" ? "#ffffff" : "transparent", color: mobileTab === "team" ? "#1e3a5f" : "#64748b", boxShadow: mobileTab === "team" ? "0 1px 3px rgba(0,0,0,0.12)" : "none" }}>
+              Team
+            </button>
+            {isInternal && (
+              <button onClick={function() {
+                setMobileTab("notes");
+                var el = document.getElementById("cd-notes-mobile"); if (el) el.scrollIntoView({ behavior: "auto" });
+              }} style={{ padding: "5px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600, border: "none", cursor: "pointer", whiteSpace: "nowrap", fontFamily: "'Inter', system-ui, sans-serif", background: mobileTab === "notes" ? "#ffffff" : "transparent", color: mobileTab === "notes" ? "#1e3a5f" : "#64748b", boxShadow: mobileTab === "notes" ? "0 1px 3px rgba(0,0,0,0.12)" : "none" }}>
+                Notes
+              </button>
+            )}
+          </div>
+          </div>
+          </div>
+        )}
+
+        <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
         <div
-          style={{ maxWidth: "1000px", margin: "0 auto", padding: isMobileCD ? "16px 12px" : "24px 16px", paddingBottom: editMode ? "120px" : "24px", boxSizing: "border-box", width: "100%" }}
+          style={{ maxWidth: "1000px", margin: "0 auto", padding: isMobileCD ? "12px 12px 16px" : "24px 16px", paddingBottom: editMode ? "120px" : "24px", boxSizing: "border-box", width: "100%" }}
           onDoubleClick={isInternal && !editMode ? function (e) {
-            if (e.target.tagName === "BUTTON" || e.target.tagName === "A" ||
-                e.target.tagName === "INPUT"  || e.target.tagName === "SELECT" ||
-                e.target.tagName === "TEXTAREA") return;
+            var tag = e.target.tagName;
+            if (tag === "BUTTON" || tag === "A" || tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
             setEditMode(true);
             setSaveError(null);
-          } : undefined}
+          } : null}
         >
 
-        {/* Tab bar + Create Login + Edit button — all on one row */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
+        {/* Tab bar + Create Login + Edit button — desktop only now */}
+        <div id="cd-content-top" style={{
+          display: isMobileCD ? "none" : "flex", flexDirection: "column", gap: "8px", marginBottom: "12px",
+        }}>
           {/* Row 1: tabs + buttons together */}
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <div style={{ display: "flex", gap: "2px", background: "#e2e8f0", borderRadius: "10px", padding: "3px", flex: 1 }}>
+          <div style={{ display: "flex", gap: "2px", background: "#e2e8f0", borderRadius: "10px", padding: "3px", width: "fit-content" }}>
+            {/* Scenarios — first on mobile */}
+            {isInternal && isMobileCD && (
+              <a href="#cd-scenarios-section"
+                style={{
+                  padding: "5px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600,
+                  textDecoration: "none", whiteSpace: "nowrap",
+                  background: "transparent", color: "#64748b",
+                  fontFamily: "'Inter', system-ui, sans-serif",
+                  display: "inline-block",
+                }}
+              >
+                Scenarios
+              </a>
+            )}
             <button
               onClick={function () { if (onSetView) onSetView("contact"); }}
               style={{
                 padding: "5px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600,
-                border: "none", cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif", flex: 1, whiteSpace: "nowrap",
+                border: "none", cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif", whiteSpace: "nowrap",
                 background: activeView === "contact" ? "#ffffff" : "transparent",
                 color:      activeView === "contact" ? "#1e3a5f"  : "#64748b",
                 boxShadow:  activeView === "contact" ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
                 transition: "background 0.15s, color 0.15s",
               }}
             >
-              Contact Info
+              Contact
             </button>
             <button
-              onClick={function () { if (onSetView) onSetView("network"); }}
+              onClick={function () { var el = document.getElementById("cd-team-section"); if (el) el.scrollIntoView({ behavior: "auto" }); }}
               style={{
                 padding: "5px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600,
-                border: "none", cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif", flex: 1, whiteSpace: "nowrap",
-                background: activeView === "network" ? "#ffffff" : "transparent",
-                color:      activeView === "network" ? "#1e3a5f"  : "#64748b",
-                boxShadow:  activeView === "network" ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
+                border: "none", cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif", whiteSpace: "nowrap",
+                background: "transparent", color: "#64748b",
                 transition: "background 0.15s, color 0.15s",
-                whiteSpace: "nowrap",
               }}
             >
-              My Team
+              Team
             </button>
-            {isInternal && (
-              <button
-                onClick={function () { if (onSetView) onSetView("internal"); }}
+            {/* Notes — last on mobile */}
+            {isInternal && isMobileCD && (
+              <a href="#cd-notes-mobile"
                 style={{
                   padding: "5px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600,
-                  border: "none", cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif",
-                  background: activeView === "internal" ? "#ffffff" : "transparent",
-                  color:      activeView === "internal" ? "#1e3a5f"  : "#64748b",
-                  boxShadow:  activeView === "internal" ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
-                  transition: "background 0.15s, color 0.15s",
-                  whiteSpace: "nowrap",
+                  textDecoration: "none", whiteSpace: "nowrap",
+                  background: "transparent", color: "#64748b",
+                  fontFamily: "'Inter', system-ui, sans-serif",
+                  display: "inline-block",
                 }}
               >
-                Internal Notes
-              </button>
+                Notes
+              </a>
             )}
           </div>
           </div>{/* end tabs pill */}
@@ -1356,22 +1753,9 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
           {!editMode && (
             <div style={{ display: "flex", gap: "8px", alignItems: "center", flexShrink: 0 }}>
               {/* Create Login / Login Active — Contact Info tab only */}
-              {activeView === "contact" && canManage && (portalCreated || contact.auth_user_id ||
-                contact.email_personal || contact.email || contact.email_work) && (
-                (portalCreated || contact.auth_user_id) ? (
-                  <button
-                    disabled
-                    style={{
-                      background: "#dcfce7", color: "#16a34a",
-                      border: "1px solid #86efac", borderRadius: "8px",
-                      padding: "4px 14px", fontSize: "13px", fontWeight: 700,
-                      cursor: "default", fontFamily: "'Inter', system-ui, sans-serif",
-                      opacity: 1, flexShrink: 0,
-                    }}
-                  >
-                    ✓ Login Active
-                  </button>
-                ) : (
+              {/* Create Login button — only shown when no portal exists yet */}
+              {activeView === "contact" && canManage && !(portalCreated || contact.auth_user_id) &&
+                (contact.email_personal || contact.email || contact.email_work) && (
                   <button
                     onClick={handleCreatePortal}
                     disabled={portalLoading}
@@ -1387,7 +1771,6 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                   >
                     {portalLoading ? "Creating…" : "Create Login"}
                   </button>
-                )
               )}
               {/* Edit button replaced by floating action button below */}
             </div>
@@ -1408,112 +1791,69 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
         )}
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        {/* CARD 1 — Linked Scenarios                                          */}
+        {/* CARD 1 — Scenarios                                                  */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        <div style={sectionStyle}>{cardNum(1)}
-          <h3 style={{ margin: "0 0 14px", fontSize: "16px", fontWeight: "700", color: "#1e293b" }}>
-            Linked Scenarios
-          </h3>
+        <div id="cd-scenarios-section" style={sectionStyle} onDoubleClick={cardDoubleClick}>{cardNum(1)}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+            <div style={sectionTitleStyle}>Scenarios</div>
+            {onSelectScenario && (
+              <button onClick={handleNewScenario} disabled={creatingScenario} style={{
+                background: creatingScenario ? "#e2e8f0" : "#1e3a5f",
+                color: creatingScenario ? "#94a3b8" : "#fff",
+                border: "none", borderRadius: "7px", padding: "5px 14px",
+                fontSize: "12px", fontWeight: 700, cursor: creatingScenario ? "not-allowed" : "pointer",
+              }}>
+                {creatingScenario ? "Creating…" : "+ New Scenario"}
+              </button>
+            )}
+          </div>
           {scenariosLoading ? (
-            <div style={{ textAlign: "center", color: "#94a3b8", padding: "20px", fontSize: "14px" }}>
-              Loading...
-            </div>
+            <div style={{ textAlign: "center", color: "#94a3b8", padding: "20px", fontSize: "14px" }}>Loading...</div>
           ) : linkedScenarios.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "20px" }}>
-              <div style={{ color: "#94a3b8", fontSize: "14px", marginBottom: "14px" }}>
-                No scenarios linked to this contact yet.
-              </div>
-              {onSelectScenario && (
-                <button
-                  onClick={handleNewScenario}
-                  disabled={creatingScenario}
-                  style={{
-                    background: creatingScenario ? "#e2e8f0" : "#1e3a5f",
-                    color: creatingScenario ? "#94a3b8" : "#fff",
-                    border: "none", borderRadius: "8px",
-                    padding: "10px 22px", fontSize: "13px", fontWeight: 700,
-                    cursor: creatingScenario ? "not-allowed" : "pointer",
-                  }}
-                >
-                  {creatingScenario ? "Creating…" : "+ Start New Scenario"}
-                </button>
-              )}
-            </div>
+            <div style={{ color: "#94a3b8", fontSize: "14px", padding: "12px 0" }}>No scenarios yet.</div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              {linkedScenarios.map(function (s) {
-                const ls      = s.lead_status  || "?";
-                const lsColor = cdGetLeadStatusColors(ls);
-                const lp      = s.loan_purpose || "purchase";
-                const lpLabel = cdGetLoanPurposeLabel(lp);
-                return (
-                  <div key={s.id} style={{
-                    background: "#f8fafc", borderRadius: "8px", padding: "10px 14px",
-                    borderLeft: "3px solid #2d5a8e",
-                  }}>
-                    <div style={{ fontSize: "14px", fontWeight: 600, color: "#1e293b", marginBottom: "4px" }}>
-                      {s.name || "Untitled Scenario"}
-                    </div>
-                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "4px" }}>
-                      <span style={{
-                        fontSize: "11px", fontWeight: 700,
-                        padding: "2px 8px", borderRadius: "6px",
-                        background: lsColor.bg, color: lsColor.text,
-                      }}>
-                        {ls}
-                      </span>
-                      {lp !== "purchase" && (
-                        <span style={{
-                          fontSize: "11px", fontWeight: 700,
-                          padding: "2px 8px", borderRadius: "6px",
-                          background: "rgba(139,92,246,0.12)", color: "#7c3aed",
-                        }}>
-                          {lpLabel}
-                        </span>
-                      )}
-                    </div>
-                    {s.property_address && (
-                      <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "2px" }}>
-                        {s.property_address}
-                      </div>
-                    )}
-                    {(s.lead_source || s.target_close_date || s.actual_close_date) && (
-                      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", fontSize: "12px", marginBottom: "2px" }}>
-                        {s.lead_source && (
-                          <span style={{ color: "#64748b" }}>{s.lead_source}</span>
-                        )}
-                        {s.target_close_date && (
-                          <span style={{ color: "#b45309" }}>Target: {cdFormatDateOnly(s.target_close_date)}</span>
-                        )}
-                        {s.actual_close_date && (
-                          <span style={{ color: "#16a34a" }}>Closed: {cdFormatDateOnly(s.actual_close_date)}</span>
-                        )}
-                      </div>
-                    )}
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "4px" }}>
-                      <div style={{ fontSize: "11px", color: "#94a3b8" }}>
-                        Updated {s.updated_at ? new Date(s.updated_at).toLocaleDateString() : "—"}
-                      </div>
-                      {onSelectScenario && (
-                        <button
-                          onClick={function (e) { e.stopPropagation(); handleOpenScenario(s.id); }}
-                          disabled={openingScenario === s.id}
-                          style={{
-                            background: openingScenario === s.id ? "#e2e8f0" : "#1e3a5f",
-                            color:      openingScenario === s.id ? "#94a3b8" : "#fff",
-                            border: "none", borderRadius: "6px",
-                            padding: "4px 12px", fontSize: "12px", fontWeight: 600,
-                            cursor: openingScenario === s.id ? "not-allowed" : "pointer",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {openingScenario === s.id ? "Opening..." : "Open →"}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                <thead>
+                  <tr style={{ background: "#f1f5f9" }}>
+                    <th style={{ textAlign: "left", padding: "7px 12px", fontWeight: 700, color: "#475569", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid #e2e8f0" }}>Scenario Name</th>
+                    <th style={{ textAlign: "left", padding: "7px 12px", fontWeight: 700, color: "#475569", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid #e2e8f0" }}>Purpose</th>
+                    <th style={{ textAlign: "left", padding: "7px 12px", fontWeight: 700, color: "#475569", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" }}>Created</th>
+                    <th style={{ padding: "7px 12px", borderBottom: "1px solid #e2e8f0" }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {linkedScenarios.map(function(s, i) {
+                    var lp = s.loan_purpose || "purchase";
+                    var lpLabel = cdGetLoanPurposeLabel(lp);
+                    var createdDate = s.created_at ? new Date(s.created_at).toLocaleDateString() : "—";
+                    return (
+                      <tr key={s.id} style={{ background: i % 2 === 0 ? "#fff" : "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                        <td style={{ padding: "9px 12px", fontWeight: 600, color: "#1e293b" }}>
+                          {s.name || "Untitled Scenario"}
+                        </td>
+                        <td style={{ padding: "9px 12px", color: "#475569" }}>{lpLabel}</td>
+                        <td style={{ padding: "9px 12px", color: "#94a3b8", whiteSpace: "nowrap" }}>{createdDate}</td>
+                        <td style={{ padding: "9px 12px", textAlign: "right" }}>
+                          {onSelectScenario && (
+                            <button onClick={function(e) { e.stopPropagation(); handleOpenScenario(s.id); }}
+                              disabled={openingScenario === s.id}
+                              style={{
+                                background: openingScenario === s.id ? "#e2e8f0" : "#1e3a5f",
+                                color: openingScenario === s.id ? "#94a3b8" : "#fff",
+                                border: "none", borderRadius: "6px", padding: "4px 12px",
+                                fontSize: "12px", fontWeight: 600, cursor: openingScenario === s.id ? "not-allowed" : "pointer",
+                                whiteSpace: "nowrap",
+                              }}>
+                              {openingScenario === s.id ? "Opening..." : "Open →"}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
@@ -1522,12 +1862,14 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
         {/* CARD 2 — Personal Info                                             */}
         {/* Left: First / Nickname / Last   Right: Type / Category / Source   */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        <div style={sectionStyle}>{cardNum(2)}
-          <div style={sectionTitleStyle}>Personal Info</div>
+        <div style={sectionStyle} onDoubleClick={cardDoubleClick}>{cardNum(2)}
+          <div style={sectionTitleStyle}>Names</div>
           {editMode ? (
+            <div>
             <div style={{ display: "grid", gridTemplateColumns: cols2, gap: gap2 }}>
               {/* Left: Name (Client 1) */}
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0C4160", marginBottom: 4 }}>Person 1</div>
                 <div>
                   <label style={labelStyle}>Prefix</label>
                   <select
@@ -1550,7 +1892,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                     style={fieldStyle}
                     value={editForm.first_name}
                     onChange={function (e) { handleFieldChange("first_name", e.target.value); }}
-                    placeholder="First name"
+                    placeholder=""
                   />
                 </div>
                 <div>
@@ -1559,7 +1901,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                     style={fieldStyle}
                     value={editForm.nickname}
                     onChange={function (e) { handleFieldChange("nickname", e.target.value); }}
-                    placeholder="Nickname"
+                    placeholder=""
                   />
                 </div>
                 <div>
@@ -1568,51 +1910,63 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                     style={fieldStyle}
                     value={editForm.last_name}
                     onChange={function (e) { handleFieldChange("last_name", e.target.value); }}
-                    placeholder="Last name"
+                    placeholder=""
                   />
                 </div>
-                {isMobileCD && editForm.contact_type !== "client" && (
-                  <div>
-                    <label style={labelStyle}>Company</label>
-                    <input style={fieldStyle} value={editForm.company}
-                      onChange={function(e) { handleFieldChange("company", e.target.value); }}
-                      placeholder="Employer / company name" />
-                  </div>
-                )}
-                {isMobileCD && editForm.contact_type !== "client" && (
-                  <div>
-                    <label style={labelStyle}>Team Name</label>
-                    <input style={fieldStyle} value={editForm.team_name}
-                      onChange={function(e) { handleFieldChange("team_name", e.target.value); }}
-                      placeholder="e.g. Sample Team Name" />
-                  </div>
-                )}
               </div>
-              {/* Right column: Company + Team Name for business contacts (desktop only) */}
+              {/* Right column: Person 2 fields */}
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                {!isMobileCD && editForm.contact_type !== "client" && (
-                  <div>
-                    <label style={labelStyle}>Company</label>
-                    <input style={fieldStyle} value={editForm.company}
-                      onChange={function(e) { handleFieldChange("company", e.target.value); }}
-                      placeholder="Employer / company name" />
-                  </div>
-                )}
-                {!isMobileCD && editForm.contact_type !== "client" && (
-                  <div>
-                    <label style={labelStyle}>Team Name</label>
-                    <input style={fieldStyle} value={editForm.team_name}
-                      onChange={function(e) { handleFieldChange("team_name", e.target.value); }}
-                      placeholder="e.g. Sample Team Name" />
-                  </div>
-                )}
+                <div style={isMobileCD ? { borderTop: "1px solid #cbd5e1", marginTop: 8, paddingTop: 14, fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0C4160", marginBottom: 4 } : { borderTop: "1px solid #e2e8f0", paddingTop: 10, fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0C4160", marginBottom: 4 }}>Person 2</div>
+                <div>
+                  <label style={labelStyle}>Prefix (2)</label>
+                  <select style={fieldStyle} value={editForm.prefix2}
+                    onChange={function(e) { handleFieldChange("prefix2", e.target.value); }}>
+                    <option value="">&mdash; None &mdash;</option>
+                    <option value="Mr.">Mr.</option>
+                    <option value="Mrs.">Mrs.</option>
+                    <option value="Ms.">Ms.</option>
+                    <option value="Dr.">Dr.</option>
+                    <option value="Rev.">Rev.</option>
+                    <option value="Prof.">Prof.</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>First Name (2)</label>
+                  <input style={fieldStyle} value={editForm.first_name2}
+                    onChange={function(e) { handleFieldChange("first_name2", e.target.value); }} placeholder="" />
+                </div>
+                <div>
+                  <label style={labelStyle}>Nickname (2)</label>
+                  <input style={fieldStyle} value={editForm.nickname2}
+                    onChange={function(e) { handleFieldChange("nickname2", e.target.value); }} placeholder="" />
+                </div>
+                <div>
+                  <label style={labelStyle}>Last Name (2)</label>
+                  <input style={fieldStyle} value={editForm.last_name2}
+                    onChange={function(e) { handleFieldChange("last_name2", e.target.value); }} placeholder="" />
+                </div>
+                <div>
+                  <label style={labelStyle}>Connection to Person 1</label>
+                  <select style={fieldStyle} value={editForm.connection_to_contact1}
+                    onChange={function(e) { handleFieldChange("connection_to_contact1", e.target.value); }}>
+                    <option value="">&mdash; None &mdash;</option>
+                    <option value="Spouse">Spouse</option>
+                    <option value="Significant Other">Significant Other</option>
+                    <option value="Parent">Parent</option>
+                    <option value="Child">Child</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
               </div>
+            </div>
             </div>
           ) : (
             /* Read View */
-            <div style={{ display: "grid", gridTemplateColumns: cols2, gap: "16px" }}>
+            <div>
+            <div style={{ display: "grid", gridTemplateColumns: contact.first_name2 ? cols2 : "1fr", gap: "16px" }}>
+              {/* Left: Name fields */}
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                {/* Photo + logo display for business contacts */}
+                {contact.first_name2 && <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0C4160", marginBottom: 4 }}>Person 1</div>}
                 {isBusiness && (contact.photo_url || contact.logo_url) && (
                   <div style={{ display: "flex", gap: 10, marginBottom: 4 }}>
                     {contact.photo_url && <img src={contact.photo_url} alt="Headshot" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: "50%", border: "2px solid #E8EEF4" }} />}
@@ -1623,10 +1977,19 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                 <InfoRow label="First Name" value={contact.first_name} />
                 <InfoRow label="Nickname"   value={contact.nickname} />
                 <InfoRow label="Last Name"  value={contact.last_name} />
-                {contact.contact_type !== "client" && <InfoRow label="Company" value={contact.company} />}
               </div>
-              {/* Classification moved to Internal Info section below */}
-              <div />
+              {/* Right: Person 2 — only shown when first_name2 exists */}
+              {contact.first_name2 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  <div style={isMobileCD ? { borderTop: "1px solid #cbd5e1", marginTop: 8, paddingTop: 14, fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0C4160", marginBottom: 4 } : { borderTop: "1px solid #e2e8f0", paddingTop: 10, fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0C4160", marginBottom: 4 }}>Person 2</div>
+                  <InfoRow label="Prefix (2)"     value={contact.prefix2} />
+                  <InfoRow label="First Name (2)" value={contact.first_name2} />
+                  <InfoRow label="Nickname (2)"   value={contact.nickname2} />
+                  <InfoRow label="Last Name (2)"  value={contact.last_name2} />
+                  <InfoRow label="Connection"     value={contact.connection_to_contact1} />
+                </div>
+              )}
+            </div>
             </div>
           )}
 
@@ -1634,8 +1997,8 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
 
         {/* Internal Info - LO/Admin only */}
         {(isInternal || isAdmin) && (
-          <div style={sectionStyle}>
-            <div style={sectionTitleStyle}>Internal Info</div>
+          <div style={sectionStyle} onDoubleClick={cardDoubleClick}>
+            <div style={sectionTitleStyle}>Lead Details (Internal)</div>
             {editMode ? (
               <div style={{ display: "grid", gridTemplateColumns: cols2, gap: "16px" }}>
                 {/* Left: Type + Category */}
@@ -1662,7 +2025,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                   </div>
                 </div>
                 {/* Right: Source + Assigned LO */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px", ...rightColStyle }}>
                   <div>
                     <label style={labelStyle}>Source (Referred By)</label>
                     <ReferralPickerCD value={editForm.referred_by_contact_id}
@@ -1679,6 +2042,15 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                       </select>
                     </div>
                   )}
+                  {canManage && (
+                    <div>
+                      <div style={{ fontSize: "11px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>Portal Access</div>
+                      {(portalCreated || contact.auth_user_id)
+                        ? <span style={{ fontSize: "14px", fontWeight: 700, color: "#16a34a" }}>✓ Login Active</span>
+                        : <span style={{ fontSize: "14px", color: "#94a3b8" }}>No login yet</span>
+                      }
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
@@ -1689,7 +2061,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                 <InfoRow label="Category" value={contact.contact_category} />
                 </div>
                 {/* Right: Source + Assigned LO + Creator + Referral */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px", ...rightColStyle }}>
                 <div>
                   <div style={{ fontSize: "11px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>Source (Referred By)</div>
                   {(() => {
@@ -1705,6 +2077,15 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                     );
                   })()}
                 </div>
+                {canManage && (
+                  <div>
+                    <div style={{ fontSize: "11px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>Portal Access</div>
+                    {(portalCreated || contact.auth_user_id)
+                      ? <span style={{ fontSize: "14px", fontWeight: 700, color: "#16a34a" }}>✓ Login Active</span>
+                      : <span style={{ fontSize: "14px", color: "#94a3b8" }}>No login yet</span>
+                    }
+                  </div>
+                )}
                 {contact.contact_type !== "business" && (() => {
                   var alo = contact.assigned_lo_id ? loProfiles.find(function(lo) { return lo.id === contact.assigned_lo_id; }) : null;
                   return <InfoRow label="Assigned LO" value={alo ? (alo.display_name || alo.email) : null} />;
@@ -1740,251 +2121,141 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
 
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        {/* Contact Info                                                        */}
-        {/* Left: Cell/Work/Home/Best   Right: Personal/Work/Other/Best       */}
+        {/* Contact Info — phones left column, emails right column           */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        <div style={sectionStyle}>
+        <div style={sectionStyle} onDoubleClick={cardDoubleClick}>
           <div style={sectionTitleStyle}>Contact Info</div>
+          <div style={{ display: "grid", gridTemplateColumns: cols2, gap: gap2 }}>
+          {/* Left: Phone */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            {isMobileCD && <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0C4160", marginBottom: 4 }}>Phone</div>}
           {editMode ? (
-            <div style={{ display: "grid", gridTemplateColumns: cols2, gap: gap2 }}>
-              {/* Left: Phone */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                <div>
-                  <label style={labelStyle}>Phone: Cell</label>
-                  <input
-                    style={fieldStyle} type="tel"
-                    value={editForm.phone_cell}
-                    onChange={function (e) { handleFieldChange("phone_cell", e.target.value); }}
-                    onBlur={function () { handlePhoneBlur("phone_cell"); }}
-                    placeholder="(555) 555-5555"
-                  />
-                </div>
-                <div>
-                  <label style={labelStyle}>Phone: Work</label>
-                  <input
-                    style={fieldStyle} type="tel"
-                    value={editForm.phone_work}
-                    onChange={function (e) { handleFieldChange("phone_work", e.target.value); }}
-                    onBlur={function () { handlePhoneBlur("phone_work"); }}
-                    placeholder="(555) 555-5555"
-                  />
-                </div>
-                <div>
-                  <label style={labelStyle}>Phone: Home</label>
-                  <input
-                    style={fieldStyle} type="tel"
-                    value={editForm.phone_home}
-                    onChange={function (e) { handleFieldChange("phone_home", e.target.value); }}
-                    onBlur={function () { handlePhoneBlur("phone_home"); }}
-                    placeholder="(555) 555-5555"
-                  />
-                </div>
-                <div>
-                  <label style={labelStyle}>Phone: Best</label>
-                  <select
-                    style={fieldStyle}
-                    value={editForm.phone_best}
-                    onChange={function (e) { handleFieldChange("phone_best", e.target.value); }}
-                  >
-                    <option value="">&mdash; Select &mdash;</option>
-                    <option value="Cell">Cell</option>
-                    <option value="Work">Work</option>
-                    <option value="Home">Home</option>
-                  </select>
-                </div>
+            <React.Fragment>
+              <div><label style={labelStyle}>Phone: Cell</label><input style={fieldStyle} type="tel" inputMode="tel" value={editForm.phone_cell} onChange={function(e){handlePhoneChange("phone_cell",e);}} onBlur={function(){handlePhoneBlur("phone_cell");}} placeholder="" /></div>
+              <div><label style={labelStyle}>Phone: Work</label><input style={fieldStyle} type="tel" inputMode="tel" value={editForm.phone_work} onChange={function(e){handlePhoneChange("phone_work",e);}} onBlur={function(){handlePhoneBlur("phone_work");}} placeholder="" /></div>
+              <div><label style={labelStyle}>Phone: Home</label><input style={fieldStyle} type="tel" inputMode="tel" value={editForm.phone_home} onChange={function(e){handlePhoneChange("phone_home",e);}} onBlur={function(){handlePhoneBlur("phone_home");}} placeholder="" /></div>
+              <div><label style={labelStyle}>Phone: Best</label>
+                <select style={fieldStyle} value={editForm.phone_best} onChange={function(e){handleFieldChange("phone_best",e.target.value);}}>
+                  <option value="">&mdash; Select &mdash;</option>
+                  <option value="Cell">Cell</option>
+                  <option value="Work">Work</option>
+                  <option value="Home">Home</option>
+                </select>
               </div>
-              {/* Right: Email */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                <div>
-                  <label style={labelStyle}>Email: Personal</label>
-                  <input
-                    style={fieldStyle} type="email"
-                    value={editForm.email_personal}
-                    onChange={function (e) { handleFieldChange("email_personal", e.target.value); }}
-                    placeholder="email@example.com"
-                  />
-                </div>
-                <div>
-                  <label style={labelStyle}>Email: Work</label>
-                  <input
-                    style={fieldStyle} type="email"
-                    value={editForm.email_work}
-                    onChange={function (e) { handleFieldChange("email_work", e.target.value); }}
-                    placeholder="email@company.com"
-                  />
-                </div>
-                <div>
-                  <label style={labelStyle}>Email: Other</label>
-                  <input
-                    style={fieldStyle} type="email"
-                    value={editForm.email_other}
-                    onChange={function (e) { handleFieldChange("email_other", e.target.value); }}
-                    placeholder="other@example.com"
-                  />
-                </div>
-                <div>
-                  <label style={labelStyle}>Email: Best</label>
-                  <select
-                    style={fieldStyle}
-                    value={editForm.email_best}
-                    onChange={function (e) { handleFieldChange("email_best", e.target.value); }}
-                  >
-                    <option value="">&mdash; Select &mdash;</option>
-                    <option value="Personal">Personal</option>
-                    <option value="Work">Work</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-              </div>
-            </div>
+            </React.Fragment>
           ) : (
-            /* Read View */
-            <div style={{ display: "grid", gridTemplateColumns: cols2, gap: "16px" }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                <InfoRow label="Phone: Cell" value={cdFormatPhone(contact.phone_cell || contact.phone)} />
-                <InfoRow label="Phone: Work" value={cdFormatPhone(contact.phone_work)} />
-                <InfoRow label="Phone: Home" value={cdFormatPhone(contact.phone_home)} />
-                <InfoRow label="Phone: Best" value={contact.phone_best} />
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                <InfoRow label="Email: Personal" value={contact.email_personal || contact.email} />
-                <InfoRow label="Email: Work"     value={contact.email_work} />
-                <InfoRow label="Email: Other"    value={contact.email_other} />
-                <InfoRow label="Email: Best"     value={contact.email_best} />
-              </div>
-            </div>
+            <React.Fragment>
+              <InfoRow label="Phone: Cell" value={cdFormatPhone(contact.phone_cell || contact.phone)} />
+              <InfoRow label="Phone: Work" value={cdFormatPhone(contact.phone_work)} />
+              <InfoRow label="Phone: Home" value={cdFormatPhone(contact.phone_home)} />
+              <InfoRow label="Phone: Best" value={contact.phone_best || (function() {
+                var phones = [contact.phone_cell || contact.phone, contact.phone_work, contact.phone_home].filter(Boolean);
+                if (phones.length === 1) { if (contact.phone_cell || contact.phone) return "Cell"; if (contact.phone_work) return "Work"; if (contact.phone_home) return "Home"; }
+                return null;
+              })()} />
+            </React.Fragment>
           )}
+          </div>
+          {/* Right: Email */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px", ...rightColStyle }}>
+            {isMobileCD && <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0C4160", marginBottom: 4 }}>Email</div>}
+            {editMode ? (<React.Fragment>
+              <div><label style={labelStyle}>Email: Personal</label><input style={fieldStyle} type="email" value={editForm.email_personal} onChange={function (e) { handleFieldChange("email_personal", e.target.value); }} placeholder="" /></div>
+              <div><label style={labelStyle}>Email: Work</label><input style={fieldStyle} type="email" value={editForm.email_work} onChange={function (e) { handleFieldChange("email_work", e.target.value); }} placeholder="" /></div>
+              <div><label style={labelStyle}>Email: Other</label><input style={fieldStyle} type="email" value={editForm.email_other} onChange={function (e) { handleFieldChange("email_other", e.target.value); }} placeholder="" /></div>
+              <div><label style={labelStyle}>Email: Best</label>
+                <select style={fieldStyle} value={editForm.email_best} onChange={function (e) { handleFieldChange("email_best", e.target.value); }}>
+                  <option value="">&mdash; Select &mdash;</option>
+                  <option value="Personal">Personal</option>
+                  <option value="Work">Work</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+            </React.Fragment>) : (<React.Fragment>
+              <InfoRow label="Email: Personal" value={contact.email_personal || contact.email} />
+              <InfoRow label="Email: Work"     value={contact.email_work} />
+              <InfoRow label="Email: Other"    value={contact.email_other} />
+              <InfoRow label="Email: Best"     value={contact.email_best || (function() {
+                var emails = [contact.email_personal || contact.email, contact.email_work, contact.email_other].filter(Boolean);
+                if (emails.length === 1) { if (contact.email_personal || contact.email) return "Personal"; if (contact.email_work) return "Work"; if (contact.email_other) return "Other"; }
+                return null;
+              })()} />
+            </React.Fragment>)}
+          </div>
+          </div>{/* end contact info grid */}
         </div>
 
           </React.Fragment>
         )}
 
-        {/* ── My Team tab ──────────────────────────────────────────── */}
-        {activeView === "network" && (
-          <TransactionTeamTab
-            contact={contact}
-            contacts={contacts}
-            loProfiles={loProfiles}
-            isInternal={isInternal}
-            isPartner={isPartner}
-            user={user}
-            onSelectContact={onSelectContact}
-            onNetworkPatched={function(newLinks) {
-              if (onSave) onSave(Object.assign({}, contact, { network_links: newLinks }));
-            }}
-          />
-        )}
 
         {activeView === "internal" && isInternal && (
           <React.Fragment>
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        {/* CARD 1 — Linked Scenarios (copy)                                   */}
+        {/* CARD 1 — Scenarios (copy)                                          */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        <div style={sectionStyle}>{cardNum(1)}
-          <h3 style={{ margin: "0 0 14px", fontSize: "16px", fontWeight: "700", color: "#1e293b" }}>
-            Linked Scenarios
-          </h3>
+        <div style={sectionStyle} onDoubleClick={cardDoubleClick}>{cardNum(1)}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+            <div style={sectionTitleStyle}>Scenarios</div>
+            {onSelectScenario && (
+              <button onClick={handleNewScenario} disabled={creatingScenario} style={{
+                background: creatingScenario ? "#e2e8f0" : "#1e3a5f",
+                color: creatingScenario ? "#94a3b8" : "#fff",
+                border: "none", borderRadius: "7px", padding: "5px 14px",
+                fontSize: "12px", fontWeight: 700, cursor: creatingScenario ? "not-allowed" : "pointer",
+              }}>
+                {creatingScenario ? "Creating…" : "+ New Scenario"}
+              </button>
+            )}
+          </div>
           {scenariosLoading ? (
-            <div style={{ textAlign: "center", color: "#94a3b8", padding: "20px", fontSize: "14px" }}>
-              Loading...
-            </div>
+            <div style={{ textAlign: "center", color: "#94a3b8", padding: "20px", fontSize: "14px" }}>Loading...</div>
           ) : linkedScenarios.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "20px" }}>
-              <div style={{ color: "#94a3b8", fontSize: "14px", marginBottom: "14px" }}>
-                No scenarios linked to this contact yet.
-              </div>
-              {onSelectScenario && (
-                <button
-                  onClick={handleNewScenario}
-                  disabled={creatingScenario}
-                  style={{
-                    background: creatingScenario ? "#e2e8f0" : "#1e3a5f",
-                    color: creatingScenario ? "#94a3b8" : "#fff",
-                    border: "none", borderRadius: "8px",
-                    padding: "10px 22px", fontSize: "13px", fontWeight: 700,
-                    cursor: creatingScenario ? "not-allowed" : "pointer",
-                  }}
-                >
-                  {creatingScenario ? "Creating…" : "+ Start New Scenario"}
-                </button>
-              )}
-            </div>
+            <div style={{ color: "#94a3b8", fontSize: "14px", padding: "12px 0" }}>No scenarios yet.</div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              {linkedScenarios.map(function (s) {
-                const ls      = s.lead_status  || "?";
-                const lsColor = cdGetLeadStatusColors(ls);
-                const lp      = s.loan_purpose || "purchase";
-                const lpLabel = cdGetLoanPurposeLabel(lp);
-                return (
-                  <div key={s.id} style={{
-                    background: "#f8fafc", borderRadius: "8px", padding: "10px 14px",
-                    borderLeft: "3px solid #2d5a8e",
-                  }}>
-                    <div style={{ fontSize: "14px", fontWeight: 600, color: "#1e293b", marginBottom: "4px" }}>
-                      {s.name || "Untitled Scenario"}
-                    </div>
-                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "4px" }}>
-                      <span style={{
-                        fontSize: "11px", fontWeight: 700,
-                        padding: "2px 8px", borderRadius: "6px",
-                        background: lsColor.bg, color: lsColor.text,
-                      }}>
-                        {ls}
-                      </span>
-                      {lp !== "purchase" && (
-                        <span style={{
-                          fontSize: "11px", fontWeight: 700,
-                          padding: "2px 8px", borderRadius: "6px",
-                          background: "rgba(139,92,246,0.12)", color: "#7c3aed",
-                        }}>
-                          {lpLabel}
-                        </span>
-                      )}
-                    </div>
-                    {s.property_address && (
-                      <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "2px" }}>
-                        {s.property_address}
-                      </div>
-                    )}
-                    {(s.lead_source || s.target_close_date || s.actual_close_date) && (
-                      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", fontSize: "12px", marginBottom: "2px" }}>
-                        {s.lead_source && (
-                          <span style={{ color: "#64748b" }}>{s.lead_source}</span>
-                        )}
-                        {s.target_close_date && (
-                          <span style={{ color: "#b45309" }}>Target: {cdFormatDateOnly(s.target_close_date)}</span>
-                        )}
-                        {s.actual_close_date && (
-                          <span style={{ color: "#16a34a" }}>Closed: {cdFormatDateOnly(s.actual_close_date)}</span>
-                        )}
-                      </div>
-                    )}
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "4px" }}>
-                      <div style={{ fontSize: "11px", color: "#94a3b8" }}>
-                        Updated {s.updated_at ? new Date(s.updated_at).toLocaleDateString() : "—"}
-                      </div>
-                      {onSelectScenario && (
-                        <button
-                          onClick={function (e) { e.stopPropagation(); handleOpenScenario(s.id); }}
-                          disabled={openingScenario === s.id}
-                          style={{
-                            background: openingScenario === s.id ? "#e2e8f0" : "#1e3a5f",
-                            color:      openingScenario === s.id ? "#94a3b8" : "#fff",
-                            border: "none", borderRadius: "6px",
-                            padding: "4px 12px", fontSize: "12px", fontWeight: 600,
-                            cursor: openingScenario === s.id ? "not-allowed" : "pointer",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {openingScenario === s.id ? "Opening..." : "Open →"}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                <thead>
+                  <tr style={{ background: "#f1f5f9" }}>
+                    <th style={{ textAlign: "left", padding: "7px 12px", fontWeight: 700, color: "#475569", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid #e2e8f0" }}>Scenario Name</th>
+                    <th style={{ textAlign: "left", padding: "7px 12px", fontWeight: 700, color: "#475569", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid #e2e8f0" }}>Purpose</th>
+                    <th style={{ textAlign: "left", padding: "7px 12px", fontWeight: 700, color: "#475569", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" }}>Created</th>
+                    <th style={{ padding: "7px 12px", borderBottom: "1px solid #e2e8f0" }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {linkedScenarios.map(function(s, i) {
+                    var lp = s.loan_purpose || "purchase";
+                    var lpLabel = cdGetLoanPurposeLabel(lp);
+                    var createdDate = s.created_at ? new Date(s.created_at).toLocaleDateString() : "—";
+                    return (
+                      <tr key={s.id} style={{ background: i % 2 === 0 ? "#fff" : "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                        <td style={{ padding: "9px 12px", fontWeight: 600, color: "#1e293b" }}>
+                          {s.name || "Untitled Scenario"}
+                        </td>
+                        <td style={{ padding: "9px 12px", color: "#475569" }}>{lpLabel}</td>
+                        <td style={{ padding: "9px 12px", color: "#94a3b8", whiteSpace: "nowrap" }}>{createdDate}</td>
+                        <td style={{ padding: "9px 12px", textAlign: "right" }}>
+                          {onSelectScenario && (
+                            <button onClick={function(e) { e.stopPropagation(); handleOpenScenario(s.id); }}
+                              disabled={openingScenario === s.id}
+                              style={{
+                                background: openingScenario === s.id ? "#e2e8f0" : "#1e3a5f",
+                                color: openingScenario === s.id ? "#94a3b8" : "#fff",
+                                border: "none", borderRadius: "6px", padding: "4px 12px",
+                                fontSize: "12px", fontWeight: 600, cursor: openingScenario === s.id ? "not-allowed" : "pointer",
+                                whiteSpace: "nowrap",
+                              }}>
+                              {openingScenario === s.id ? "Opening..." : "Open →"}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
@@ -1992,7 +2263,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
         {/* ═══════════════════════════════════════════════════════════════════ */}
         {/* CARD 3 — Notes (Internal only)                                     */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        <div style={sectionStyle}>{cardNum(3)}
+        <div style={sectionStyle} onDoubleClick={cardDoubleClick}>{cardNum(3)}
           <div style={sectionTitleStyle}>Notes (Internal)</div>
           <div style={{ display: "grid", gridTemplateColumns: isMobileCD ? "1fr" : "1fr 1.4fr", gap: isMobileCD ? "14px" : "24px" }}>
 
@@ -2056,7 +2327,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                       maxLength={120}
                       value={editForm.note_quick}
                       onChange={function (e) { handleFieldChange("note_quick", e.target.value); }}
-                      placeholder="Quick reminder for this call..."
+                      placeholder=""
                     />
                     <div style={{ fontSize: "11px", color: "#94a3b8", textAlign: "right", marginTop: "3px" }}>
                       {(editForm.note_quick || "").length}/120
@@ -2069,7 +2340,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                         style={Object.assign({}, fieldStyle, { minHeight: "60px", resize: "vertical" })}
                         value={editForm.notes}
                         onChange={function (e) { handleFieldChange("notes", e.target.value); }}
-                        placeholder="Permanent notes about this contact..."
+                        placeholder=""
                       />
                     </div>
                   )}
@@ -2088,7 +2359,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
         {/* ═══════════════════════════════════════════════════════════════════ */}
         {/* Activity Log (internal only)                                       */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        <div style={sectionStyle}>{cardNum(4)}
+        <div style={sectionStyle} onDoubleClick={cardDoubleClick}>{cardNum(4)}
           <div style={sectionTitleStyle}>Activity Log (Internal)</div>
 
           {isInternal && (
@@ -2098,7 +2369,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                   style={Object.assign({}, fieldStyle, { flex: 1, minHeight: "64px", resize: "vertical" })}
                   value={newNote}
                   onChange={function (e) { setNewNote(e.target.value); }}
-                  placeholder="Add a note about this contact..."
+                  placeholder=""
                   disabled={noteAdding}
                 />
                 <button
@@ -2156,110 +2427,10 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
           <React.Fragment>
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        {/* Personal 2 Info                                                    */}
+        {/* Contact 2 Info (Person 2 phone/email)                             */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        <div style={sectionStyle}>{cardNum(6)}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: showPerson2 ? 16 : 0 }}>
-            <div style={sectionTitleStyle}>Person 2 Info</div>
-            <button
-              onClick={function() { setShowPerson2(function(v) { return !v; }); }}
-              style={{ fontSize: 12, fontWeight: 600, color: "#0C4160", background: showPerson2 ? "#E8EEF4" : "#F0F4F8", border: "1px solid #D1D9E6", borderRadius: 6, padding: "4px 12px", cursor: "pointer", fontFamily: "inherit" }}
-            >
-              {showPerson2 ? "Hide" : "Show"}
-            </button>
-          </div>
-          {showPerson2 && editMode ? (
-            <div style={{ display: "grid", gridTemplateColumns: cols2, gap: gap2 }}>
-              {/* Left: Name (Client 2) */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                <div>
-                  <label style={labelStyle}>Prefix</label>
-                  <select
-                    style={fieldStyle}
-                    value={editForm.prefix2}
-                    onChange={function (e) { handleFieldChange("prefix2", e.target.value); }}
-                  >
-                    <option value="">&mdash; None &mdash;</option>
-                    <option value="Mr.">Mr.</option>
-                    <option value="Mrs.">Mrs.</option>
-                    <option value="Ms.">Ms.</option>
-                    <option value="Dr.">Dr.</option>
-                    <option value="Rev.">Rev.</option>
-                    <option value="Prof.">Prof.</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={labelStyle}>First Name</label>
-                  <input
-                    style={fieldStyle}
-                    value={editForm.first_name2}
-                    onChange={function (e) { handleFieldChange("first_name2", e.target.value); }}
-                    placeholder="First name"
-                  />
-                </div>
-                <div>
-                  <label style={labelStyle}>Nickname</label>
-                  <input
-                    style={fieldStyle}
-                    value={editForm.nickname2}
-                    onChange={function (e) { handleFieldChange("nickname2", e.target.value); }}
-                    placeholder="Nickname"
-                  />
-                </div>
-                <div>
-                  <label style={labelStyle}>Last Name</label>
-                  <input
-                    style={fieldStyle}
-                    value={editForm.last_name2}
-                    onChange={function (e) { handleFieldChange("last_name2", e.target.value); }}
-                    placeholder="Last name"
-                  />
-                </div>
-              </div>
-              {/* Right: Connection */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                <div>
-                  <label style={labelStyle}>Connection to Contact 1</label>
-                  <select
-                    style={fieldStyle}
-                    value={editForm.connection_to_contact1}
-                    onChange={function (e) { handleFieldChange("connection_to_contact1", e.target.value); }}
-                  >
-                    <option value="">&mdash; None &mdash;</option>
-                    <option value="Spouse">Spouse</option>
-                    <option value="Significant Other">Significant Other</option>
-                    <option value="Parent">Parent</option>
-                    <option value="Child">Child</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          ) : showPerson2 ? (
-            (contact.first_name2 || contact.last_name2) ? (
-              <div style={{ display: "grid", gridTemplateColumns: cols2, gap: "16px" }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                  <InfoRow label="Prefix"     value={contact.prefix2} />
-                  <InfoRow label="First Name" value={contact.first_name2} />
-                  <InfoRow label="Nickname"   value={contact.nickname2} />
-                  <InfoRow label="Last Name"  value={contact.last_name2} />
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                  <InfoRow label="Connection to Contact 1" value={contact.connection_to_contact1} />
-                </div>
-              </div>
-            ) : (
-              <div style={{ fontSize: "13px", color: "#94a3b8" }}>No person 2 on record.</div>
-            )
-          ) : null}
-        </div>
-
-        {/* ═══════════════════════════════════════════════════════════════════ */}
-        {/* Contact 2 Info                                                     */}
-        {/* Left: Cell/Work/Home/Best   Right: Personal/Work/Other/Best       */}
-        {/* ═══════════════════════════════════════════════════════════════════ */}
-        {(editMode || contact.first_name2 || contact.last_name2 || contact.phone2 || contact.email2) && (
-          <div style={sectionStyle}>{cardNum(7)}
+        {contact.first_name2 && (
+          <div style={sectionStyle} onDoubleClick={cardDoubleClick}>{cardNum(7)}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: showContact2 ? 16 : 0 }}>
               <div style={sectionTitleStyle}>Contact 2 Info</div>
               <button
@@ -2280,7 +2451,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                       value={editForm.phone2}
                       onChange={function (e) { handleFieldChange("phone2", e.target.value); }}
                       onBlur={function () { handlePhoneBlur("phone2"); }}
-                      placeholder="(555) 555-5555"
+                      placeholder=""
                     />
                   </div>
                   <div>
@@ -2290,7 +2461,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                       value={editForm.phone2_work}
                       onChange={function (e) { handleFieldChange("phone2_work", e.target.value); }}
                       onBlur={function () { handlePhoneBlur("phone2_work"); }}
-                      placeholder="(555) 555-5555"
+                      placeholder=""
                     />
                   </div>
                   <div>
@@ -2300,7 +2471,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                       value={editForm.phone2_home}
                       onChange={function (e) { handleFieldChange("phone2_home", e.target.value); }}
                       onBlur={function () { handlePhoneBlur("phone2_home"); }}
-                      placeholder="(555) 555-5555"
+                      placeholder=""
                     />
                   </div>
                   <div>
@@ -2325,7 +2496,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                       style={fieldStyle} type="email"
                       value={editForm.email2}
                       onChange={function (e) { handleFieldChange("email2", e.target.value); }}
-                      placeholder="email@example.com"
+                      placeholder=""
                     />
                   </div>
                   <div>
@@ -2334,7 +2505,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                       style={fieldStyle} type="email"
                       value={editForm.email2_work}
                       onChange={function (e) { handleFieldChange("email2_work", e.target.value); }}
-                      placeholder="email@company.com"
+                      placeholder=""
                     />
                   </div>
                   <div>
@@ -2343,7 +2514,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                       style={fieldStyle} type="email"
                       value={editForm.email2_other}
                       onChange={function (e) { handleFieldChange("email2_other", e.target.value); }}
-                      placeholder="other@example.com"
+                      placeholder=""
                     />
                   </div>
                   <div>
@@ -2362,19 +2533,25 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                 </div>
               </div>
             ) : showContact2 ? (
-              /* Read View */
+              /* Read View — only show rows with data */
               <div style={{ display: "grid", gridTemplateColumns: cols2, gap: "16px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  <InfoRow label="Phone: Cell" value={cdFormatPhone(contact.phone2)} />
-                  <InfoRow label="Phone: Work" value={cdFormatPhone(contact.phone2_work)} />
-                  <InfoRow label="Phone: Home" value={cdFormatPhone(contact.phone2_home)} />
-                  <InfoRow label="Phone: Best" value={contact.phone2_best} />
+                  {contact.phone2      && <InfoRow label="Phone: Cell" value={cdFormatPhone(contact.phone2)} />}
+                  {contact.phone2_work && <InfoRow label="Phone: Work" value={cdFormatPhone(contact.phone2_work)} />}
+                  {contact.phone2_home && <InfoRow label="Phone: Home" value={cdFormatPhone(contact.phone2_home)} />}
+                  {contact.phone2_best && <InfoRow label="Phone: Best" value={contact.phone2_best} />}
+                  {!contact.phone2 && !contact.phone2_work && !contact.phone2_home && (
+                    <div style={{ fontSize: 13, color: "#94a3b8" }}>No phone on file.</div>
+                  )}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  <InfoRow label="Email: Personal" value={contact.email2} />
-                  <InfoRow label="Email: Work"     value={contact.email2_work} />
-                  <InfoRow label="Email: Other"    value={contact.email2_other} />
-                  <InfoRow label="Email: Best"     value={contact.email2_best} />
+                  {contact.email2       && <InfoRow label="Email: Personal" value={contact.email2} />}
+                  {contact.email2_work  && <InfoRow label="Email: Work"     value={contact.email2_work} />}
+                  {contact.email2_other && <InfoRow label="Email: Other"    value={contact.email2_other} />}
+                  {contact.email2_best  && <InfoRow label="Email: Best"     value={contact.email2_best} />}
+                  {!contact.email2 && !contact.email2_work && !contact.email2_other && (
+                    <div style={{ fontSize: 13, color: "#94a3b8" }}>No email on file.</div>
+                  )}
                 </div>
               </div>
             ) : null}
@@ -2382,16 +2559,89 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
         )}
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* COMPANY INFO — hidden for clients                                  */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {contact.contact_type !== "client" && <div style={sectionStyle} onDoubleClick={cardDoubleClick}>
+            <div style={sectionTitleStyle}>Company</div>
+            {editMode ? (
+              <div style={{ display: "grid", gridTemplateColumns: cols2, gap: 12 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  <div>
+                    <label style={labelStyle}>Company Name</label>
+                    <input style={fieldStyle} value={editForm.company}
+                      onChange={function(e) { handleFieldChange("company", e.target.value); }} placeholder="" />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Branch / Office</label>
+                    <select style={fieldStyle} value={editForm.branch_id || ""} onChange={function(e) { handleFieldChange("branch_id", e.target.value || null); }}>
+                      <option value="">— No Branch —</option>
+                      {cdBranches.map(function(b) { return <option key={b.id} value={b.id}>{b.name}</option>; })}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Title</label>
+                    <input style={fieldStyle} value={editForm.lo_title}
+                      onChange={function(e) { handleFieldChange("lo_title", e.target.value); }} placeholder="" />
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, ...rightColStyle }}>
+                  <div>
+                    <label style={labelStyle}>Team Name</label>
+                    <input style={fieldStyle} value={editForm.team_name}
+                      onChange={function(e) { handleFieldChange("team_name", e.target.value); }} placeholder="" />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Team Lead</label>
+                    <select style={fieldStyle} value={editForm.team_lead_contact_id || ""} onChange={function(e) { handleFieldChange("team_lead_contact_id", e.target.value || null); }}>
+                      <option value="">— No Team Lead —</option>
+                      {loContacts.filter(function(c) { return c.id !== contact.id && c.contact_category === editForm.contact_category; }).map(function(c) {
+                        var name = ((c.first_name || "") + " " + (c.last_name || "")).trim() || "(unnamed)";
+                        return <option key={c.id} value={c.id}>{name}{c.lo_title ? " · " + c.lo_title : ""}{c.company ? " · " + c.company : ""}</option>;
+                      })}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: cols2, gap: "8px 16px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <InfoRow label="Company"        value={contact.company} />
+                  <InfoRow label="Branch / Office" value={(function() {
+                    if (!contact.branch_id) return null;
+                    var branch = cdBranches.find(function(b) { return b.id === contact.branch_id; });
+                    return branch ? branch.name : contact.branch_id;
+                  })()} />
+                  <InfoRow label="Title"          value={contact.lo_title} />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, ...rightColStyle }}>
+                  <InfoRow label="Team Name" value={contact.team_name} />
+                  <InfoRow label="Team Lead" value={(function() {
+                    if (!contact.team_lead_contact_id) return null;
+                    var lead = loContacts.find(function(c) { return c.id === contact.team_lead_contact_id; });
+                    return lead ? ((lead.first_name || "") + " " + (lead.last_name || "")).trim() : contact.team_lead_contact_id;
+                  })()} />
+                </div>
+              </div>
+            )}
+          </div>}
+
+        {/* ═══════════════════════════════════════════════════════════════════ */}
         {/* CARD 8 — Address Information                                       */}
         {/* Left: Mailing Address 1 + Type   Right: Mailing Address 2 + Type  */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        <div style={sectionStyle}>{cardNum(8)}
-          <div style={sectionTitleStyle}>Address Information</div>
+        <div style={sectionStyle} onDoubleClick={cardDoubleClick}>{cardNum(8)}
+          <div style={sectionTitleStyle}>Address</div>
           {editMode ? (
             <div style={{ display: "grid", gridTemplateColumns: cols2, gap: gap2 }}>
               {/* Left: Address 1 */}
               <div>
-                <div style={addrSubheadStyle}>Mailing Address 1</div>
+                <div style={addrSubheadStyle}>Address 1</div>
+                <AddressAutocomplete font={font} onSelect={function(a) {
+                  if (a.street) handleFieldChange("address1_street", a.street);
+                  if (a.city)   handleFieldChange("address1_city",   a.city);
+                  if (a.state)  handleFieldChange("address1_state",  a.state);
+                  if (a.zip)    handleFieldChange("address1_zip",    a.zip);
+                }} />
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   <div>
                     <label style={labelStyle}>Street</label>
@@ -2399,7 +2649,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                       style={fieldStyle}
                       value={editForm.address1_street}
                       onChange={function (e) { handleFieldChange("address1_street", e.target.value); }}
-                      placeholder="Street address"
+                      placeholder=""
                     />
                   </div>
                   <div>
@@ -2408,7 +2658,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                       style={fieldStyle}
                       value={editForm.address1_city}
                       onChange={function (e) { handleFieldChange("address1_city", e.target.value); }}
-                      placeholder="City"
+                      placeholder=""
                     />
                   </div>
                   <div>
@@ -2417,7 +2667,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                       style={fieldStyle}
                       value={editForm.address1_zip}
                       onChange={function (e) { handleFieldChange("address1_zip", e.target.value); }}
-                      placeholder="12345"
+                      placeholder=""
                     />
                   </div>
                   <div>
@@ -2426,7 +2676,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                       style={fieldStyle}
                       value={editForm.address1_state}
                       onChange={function (e) { handleFieldChange("address1_state", e.target.value); }}
-                      placeholder="TX" maxLength={2}
+                      placeholder="" maxLength={2}
                     />
                   </div>
                   <div>
@@ -2440,11 +2690,28 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                       <option value="Work">Work</option>
                     </select>
                   </div>
+                  <div>
+                    <label style={labelStyle}>Mailing Address</label>
+                    <select
+                      style={fieldStyle}
+                      value={editForm.mailing_address_primary}
+                      onChange={function (e) { handleFieldChange("mailing_address_primary", e.target.value); }}
+                    >
+                      <option value="address1">Address 1</option>
+                      <option value="address2">Address 2</option>
+                    </select>
+                  </div>
                 </div>
               </div>
               {/* Right: Address 2 */}
-              <div>
-                <div style={addrSubheadStyle}>Mailing Address 2</div>
+              <div style={rightColStyle}>
+                <div style={addrSubheadStyle}>Address 2</div>
+                <AddressAutocomplete font={font} onSelect={function(a) {
+                  if (a.street) handleFieldChange("address2_street", a.street);
+                  if (a.city)   handleFieldChange("address2_city",   a.city);
+                  if (a.state)  handleFieldChange("address2_state",  a.state);
+                  if (a.zip)    handleFieldChange("address2_zip",    a.zip);
+                }} />
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   <div>
                     <label style={labelStyle}>Street</label>
@@ -2452,7 +2719,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                       style={fieldStyle}
                       value={editForm.address2_street}
                       onChange={function (e) { handleFieldChange("address2_street", e.target.value); }}
-                      placeholder="Street address"
+                      placeholder=""
                     />
                   </div>
                   <div>
@@ -2461,7 +2728,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                       style={fieldStyle}
                       value={editForm.address2_city}
                       onChange={function (e) { handleFieldChange("address2_city", e.target.value); }}
-                      placeholder="City"
+                      placeholder=""
                     />
                   </div>
                   <div>
@@ -2470,7 +2737,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                       style={fieldStyle}
                       value={editForm.address2_zip}
                       onChange={function (e) { handleFieldChange("address2_zip", e.target.value); }}
-                      placeholder="12345"
+                      placeholder=""
                     />
                   </div>
                   <div>
@@ -2479,7 +2746,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                       style={fieldStyle}
                       value={editForm.address2_state}
                       onChange={function (e) { handleFieldChange("address2_state", e.target.value); }}
-                      placeholder="TX" maxLength={2}
+                      placeholder="" maxLength={2}
                     />
                   </div>
                   <div>
@@ -2501,24 +2768,27 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
             <div style={{ display: "grid", gridTemplateColumns: cols2, gap: "16px" }}>
               <div>
                 <div style={addrSubheadStyle}>
-                  Mailing Address 1{contact.address1_type ? ` (${contact.address1_type})` : ""}
+                  Address 1{contact.address1_type ? ` (${contact.address1_type})` : ""}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  <InfoRow label="Street" value={contact.address1_street || contact.address} />
-                  <InfoRow label="City"   value={contact.address1_city   || contact.city} />
-                  <InfoRow label="ZIP"    value={contact.address1_zip    || contact.zip} />
-                  <InfoRow label="State"  value={contact.address1_state  || contact.state} />
+                  <InfoRow label="Street"          value={contact.address1_street || contact.address} />
+                  <InfoRow label="City"            value={contact.address1_city   || contact.city} />
+                  <InfoRow label="ZIP"             value={contact.address1_zip    || contact.zip} />
+                  <InfoRow label="State"           value={contact.address1_state  || contact.state} />
+                  <InfoRow label="Address Type"    value={contact.address1_type} />
+                  <InfoRow label="Mailing Address" value={contact.mailing_address_primary === "address2" ? "Address 2" : "Address 1"} />
                 </div>
               </div>
-              <div>
+              <div style={rightColStyle}>
                 <div style={addrSubheadStyle}>
-                  Mailing Address 2{contact.address2_type ? ` (${contact.address2_type})` : ""}
+                  Address 2{contact.address2_type ? ` (${contact.address2_type})` : ""}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  <InfoRow label="Street" value={contact.address2_street} />
-                  <InfoRow label="City"   value={contact.address2_city} />
-                  <InfoRow label="ZIP"    value={contact.address2_zip} />
-                  <InfoRow label="State"  value={contact.address2_state} />
+                  <InfoRow label="Street"       value={contact.address2_street} />
+                  <InfoRow label="City"         value={contact.address2_city} />
+                  <InfoRow label="ZIP"          value={contact.address2_zip} />
+                  <InfoRow label="State"        value={contact.address2_state} />
+                  <InfoRow label="Address Type" value={contact.address2_type} />
                 </div>
               </div>
             </div>
@@ -2528,118 +2798,78 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
         {/* Delete moved to edit mode bar — see below */}
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        {/* LO / PARTNER PROFILE (business contacts, admin only)              */}
+        {/* PQ INFO — internal/admin only                                      */}
         {/* ═══════════════════════════════════════════════════════════════════ */}
-        {isBusiness && (isAdmin || isOwnProfile) && (
-          <div style={{ ...sectionStyle, borderLeft: "4px solid #0C4160" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-              <div style={{ ...sectionTitleStyle, margin: 0, flex: 1 }}>LO / Partner Profile</div>
-              <span style={{ fontSize: 12, color: "#94a3b8", fontStyle: "italic" }}>{isAdmin ? "Admin only · " : ""}Used on PQ letters &amp; team assignments</span>
+        {(isInternal || isAdmin) && <div style={{ ...sectionStyle, borderLeft: "4px solid #0C4160" }} onDoubleClick={cardDoubleClick}>
+            <div style={{ marginBottom: 16 }}>
+              <div style={sectionTitleStyle}>PQ Letter Info (Internal)</div>
             </div>
 
             {editMode ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-
-                {/* ── Professional Info ── */}
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0C4160", marginBottom: 4 }}>Professional Info</div>
-                <div style={{ display: "grid", gridTemplateColumns: cols2, gap: 12 }}>
-                  {/* Left column */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                    <div>
-                      <label style={labelStyle}>Title</label>
-                      <input style={fieldStyle} value={editForm.lo_title} onChange={function(e) { handleFieldChange("lo_title", e.target.value); }} placeholder="e.g. Senior Loan Officer" />
-                    </div>
-                    {editForm.contact_category !== "Realtor" && editForm.contact_category !== "Builder" && (
-                      <>
-                        <div>
-                          <label style={labelStyle}>Personal NMLS #</label>
-                          <input style={fieldStyle} value={editForm.lo_nmls} onChange={function(e) { handleFieldChange("lo_nmls", e.target.value); }} placeholder="729612" />
-                        </div>
-                        <div>
-                          <label style={labelStyle}>Branch NMLS #</label>
-                          <input style={fieldStyle} value={editForm.lo_branch_nmls} onChange={function(e) { handleFieldChange("lo_branch_nmls", e.target.value); }} placeholder="Branch NMLS" />
-                        </div>
-                        <div>
-                          <label style={labelStyle}>Company NMLS #</label>
-                          <input style={fieldStyle} value={editForm.lo_company_nmls} onChange={function(e) { handleFieldChange("lo_company_nmls", e.target.value); }} placeholder="1820" />
-                        </div>
-                      </>
-                    )}
-                    {(editForm.contact_category === "Realtor" || editForm.contact_category === "Builder") && (
+              <div style={{ display: "grid", gridTemplateColumns: cols2, gap: 12 }}>
+                {/* Left column */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {editForm.contact_category !== "Realtor" && editForm.contact_category !== "Builder" && (
+                    <>
                       <div>
-                        <label style={labelStyle}>License #</label>
-                        <input style={fieldStyle} value={editForm.lo_license} onChange={function(e) { handleFieldChange("lo_license", e.target.value); }} placeholder="TX-123456" />
+                        <label style={labelStyle}>Personal NMLS #</label>
+                        <input style={fieldStyle} value={editForm.lo_nmls} onChange={function(e) { handleFieldChange("lo_nmls", e.target.value); }} placeholder="" />
                       </div>
-                    )}
-                  </div>
-                  {/* Right column */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      <div>
+                        <label style={labelStyle}>Branch NMLS #</label>
+                        <input style={fieldStyle} value={editForm.lo_branch_nmls} onChange={function(e) { handleFieldChange("lo_branch_nmls", e.target.value); }} placeholder="" />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Company NMLS #</label>
+                        <input style={fieldStyle} value={editForm.lo_company_nmls} onChange={function(e) { handleFieldChange("lo_company_nmls", e.target.value); }} placeholder="" />
+                      </div>
+                    </>
+                  )}
+                  {(editForm.contact_category === "Realtor" || editForm.contact_category === "Builder") && (
                     <div>
-                      <label style={labelStyle}>Display Email (for letters)</label>
-                      <input style={fieldStyle} value={editForm.lo_email_display} onChange={function(e) { handleFieldChange("lo_email_display", e.target.value); }} placeholder="team@company.com" type="email" />
-                      <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 3 }}>Use if different from login email</div>
+                      <label style={labelStyle}>License #</label>
+                      <input style={fieldStyle} value={editForm.lo_license} onChange={function(e) { handleFieldChange("lo_license", e.target.value); }} placeholder="" />
                     </div>
-                    <div>
-                      <label style={labelStyle}>Website</label>
-                      <input style={fieldStyle} value={editForm.lo_website} onChange={function(e) { handleFieldChange("lo_website", e.target.value); }} placeholder="https://mortgagemark.com" />
-                    </div>
-                  </div>
+                  )}
                 </div>
-
-                {/* ── Team ── */}
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0C4160", marginTop: 8, marginBottom: 4 }}>Team</div>
-                <div style={{ display: "grid", gridTemplateColumns: cols2, gap: 12 }}>
+                {/* Right column */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, ...rightColStyle }}>
                   <div>
-                    <label style={labelStyle}>Team Lead</label>
-                    <select style={fieldStyle} value={editForm.team_lead_contact_id || ""} onChange={function(e) { handleFieldChange("team_lead_contact_id", e.target.value || null); }}>
-                      <option value="">— No Team Lead —</option>
-                      {loContacts.filter(function(c) { return c.id !== contact.id && c.contact_category === editForm.contact_category; }).map(function(c) {
-                        var name = ((c.first_name || "") + " " + (c.last_name || "")).trim() || "(unnamed)";
-                        return <option key={c.id} value={c.id}>{name}{c.lo_title ? " · " + c.lo_title : ""}{c.company ? " · " + c.company : ""}</option>;
-                      })}
-                    </select>
+                    <label style={labelStyle}>Display Email (for letters)</label>
+                    <input style={fieldStyle} value={editForm.lo_email_display} onChange={function(e) { handleFieldChange("lo_email_display", e.target.value); }} placeholder="" type="email" />
                   </div>
                   <div>
-                    <label style={labelStyle}>Branch</label>
-                    <select style={fieldStyle} value={editForm.branch_id || ""} onChange={function(e) { handleFieldChange("branch_id", e.target.value || null); }}>
-                      <option value="">— No Branch —</option>
-                      {cdBranches.map(function(b) { return <option key={b.id} value={b.id}>{b.name}</option>; })}
-                    </select>
+                    <label style={labelStyle}>Website</label>
+                    <input style={fieldStyle} value={editForm.lo_website} onChange={function(e) { handleFieldChange("lo_website", e.target.value); }} placeholder="" />
                   </div>
                 </div>
-
               </div>
             ) : (
-              <div style={{ display: "grid", gridTemplateColumns: cols2, gap: "8px 16px" }}>
-                {contact.lo_title         && <InfoRow label="Title"              value={contact.lo_title} />}
-                {contact.lo_nmls          && <InfoRow label="NMLS #"             value={"#" + contact.lo_nmls} />}
-                {contact.lo_license       && <InfoRow label="License #"          value={contact.lo_license} />}
-                {contact.lo_email_display && <InfoRow label="Display Email"      value={contact.lo_email_display} />}
-                {contact.lo_website       && <InfoRow label="Website"            value={contact.lo_website} />}
-                {contact.lo_company_nmls  && <InfoRow label="Company NMLS"       value={"#" + contact.lo_company_nmls} />}
-                {contact.lo_branch_nmls   && <InfoRow label="Branch NMLS"        value={"#" + contact.lo_branch_nmls} />}
-                {contact.team_lead_contact_id && (function() {
-                  var lead = loContacts.find(function(c) { return c.id === contact.team_lead_contact_id; });
-                  var name = lead ? ((lead.first_name || "") + " " + (lead.last_name || "")).trim() : contact.team_lead_contact_id;
-                  return <InfoRow label="Team Lead" value={name} />;
-                })()}
-                {contact.branch_id && (function() {
-                  var branch = cdBranches.find(function(b) { return b.id === contact.branch_id; });
-                  return <InfoRow label="Branch" value={branch ? branch.name : contact.branch_id} />;
-                })()}
-                {!contact.lo_title && !contact.lo_nmls && !contact.lo_email_display && !contact.team_lead_contact_id && (
-                  <div style={{ color: "#94a3b8", fontSize: 13, gridColumn: "1 / -1" }}>
-                    No LO profile data yet. Click ✏️ Edit to fill in PQ letter info and team assignment.
-                  </div>
-                )}
+              <div style={{ display: "grid", gridTemplateColumns: cols2, gap: "12px 16px" }}>
+                {/* Left col — mirrors edit left col */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {contact.contact_category !== "Realtor" && contact.contact_category !== "Builder" ? (
+                    <>
+                      <InfoRow label="Personal NMLS #"  value={contact.lo_nmls ? "#" + contact.lo_nmls : null} />
+                      <InfoRow label="Branch NMLS #"    value={contact.lo_branch_nmls ? "#" + contact.lo_branch_nmls : null} />
+                      <InfoRow label="Company NMLS #"   value={contact.lo_company_nmls ? "#" + contact.lo_company_nmls : null} />
+                    </>
+                  ) : (
+                    <InfoRow label="License #" value={contact.lo_license} />
+                  )}
+                </div>
+                {/* Right col — mirrors edit right col */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, ...rightColStyle }}>
+                  <InfoRow label="Display Email (for letters)" value={contact.lo_email_display} />
+                  <InfoRow label="Website"                     value={contact.lo_website} />
+                </div>
               </div>
             )}
-          </div>
-        )}
+          </div>}
 
         {/* ── Photo, Logo & Signature (LO/Admin only) ── */}
         {isBusiness && (isInternal || isAdmin) && (
-          <div style={sectionStyle}>
+          <div style={sectionStyle} onDoubleClick={cardDoubleClick}>
             <div style={sectionTitleStyle}>Photos &amp; Signature</div>
             {editMode ? (
               <>
@@ -2720,8 +2950,80 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
           </React.Fragment>
         )}
 
+        {/* ── Team section — always shown at bottom, scroll target ── */}
+        <div id="cd-team-section">
+          <TransactionTeamTab
+            contact={contact}
+            contacts={contacts}
+            loProfiles={loProfiles}
+            isInternal={isInternal}
+            isPartner={isPartner}
+            user={user}
+            onSelectContact={onSelectContact}
+            onNetworkPatched={function(newLinks) {
+              if (onSave) onSave(Object.assign({}, contact, { network_links: newLinks }));
+            }}
+          />
+        </div>
+
+        {/* ── Back to Top ── */}
+        <div style={{ display: "flex", justifyContent: "center", padding: "16px 0 8px" }}>
+          <button
+            onClick={function() {
+              var el = document.getElementById("cd-content-top");
+              if (el) el.scrollIntoView({ behavior: "auto" });
+            }}
+            style={{
+              background: "none", border: "1px solid #cbd5e1", borderRadius: 8,
+              padding: "7px 20px", fontSize: 13, fontWeight: 600, color: "#64748b",
+              cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif",
+              display: "flex", alignItems: "center", gap: 6,
+            }}
+          >
+            ↑ Back to Top
+          </button>
+        </div>
+
+        {/* ── Mobile notes — inside scroll area so page scrolls normally ── */}
+        {isInternal && isMobileCD && (
+          <div id="cd-notes-mobile" style={{ background: "#f8fafc", borderTop: "1px solid #e2e8f0", marginTop: 8 }}>
+            <ActivityNotesPanel
+              contactId={contact.id}
+              userName={user && (user.name || user.email) || ""}
+              font={font}
+              isMobile
+            />
+          </div>
+        )}
+
       </div>
+        </div>{/* end scroll div */}
+
+      {/* ── Drag handle + Right panel (desktop only) ────────────────────── */}
+      {isInternal && !isMobileCD && (
+        <React.Fragment>
+          {/* Drag handle */}
+          <div
+            onMouseDown={startDrag}
+            style={{
+              width: 6, flexShrink: 0, cursor: "col-resize", background: "transparent",
+              borderLeft: "1px solid #e2e8f0", position: "relative",
+              transition: "background 0.15s",
+            }}
+            onMouseEnter={function(e) { e.currentTarget.style.background = "#cbd5e1"; }}
+            onMouseLeave={function(e) { e.currentTarget.style.background = "transparent"; }}
+            title="Drag to resize"
+          />
+          <ActivityNotesPanel
+            contactId={contact.id}
+            userName={user && (user.name || user.email) || ""}
+            font={font}
+            width={rightPanelWidth}
+          />
+        </React.Fragment>
+      )}
       </div>
+
 
       {/* ── Floating Edit button (always visible when not in edit mode) ─── */}
       {!editMode && isInternal && (
@@ -2733,21 +3035,23 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
             bottom: "max(24px, calc(env(safe-area-inset-bottom, 0px) + 20px))",
             right: 24,
             zIndex: 290,
-            width: 52, height: 52,
-            borderRadius: "50%",
+            width: 44, height: 44,
+            borderRadius: "10px",
             background: "#1e3a5f",
             color: "#fff",
             border: "none",
-            fontSize: 22,
             cursor: "pointer",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            transition: "transform 0.15s, box-shadow 0.15s",
+            transition: "background 0.15s, box-shadow 0.15s",
           }}
-          onMouseEnter={function(e) { e.currentTarget.style.transform = "scale(1.08)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,0.32)"; }}
-          onMouseLeave={function(e) { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.25)"; }}
+          onMouseEnter={function(e) { e.currentTarget.style.background = "#2d5a8e"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.22)"; }}
+          onMouseLeave={function(e) { e.currentTarget.style.background = "#1e3a5f"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.18)"; }}
         >
-          ✏️
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+          </svg>
         </button>
       )}
 

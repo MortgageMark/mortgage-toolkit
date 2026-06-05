@@ -1303,7 +1303,7 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
             )}
             {fees.isPurchase && <Toggle label="Home Warranty: Include"    checked={includeHomeWarranty}      onChange={setIncludeHomeWarranty} />}
             {fees.isPurchase && includeHomeWarranty && <Toggle label="Home Warranty: Seller Paid" checked={sellerPaidHomeWarranty} onChange={setSellerPaidHomeWarranty} />}
-            {fees.homeownersInsurance > 0 && <Toggle label="Insurance: Paid Outside of Closing (POC)" checked={insOutsideClosing} onChange={setInsOutsideClosing} />}
+            {/* Insurance POC moved to Escrow Details section */}
             {loanType === "va" && (
               <div style={{ background:"#f0f5ff", border:`1px solid ${COLORS.border}`, borderRadius:8, padding:10, marginTop:8 }}>
                 <div style={{ fontSize:11, fontWeight:700, color:COLORS.blue, marginBottom:6, fontFamily:font, letterSpacing:"0.06em" }}>VA FUNDING FEE</div>
@@ -1472,6 +1472,9 @@ function FeeSheetGenerator({ isInternal = false, user = null }) {
                   {fees.aggregateAdj < 0 ? ` · adj: (${fmt(Math.abs(fees.aggregateAdj))}) credit` : fees.aggregateAdj > 0 ? ` · adj: +${fmt(fees.aggregateAdj)}` : " · adj: $0"}
                 </div>
               </div>
+            )}
+            {fees.homeownersInsurance > 0 && (
+              <Toggle label="Insurance: Paid Outside of Closing (POC)" checked={insOutsideClosing} onChange={setInsOutsideClosing} />
             )}
             {canWaiveEscrows && (
               <div>

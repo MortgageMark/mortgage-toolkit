@@ -84,6 +84,149 @@ function LeadStatusSelect({ value, onChange, style }) {
   );
 }
 
+// ── Activity Report Page (standalone full-page view) ───────────────────────
+function ActivityReportPage({ user, onBack }) {
+  const f = "'Inter', system-ui, sans-serif";
+  const [activityData,    setActivityData]    = React.useState(null);
+  const [activityLoading, setActivityLoading] = React.useState(true);
+  const [contactsMap,     setContactsMap]     = React.useState({});
+
+  React.useEffect(function() {
+    async function load() {
+      setActivityLoading(true);
+      try {
+        var supabase = window._supabaseClient;
+        if (!supabase) { setActivityData([]); setActivityLoading(false); return; }
+        var since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+        var { data: internalProfiles } = await supabase.from("profiles")
+          .select("id").in("role", ["admin", "super_admin", "branch_admin", "internal"]);
+        var internalIds = new Set((internalProfiles || []).map(function(p) { return p.id; }));
+
+        var [{ data: logs }, { data: letters }, { data: shares }, { data: scenarios }, { data: contacts }] = await Promise.all([
+          supabase.from("scenario_audit_log").select("scenario_id, user_id, action, created_at").gte("created_at", since).order("created_at", { ascending: false }),
+          supabase.from("pq_letters").select("scenario_id, created_at, user_id").gte("created_at", since),
+          supabase.from("pq_letter_shares").select("scenario_id, sent_at, user_id").gte("sent_at", since),
+          supabase.from("scenarios").select("id, name, clientName, contact_id, created_at, loan_purpose"),
+          supabase.from("contacts").select("id, first_name, last_name, company"),
+        ]);
+
+        var cMap = {};
+        (contacts || []).forEach(function(c) { cMap[c.id] = c; });
+        setContactsMap(cMap);
+
+        var byScenario = {};
+        (logs || []).filter(function(l) { return !internalIds.has(l.user_id); }).forEach(function(l) {
+          if (!byScenario[l.scenario_id]) byScenario[l.scenario_id] = { views: 0, lastSeen: null, actions: [], letterCount: 0, shareCount: 0 };
+          var s = byScenario[l.scenario_id];
+          if (l.action === "viewed") { s.views++; if (!s.lastSeen || l.created_at > s.lastSeen) s.lastSeen = l.created_at; }
+          else { s.actions.push(l.action); if (!s.lastSeen || l.created_at > s.lastSeen) s.lastSeen = l.created_at; }
+        });
+        (letters || []).filter(function(l) { return !internalIds.has(l.user_id); }).forEach(function(l) {
+          if (!byScenario[l.scenario_id]) byScenario[l.scenario_id] = { views: 0, lastSeen: null, actions: [], letterCount: 0, shareCount: 0 };
+          byScenario[l.scenario_id].letterCount++;
+          if (!byScenario[l.scenario_id].lastSeen || l.created_at > byScenario[l.scenario_id].lastSeen) byScenario[l.scenario_id].lastSeen = l.created_at;
+        });
+        (shares || []).filter(function(l) { return !internalIds.has(l.user_id); }).forEach(function(l) {
+          if (!byScenario[l.scenario_id]) byScenario[l.scenario_id] = { views: 0, lastSeen: null, actions: [], letterCount: 0, shareCount: 0 };
+          byScenario[l.scenario_id].shareCount++;
+        });
+
+        var rows = (scenarios || []).map(function(sc) {
+          var d = byScenario[sc.id] || { views: 0, lastSeen: null, actions: [], letterCount: 0, shareCount: 0 };
+          return Object.assign({ scenario: sc }, d);
+        }).filter(function(r) { return r.lastSeen; })
+          .sort(function(a, b) { return (b.lastSeen || "").localeCompare(a.lastSeen || ""); });
+
+        setActivityData(rows);
+      } catch(e) { setActivityData([]); }
+      setActivityLoading(false);
+    }
+    load();
+  }, []);
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#f8fafc", fontFamily: f }}>
+      {/* Header */}
+      <div style={{ background: "#fff", borderBottom: "1px solid #e2e8f0", padding: "16px 24px", display: "flex", alignItems: "center", gap: 16 }}>
+        {onBack && (
+          <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 4, padding: 0, fontFamily: f }}>
+            ← Back
+          </button>
+        )}
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 20, fontWeight: 800, color: "#1e3a5f" }}>Activity Report</div>
+          <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>Client activity — last 30 days · sorted by most recently active</div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{ padding: "24px", maxWidth: 1000, margin: "0 auto" }}>
+        {activityLoading ? (
+          <div style={{ textAlign: "center", padding: "60px 0", color: "#64748b", fontSize: 14 }}>Loading activity data…</div>
+        ) : !activityData || activityData.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "60px 0", color: "#94a3b8", fontSize: 14 }}>
+            No activity found in the last 30 days. Activity is logged when clients open their scenarios or PQ letters are generated.
+          </div>
+        ) : (
+          <div style={{ background: "#fff", borderRadius: 12, boxShadow: "0 1px 4px rgba(0,0,0,0.07)", overflow: "hidden" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: "#f1f5f9" }}>
+                  {["Contact", "Scenario", "Last Seen", "Views (30d)", "PQ Letters", "PQ Sent", "Other Actions"].map(function(h) {
+                    return <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "#64748b", borderBottom: "1px solid #e2e8f0" }}>{h}</th>;
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {activityData.map(function(row, i) {
+                  var sc = row.scenario;
+                  var contact = sc.contact_id ? contactsMap[sc.contact_id] : null;
+                  var contactName = contact ? [contact.first_name, contact.last_name].filter(Boolean).join(" ") : (sc.clientName || "—");
+                  var lastSeen = row.lastSeen ? new Date(row.lastSeen) : null;
+                  var now = new Date();
+                  var diffMs = lastSeen ? now - lastSeen : null;
+                  var diffLabel = diffMs == null ? "—"
+                    : diffMs < 60*60*1000 ? "< 1 hour ago"
+                    : diffMs < 24*60*60*1000 ? Math.floor(diffMs/3600000) + "h ago"
+                    : diffMs < 7*24*60*60*1000 ? Math.floor(diffMs/86400000) + "d ago"
+                    : lastSeen.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                  var isHot = diffMs && diffMs < 3*24*60*60*1000;
+                  var uniqueActions = [...new Set(row.actions)].filter(function(a) { return a !== "viewed"; });
+                  return (
+                    <tr key={sc.id} style={{ borderBottom: "1px solid #f1f5f9", background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                      <td style={{ padding: "10px 14px", fontWeight: 600, color: "#1e3a5f" }}>{contactName}</td>
+                      <td style={{ padding: "10px 14px", color: "#374151" }}>{sc.clientName || sc.name || "—"}</td>
+                      <td style={{ padding: "10px 14px", whiteSpace: "nowrap" }}>
+                        <span style={{ fontWeight: isHot ? 700 : 400, color: isHot ? "#dc2626" : "#374151" }}>
+                          {isHot ? "🔥 " : ""}{diffLabel}
+                        </span>
+                      </td>
+                      <td style={{ padding: "10px 14px", textAlign: "center", fontWeight: 700, color: row.views > 0 ? "#1e3a5f" : "#94a3b8" }}>
+                        {row.views > 0 ? row.views : "—"}
+                      </td>
+                      <td style={{ padding: "10px 14px", textAlign: "center", color: row.letterCount > 0 ? "#16a34a" : "#94a3b8", fontWeight: row.letterCount > 0 ? 700 : 400 }}>
+                        {row.letterCount > 0 ? "✓ " + row.letterCount : "—"}
+                      </td>
+                      <td style={{ padding: "10px 14px", textAlign: "center", color: row.shareCount > 0 ? "#2563eb" : "#94a3b8", fontWeight: row.shareCount > 0 ? 700 : 400 }}>
+                        {row.shareCount > 0 ? "✓ " + row.shareCount : "—"}
+                      </td>
+                      <td style={{ padding: "10px 14px", color: "#64748b", fontSize: 12 }}>
+                        {uniqueActions.length > 0 ? uniqueActions.slice(0, 3).join(", ") : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+window.ActivityReportPage = ActivityReportPage;
+
 // ── Main Component ─────────────────────────────────────────────────────────
 function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpenContact, onUsers, onMyInfo, onLoginSettings, pageTitle,
   groupFilter: groupFilterProp, setGroupFilter: setGroupFilterProp }) {

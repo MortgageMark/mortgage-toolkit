@@ -599,7 +599,7 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
                         value: forgotEmail,
                         onChange: function(e) { setForgotEmail(e.target.value); },
                         style: inputStyle,
-                        placeholder: "you@email.com",
+                        placeholder: "",
                         onKeyDown: function(e) { if (e.key === "Enter") handleForgotPassword(); },
                         autoFocus: true
                       })
@@ -624,7 +624,7 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
                   value: email,
                   onChange: function(e) { setEmail(e.target.value); },
                   style: inputStyle,
-                  placeholder: "you@email.com"
+                  placeholder: ""
                 })
               ),
               React.createElement("div", { style: { marginBottom: 6 } },
@@ -634,7 +634,7 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
                   value: password,
                   onChange: function(e) { setPassword(e.target.value); },
                   style: inputStyle,
-                  placeholder: "Enter your password",
+                  placeholder: "",
                   onKeyDown: function(e) { if (e.key === "Enter") handleSignIn(); }
                 })
               ),
@@ -695,7 +695,7 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
               value: suFirstName,
               onChange: function(e) { setSuFirstName(e.target.value); },
               style: inputStyle,
-              placeholder: "Mary"
+              placeholder: ""
             })
           ),
           React.createElement("div", { style: { flex: 1 } },
@@ -705,7 +705,7 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
               value: suLastName,
               onChange: function(e) { setSuLastName(e.target.value); },
               style: inputStyle,
-              placeholder: "Smith"
+              placeholder: ""
             })
           )
         ),
@@ -716,7 +716,7 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
             value: suEmail,
             onChange: function(e) { setSuEmail(e.target.value); },
             style: inputStyle,
-            placeholder: "you@email.com"
+            placeholder: ""
           })
         ),
         React.createElement("div", { style: { marginBottom: 14 } },
@@ -726,7 +726,7 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
             value: suPhone,
             onChange: function(e) { setSuPhone(_fmtPhone(e.target.value)); },
             style: inputStyle,
-            placeholder: "(XXX) XXX-XXXX",
+            placeholder: "",
             maxLength: 14
           })
         ),
@@ -751,7 +751,7 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
             value: suNmls,
             onChange: function(e) { setSuNmls(e.target.value.replace(/\D/g, "")); },
             style: inputStyle,
-            placeholder: "e.g. 729612"
+            placeholder: ""
           }),
           React.createElement("div", { style: { fontSize: 11, color: "#94A3B0", marginTop: 4, fontFamily: font } },
             "Your NMLS number is used to generate your unique referral link."
@@ -764,7 +764,7 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
             value: suPassword,
             onChange: function(e) { setSuPassword(e.target.value); },
             style: inputStyle,
-            placeholder: "At least 6 characters"
+            placeholder: ""
           })
         ),
         React.createElement("div", { style: { marginBottom: 14 } },
@@ -774,7 +774,7 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
             value: suPassword2,
             onChange: function(e) { setSuPassword2(e.target.value); },
             style: inputStyle,
-            placeholder: "Re-enter password"
+            placeholder: ""
           })
         ),
         error && React.createElement("div", {
