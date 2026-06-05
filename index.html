@@ -2,10 +2,13 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="refresh" content="0; url=mortgage-toolkit.html">
   <title>Home Loan Toolkit</title>
 </head>
 <body>
-  <script>window.location.replace("mortgage-toolkit.html");</script>
+  <script>
+    // Preserve the original path/search when redirecting so deep links survive
+    var dest = "mortgage-toolkit.html" + window.location.search + window.location.hash;
+    window.location.replace(dest);
+  </script>
 </body>
 </html>

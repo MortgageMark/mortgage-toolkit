@@ -1114,7 +1114,34 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
 
   // Portal account creation
   const [showPerson2,    setShowPerson2]    = useState(!!(contact.first_name2 || contact.last_name2 || contact.nickname2));
-  const [mobileTab,      setMobileTab]      = useState("contact"); // tracks active mobile tab highlight
+  const [mobileTab,      setMobileTab]      = useState("scenarios"); // tracks active mobile tab highlight
+
+  // Scroll-spy: update active tab as sections scroll into view (mobile only)
+  React.useEffect(function() {
+    if (!isMobileCD) return;
+    var sc = document.getElementById("cd-scroll-container");
+    if (!sc) return;
+    var SECTIONS = [
+      { id: "cd-notes-mobile",     tab: "notes"     },
+      { id: "cd-team-section",     tab: "team"      },
+      { id: "cd-scenarios-section", tab: "scenarios" },
+    ];
+    function onScroll() {
+      var scTop = sc.getBoundingClientRect().top;
+      for (var i = 0; i < SECTIONS.length; i++) {
+        var el = document.getElementById(SECTIONS[i].id);
+        if (!el) continue;
+        if (el.getBoundingClientRect().top - scTop <= 80) {
+          setMobileTab(SECTIONS[i].tab);
+          return;
+        }
+      }
+      setMobileTab("scenarios");
+    }
+    sc.addEventListener("scroll", onScroll, { passive: true });
+    return function() { sc.removeEventListener("scroll", onScroll); };
+  }, [isMobileCD]);
+
   const [photoUploading, setPhotoUploading] = useState(false);
   const [copiedRefLink,    setCopiedRefLink]    = useState(false);
   const [partnerStatus,    setPartnerStatus]    = useState(null); // null | 'pending' | 'active'
@@ -1658,12 +1685,14 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                 Scenarios
               </button>
             )}
-            <button onClick={function() {
-              setMobileTab("team");
-              var el = document.getElementById("cd-team-section"); if (el) el.scrollIntoView({ behavior: "auto" });
-            }} style={{ padding: "5px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif", whiteSpace: "nowrap", background: mobileTab === "team" ? "#ffffff" : "transparent", color: mobileTab === "team" ? "#1e3a5f" : "#64748b", boxShadow: mobileTab === "team" ? "0 1px 3px rgba(0,0,0,0.12)" : "none" }}>
-              Team
-            </button>
+            {contact.contact_type === "client" && (
+              <button onClick={function() {
+                setMobileTab("team");
+                var el = document.getElementById("cd-team-section"); if (el) el.scrollIntoView({ behavior: "auto" });
+              }} style={{ padding: "5px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif", whiteSpace: "nowrap", background: mobileTab === "team" ? "#ffffff" : "transparent", color: mobileTab === "team" ? "#1e3a5f" : "#64748b", boxShadow: mobileTab === "team" ? "0 1px 3px rgba(0,0,0,0.12)" : "none" }}>
+                Team
+              </button>
+            )}
             {isInternal && (
               <button onClick={function() {
                 setMobileTab("notes");
@@ -1677,7 +1706,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
           </div>
         )}
 
-        <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
+        <div id="cd-scroll-container" style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
         <div
           style={{ maxWidth: "1000px", margin: "0 auto", padding: isMobileCD ? "12px 12px 16px" : "24px 16px", paddingBottom: editMode ? "120px" : "24px", boxSizing: "border-box", width: "100%" }}
           onDoubleClick={isInternal && !editMode ? function (e) {
@@ -1694,7 +1723,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
         }}>
           {/* Row 1: tabs + buttons together */}
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <div style={{ display: "flex", gap: "2px", background: "#e2e8f0", borderRadius: "10px", padding: "3px", width: "fit-content" }}>
+          <div style={{ display: (contact.contact_type === "client" || isMobileCD) ? "flex" : "none", gap: "2px", background: "#e2e8f0", borderRadius: "10px", padding: "3px", width: "fit-content" }}>
             {/* Scenarios — first on mobile */}
             {isInternal && isMobileCD && (
               <a href="#cd-scenarios-section"
@@ -1722,17 +1751,19 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
             >
               Contact
             </button>
-            <button
-              onClick={function () { var el = document.getElementById("cd-team-section"); if (el) el.scrollIntoView({ behavior: "auto" }); }}
-              style={{
-                padding: "5px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600,
-                border: "none", cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif", whiteSpace: "nowrap",
-                background: "transparent", color: "#64748b",
-                transition: "background 0.15s, color 0.15s",
-              }}
-            >
-              Team
-            </button>
+            {contact.contact_type === "client" && (
+              <button
+                onClick={function () { var el = document.getElementById("cd-team-section"); if (el) el.scrollIntoView({ behavior: "auto" }); }}
+                style={{
+                  padding: "5px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600,
+                  border: "none", cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif", whiteSpace: "nowrap",
+                  background: "transparent", color: "#64748b",
+                  transition: "background 0.15s, color 0.15s",
+                }}
+              >
+                Team
+              </button>
+            )}
             {/* Notes — last on mobile */}
             {isInternal && isMobileCD && (
               <a href="#cd-notes-mobile"
@@ -1747,7 +1778,6 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                 Notes
               </a>
             )}
-          </div>
           </div>{/* end tabs pill */}
           {/* Buttons — same row as tabs, right side */}
           {!editMode && (
@@ -1836,17 +1866,23 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                         <td style={{ padding: "9px 12px", color: "#94a3b8", whiteSpace: "nowrap" }}>{createdDate}</td>
                         <td style={{ padding: "9px 12px", textAlign: "right" }}>
                           {onSelectScenario && (
-                            <button onClick={function(e) { e.stopPropagation(); handleOpenScenario(s.id); }}
-                              disabled={openingScenario === s.id}
+                            <a href={"/scenarios/" + s.id}
+                              onClick={function(e) {
+                                if (e.ctrlKey || e.metaKey || e.shiftKey) return;
+                                e.preventDefault();
+                                handleOpenScenario(s.id);
+                              }}
                               style={{
+                                display: "inline-block",
                                 background: openingScenario === s.id ? "#e2e8f0" : "#1e3a5f",
                                 color: openingScenario === s.id ? "#94a3b8" : "#fff",
-                                border: "none", borderRadius: "6px", padding: "4px 12px",
-                                fontSize: "12px", fontWeight: 600, cursor: openingScenario === s.id ? "not-allowed" : "pointer",
-                                whiteSpace: "nowrap",
+                                borderRadius: "6px", padding: "4px 12px",
+                                fontSize: "12px", fontWeight: 600,
+                                pointerEvents: openingScenario === s.id ? "none" : "auto",
+                                whiteSpace: "nowrap", textDecoration: "none",
                               }}>
                               {openingScenario === s.id ? "Opening..." : "Open →"}
-                            </button>
+                            </a>
                           )}
                         </td>
                       </tr>
@@ -2238,17 +2274,23 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                         <td style={{ padding: "9px 12px", color: "#94a3b8", whiteSpace: "nowrap" }}>{createdDate}</td>
                         <td style={{ padding: "9px 12px", textAlign: "right" }}>
                           {onSelectScenario && (
-                            <button onClick={function(e) { e.stopPropagation(); handleOpenScenario(s.id); }}
-                              disabled={openingScenario === s.id}
+                            <a href={"/scenarios/" + s.id}
+                              onClick={function(e) {
+                                if (e.ctrlKey || e.metaKey || e.shiftKey) return;
+                                e.preventDefault();
+                                handleOpenScenario(s.id);
+                              }}
                               style={{
+                                display: "inline-block",
                                 background: openingScenario === s.id ? "#e2e8f0" : "#1e3a5f",
                                 color: openingScenario === s.id ? "#94a3b8" : "#fff",
-                                border: "none", borderRadius: "6px", padding: "4px 12px",
-                                fontSize: "12px", fontWeight: 600, cursor: openingScenario === s.id ? "not-allowed" : "pointer",
-                                whiteSpace: "nowrap",
+                                borderRadius: "6px", padding: "4px 12px",
+                                fontSize: "12px", fontWeight: 600,
+                                pointerEvents: openingScenario === s.id ? "none" : "auto",
+                                whiteSpace: "nowrap", textDecoration: "none",
                               }}>
                               {openingScenario === s.id ? "Opening..." : "Open →"}
-                            </button>
+                            </a>
                           )}
                         </td>
                       </tr>
@@ -2950,8 +2992,8 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
           </React.Fragment>
         )}
 
-        {/* ── Team section — always shown at bottom, scroll target ── */}
-        <div id="cd-team-section">
+        {/* ── Team section — client contacts only ── */}
+        <div id="cd-team-section" style={{ display: contact.contact_type === "client" ? "block" : "none" }}>
           <TransactionTeamTab
             contact={contact}
             contacts={contacts}
@@ -2970,6 +3012,8 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
         <div style={{ display: "flex", justifyContent: "center", padding: "16px 0 8px" }}>
           <button
             onClick={function() {
+              var sc = document.getElementById("cd-scroll-container");
+              if (sc) { sc.scrollTop = 0; return; }
               var el = document.getElementById("cd-content-top");
               if (el) el.scrollIntoView({ behavior: "auto" });
             }}
@@ -2986,13 +3030,26 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
 
         {/* ── Mobile notes — inside scroll area so page scrolls normally ── */}
         {isInternal && isMobileCD && (
-          <div id="cd-notes-mobile" style={{ background: "#f8fafc", borderTop: "1px solid #e2e8f0", marginTop: 8 }}>
+          <div id="cd-notes-mobile" style={{ background: "#f8fafc", borderTop: "1px solid #e2e8f0", marginTop: 8, paddingBottom: "60vh" }}>
             <ActivityNotesPanel
               contactId={contact.id}
               userName={user && (user.name || user.email) || ""}
               font={font}
               isMobile
             />
+            <div style={{ display: "flex", justifyContent: "center", padding: "8px 0 16px" }}>
+              <button
+                onClick={function() { var sc = document.getElementById("cd-scroll-container"); if (sc) sc.scrollTop = 0; }}
+                style={{
+                  background: "none", border: "1px solid #cbd5e1", borderRadius: 8,
+                  padding: "7px 20px", fontSize: 13, fontWeight: 600, color: "#64748b",
+                  cursor: "pointer", fontFamily: "'Inter', system-ui, sans-serif",
+                  display: "flex", alignItems: "center", gap: 6,
+                }}
+              >
+                ↑ Back to Top
+              </button>
+            </div>
           </div>
         )}
 
@@ -3172,6 +3229,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
           </div>
         </div>
       )}
+      </div>
 
     </div>
   );

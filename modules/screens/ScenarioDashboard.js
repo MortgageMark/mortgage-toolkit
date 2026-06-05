@@ -485,6 +485,29 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
     return function() { cancelled = true; };
   }, []);
 
+  // ── Deep-link: auto-open scenario from URL (/scenarios/:id) ─────────────
+  useEffect(function() {
+    if (!isCloudUser || !onSelectScenario || !supabase) return;
+    var pendingId = null;
+    try { pendingId = sessionStorage.getItem("mtk_pending_scenario_id"); } catch(e) {}
+    if (!pendingId) return;
+    try { sessionStorage.removeItem("mtk_pending_scenario_id"); } catch(e) {}
+    supabase.from("scenarios").select("*").eq("id", pendingId).single()
+      .then(function(res) {
+        if (res.error || !res.data) return;
+        var row = res.data;
+        var calcData = (row.calculation_data && typeof row.calculation_data === "object") ? row.calculation_data : {};
+        onSelectScenario({
+          id: row.id, name: row.name || "Untitled",
+          notes: row.notes || "", loan_purpose: row.loan_purpose || "purchase",
+          property_address: row.property_address || "",
+          calculatorData: calcData, status: row.status || "active",
+          contact_id: row.contact_id || null,
+        });
+      })
+      .catch(function() {});
+  }, [isCloudUser]);
+
   // ── Partner invite fetch (Realtor / Builder) ──────────────────────────
   useEffect(function() {
     if (!isCloudUser || (user.role !== "realtor" && user.role !== "builder")) return;

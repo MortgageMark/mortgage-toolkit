@@ -681,7 +681,7 @@ async function addContactNoteToSupabase({ contactId, body } = {}) {
   const { data, error } = await supabase
     .from("contact_notes")
     .insert({ contact_id: contactId, user_id: user.id, body: body.trim() })
-    .select().single();
+    .select("id, body, created_at, user_id, profiles(display_name)").single();
   return { data, error };
 }
 
