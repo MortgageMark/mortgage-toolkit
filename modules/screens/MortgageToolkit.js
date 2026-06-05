@@ -779,7 +779,6 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
       writeLS("mc_hp", hp);           // Mortgage Comparison: homePrice
       writeLS("rvb_price", hp);       // Rent vs Buy: homePrice
       writeLS("hel_value", hp);       // HELOC: homeValue
-      writeLS("sns_price", hp);       // Seller Net Sheet: salePrice
       writeLS("cce_price", parseFloat(hp) || 0); // Closing Cost: purchPrice (number)
       writeLS("pq_pp", hp);           // Pre-Qual: purchasePrice
       writeLS("lpc_price", hp);       // Loan Program Comparison: price

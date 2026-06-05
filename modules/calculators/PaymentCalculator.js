@@ -1886,62 +1886,73 @@ function PaymentCalculator({ isInternal, user }) {
               const displayDollar = taxDollarStored ? taxDollarStored : (monthly > 0 ? String(Math.round(monthly)) : "");
               return (
                 <>
-                  <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
-                    <div style={wrapStyle}>
-                      <span style={{ padding: "10px 0 10px 12px", color: c.navy, fontWeight: 600, fontSize: 15, fontFamily: font }}>$</span>
-                      <input type="text" inputMode="numeric"
-                        key={"tax-dollar-" + (taxDollarStored || Math.round(monthly / 50))}
-                        defaultValue={displayDollar}
-                        onFocus={function(e) { e.target.select(); }}
-                        onBlur={function(e) {
-                          const v = stripCommasLocal(e.target.value);
-                          if (String(v).trimStart().startsWith('-')) return;
-                          const mo = parseFloat(v) || 0;
-                          setTaxDollarStored(mo > 0 ? String(mo) : "");
-                          const basis2 = homesteadExemption ? hp * 0.70 : hp;
-                          if (basis2 > 0) setPropertyTaxRate(String(parseFloat((mo * 12 / basis2 * 100).toFixed(3))));
-                          setTaxMode("rate");
-                          if (mo > 0) setTaxOverridden(true);
-                        }}
-                        style={inputStyle} />
-                      <span style={{ padding: "10px 12px 10px 0", color: c.gray, fontSize: 13, fontWeight: 500, fontFamily: font }}>/mo</span>
+                  <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                    {/* Left column: $/mo field + summary */}
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+                      <div style={wrapStyle}>
+                        <span style={{ padding: "10px 0 10px 12px", color: c.navy, fontWeight: 600, fontSize: 15, fontFamily: font }}>$</span>
+                        <input type="text" inputMode="numeric"
+                          key={"tax-dollar-" + (taxDollarStored || Math.round(monthly / 50))}
+                          defaultValue={displayDollar}
+                          onFocus={function(e) { e.target.select(); }}
+                          onBlur={function(e) {
+                            const v = stripCommasLocal(e.target.value);
+                            if (String(v).trimStart().startsWith('-')) return;
+                            const mo = parseFloat(v) || 0;
+                            setTaxDollarStored(mo > 0 ? String(mo) : "");
+                            const basis2 = homesteadExemption ? hp * 0.70 : hp;
+                            if (basis2 > 0) setPropertyTaxRate(String(parseFloat((mo * 12 / basis2 * 100).toFixed(3))));
+                            setTaxMode("rate");
+                            if (mo > 0) setTaxOverridden(true);
+                          }}
+                          style={inputStyle} />
+                        <span style={{ padding: "10px 12px 10px 0", color: c.gray, fontSize: 13, fontWeight: 500, fontFamily: font }}>/mo</span>
+                      </div>
+                      {(taxDollarStored || monthly > 0) && (
+                        <div style={{ fontFamily: font, marginTop: 4, paddingLeft: 2 }}>
+                          <div style={{ fontSize: 12, color: c.grayLight || c.gray }}>
+                            {fmt(Math.round(parseFloat(taxDollarStored) || monthly))}/mo = {fmt(Math.round((parseFloat(taxDollarStored) || monthly) * 12))}/yr
+                            {homesteadExemption ? "… with Homestead Exemption" : ""}
+                          </div>
+                          {homesteadExemption && (() => {
+                            const hp2 = parseFloat(homePrice) || 0;
+                            const rate2 = parseFloat(propertyTaxRate) || 0;
+                            const withoutAnnual = hp2 > 0 && rate2 > 0 ? Math.round(hp2 * rate2 / 100) : null;
+                            const withoutMonthly = withoutAnnual ? Math.round(withoutAnnual / 12) : null;
+                            return withoutAnnual ? (
+                              <div style={{ fontSize: 11, color: c.gray, marginTop: 2 }}>
+                                {fmt(withoutMonthly)}/mo = {fmt(withoutAnnual)}/yr… without Homestead Exemption
+                              </div>
+                            ) : null;
+                          })()}
+                        </div>
+                      )}
                     </div>
-                    <div style={wrapStyle}>
-                      <input type="number" inputMode="decimal" onFocus={(e) => e.target.select()} min="0" max="3.5" step="0.001"
-                        value={propertyTaxRate}
-                        onChange={function(e) {
-                          const v = e.target.value;
-                          if (String(v).trimStart().startsWith('-') || parseFloat(v) > 3.5) return;
-                          setPropertyTaxRate(v);
-                          setTaxDollarStored("");
-                          setTaxMode("rate");
-                          setTaxOverridden(true);
-                        }}
-                        style={inputStyle} />
-                      <span style={{ padding: "10px 12px 10px 0", color: c.gray, fontSize: 13, fontWeight: 500, fontFamily: font }}>% / yr</span>
+                    {/* Right column: % / yr field + math hint */}
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+                      <div style={wrapStyle}>
+                        <input type="number" inputMode="decimal" onFocus={(e) => e.target.select()} min="0" max="3.5" step="0.001"
+                          value={propertyTaxRate}
+                          onChange={function(e) {
+                            const v = e.target.value;
+                            if (String(v).trimStart().startsWith('-') || parseFloat(v) > 3.5) return;
+                            setPropertyTaxRate(v);
+                            setTaxDollarStored("");
+                            setTaxMode("rate");
+                            setTaxOverridden(true);
+                          }}
+                          style={inputStyle} />
+                        <span style={{ padding: "10px 12px 10px 0", color: c.gray, fontSize: 13, fontWeight: 500, fontFamily: font }}>% / yr</span>
+                      </div>
+                      {hp > 0 && rate > 0 && (
+                        <div style={{ fontSize: 11, color: c.gray, fontFamily: font, marginTop: 4, paddingLeft: 2 }}>
+                          ({fmt(hp)} × {rate}% = {fmt(Math.round(hp * rate / 100))}/yr unexempt)
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                    {(taxDollarStored || monthly > 0) ? (
-                      <div style={{ fontFamily: font }}>
-                        <div style={{ fontSize: 12, color: c.grayLight || c.gray }}>
-                          {fmt(Math.round(parseFloat(taxDollarStored) || monthly))}/mo = {fmt(Math.round((parseFloat(taxDollarStored) || monthly) * 12))}/yr
-                          {homesteadExemption ? "… with Homestead Exemption" : ""}
-                        </div>
-                        {homesteadExemption && (() => {
-                          const hp2 = parseFloat(homePrice) || 0;
-                          const rate2 = parseFloat(propertyTaxRate) || 0;
-                          const withoutAnnual = hp2 > 0 && rate2 > 0 ? Math.round(hp2 * rate2 / 100) : null;
-                          const withoutMonthly = withoutAnnual ? Math.round(withoutAnnual / 12) : null;
-                          return withoutAnnual ? (
-                            <div style={{ fontSize: 11, color: c.gray, marginTop: 2 }}>
-                              {fmt(withoutMonthly)}/mo = {fmt(withoutAnnual)}/yr… without Homestead Exemption
-                            </div>
-                          ) : null;
-                        })()}
-                      </div>
-                    ) : <div />}
-                    {taxOverridden && (
+                  {taxOverridden && (
+                    <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6, marginBottom: 4 }}>
                       <button
                         onClick={function() {
                           const stateDefault = STATE_TAX_RATES[pcState] != null ? String(STATE_TAX_RATES[pcState]) : "2.3";
@@ -1955,8 +1966,8 @@ function PaymentCalculator({ isInternal, user }) {
                       >
                         × Reset to default
                       </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </>
               );
             })()}

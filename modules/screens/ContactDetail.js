@@ -735,6 +735,7 @@ function AddressAutocomplete({ onSelect, font }) {
 const NOTE_TYPES = [
   { value: "call",    label: "Call",     icon: "📞", color: "#16a34a" },
   { value: "leftmsg", label: "Message",  icon: "📱", color: "#d97706" },
+  { value: "meeting", label: "Meeting",  icon: "🤝", color: "#7c3aed" },
   { value: "note",    label: "Note",     icon: "📝", color: "#1e3a5f" },
 ];
 // Encode type into body: "call|body text"
@@ -743,7 +744,7 @@ function decodeNote(raw) {
   var sep = raw.indexOf("|");
   if (sep < 0) return { type: "note", body: raw };
   var t = raw.slice(0, sep);
-  if (["note","call","leftmsg"].includes(t)) return { type: t, body: raw.slice(sep + 1) };
+  if (["note","call","leftmsg","meeting"].includes(t)) return { type: t, body: raw.slice(sep + 1) };
   return { type: "note", body: raw };
 }
 
@@ -809,7 +810,7 @@ function ActivityNotesPanel({ contactId, userName, font, isMobile, width }) {
 
   return React.createElement("div", { style: panelStyle },
     // Header
-    React.createElement("div", { style: { fontWeight: 800, fontSize: 15, color: "#1e3a5f", marginBottom: 14, letterSpacing: "-0.01em" } }, "Activity Notes"),
+    React.createElement("div", { style: { fontWeight: 800, fontSize: 15, color: "#1e3a5f", marginBottom: 14, letterSpacing: "-0.01em" } }, "Activity Log"),
 
     // Note type selector
     React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 10 } },
@@ -921,7 +922,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
 
   // Draggable right panel width
   const [rightPanelWidth, setRightPanelWidth] = React.useState(function() {
-    try { var s = localStorage.getItem("cd_notes_width"); return s ? parseInt(s) : 700; } catch(e) { return 700; }
+    try { var s = localStorage.getItem("cd_notes_width"); var maxW = Math.floor(window.innerWidth * 0.4); return s ? Math.min(parseInt(s) || 380, maxW) : Math.min(380, maxW); } catch(e) { return 380; }
   });
   const isDraggingRef = React.useRef(false);
   function startDrag(e) {
@@ -1661,13 +1662,13 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
         </div>
       )}
 
-      {/* ── Body row: inline sidebar (internal) + content ────────── */}
-      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+      {/* ── Body row: contact card left + notes right ────────── */}
+      <div style={{ flex: 1, display: "grid", overflow: "hidden", gridTemplateColumns: (isInternal && !isMobileCD) ? ("1fr 6px " + rightPanelWidth + "px") : "1fr" }}>
 
-        {/* ── Content scroll area (wrapped in column on mobile so tab bar sits above) ── */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: "#f1f5f9" }}>
+        {/* ── Contact card scroll area ── */}
+        <div id="cd-scroll-container" style={{ minWidth: 0, overflowY: "auto", overflowX: "hidden", background: "#f1f5f9" }}>
 
-        {/* ── MOBILE FROZEN TAB BAR — lives OUTSIDE the scroll div so it never scrolls away ── */}
+        {/* ── MOBILE FROZEN TAB BAR ── */}
         {isMobileCD && (
           <div id="cd-content-top" style={{
             flexShrink: 0, zIndex: 50, background: "#f1f5f9",
@@ -1706,7 +1707,6 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
           </div>
         )}
 
-        <div id="cd-scroll-container" style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
         <div
           style={{ maxWidth: "1000px", margin: "0 auto", padding: isMobileCD ? "12px 12px 16px" : "24px 16px", paddingBottom: editMode ? "120px" : "24px", boxSizing: "border-box", width: "100%" }}
           onDoubleClick={isInternal && !editMode ? function (e) {
@@ -1808,7 +1808,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
           </div>{/* end row */}
         </div>{/* end column wrapper */}
 
-        {activeView === "contact" && (
+        {true && (
           <React.Fragment>
 
         {saveError && (
@@ -1893,6 +1893,81 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
             </div>
           )}
         </div>
+
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* CARD — Follow Up (Internal only)                                   */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {isInternal && (
+          <div style={{ ...sectionStyle, borderLeft: "4px solid #1e3a5f" }} onDoubleClick={cardDoubleClick}>
+            <div style={sectionTitleStyle}>Follow Up (Internal)</div>
+            <div style={{ display: "grid", gridTemplateColumns: isMobileCD ? "1fr" : "1fr 1fr", gap: isMobileCD ? "14px" : "24px" }}>
+              {/* Left: FU fields */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                {editMode ? (
+                  <React.Fragment>
+                    <div>
+                      <label style={labelStyle}>FU: Next</label>
+                      <input type="date" style={fieldStyle} value={editForm.fu_date}
+                        onChange={function(e) { handleFieldChange("fu_date", e.target.value); }} />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>FU: Who</label>
+                      <select style={fieldStyle} value={editForm.fu_who}
+                        onChange={function(e) { handleFieldChange("fu_who", e.target.value); }}>
+                        <option value="">—</option>
+                        <option value="MP">MP</option>
+                        <option value="JW">JW</option>
+                        <option value="TP">TP</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={labelStyle}>FU: Priority</label>
+                      <select style={fieldStyle} value={editForm.fu_priority}
+                        onChange={function(e) { handleFieldChange("fu_priority", e.target.value); }}>
+                        <option value="">—</option>
+                        <option value="Low">Low</option>
+                        <option value="High">High</option>
+                      </select>
+                    </div>
+                  </React.Fragment>
+                ) : (
+                  <React.Fragment>
+                    <InfoRow label="FU: Next"     value={contact.fu_date ? cdFormatDateOnly(contact.fu_date) : null} />
+                    <InfoRow label="FU: Who"      value={contact.fu_who || null} />
+                    <InfoRow label="FU: Priority" value={contact.fu_priority || null} />
+                  </React.Fragment>
+                )}
+              </div>
+              {/* Right: Notes */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                {editMode ? (
+                  <React.Fragment>
+                    <div>
+                      <label style={labelStyle}>Quick Note</label>
+                      <input type="text" style={fieldStyle} maxLength={120}
+                        value={editForm.note_quick}
+                        onChange={function(e) { handleFieldChange("note_quick", e.target.value); }} />
+                      <div style={{ fontSize: "11px", color: "#94a3b8", textAlign: "right", marginTop: "3px" }}>
+                        {(editForm.note_quick || "").length}/120
+                      </div>
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Permanent Note</label>
+                      <textarea style={Object.assign({}, fieldStyle, { minHeight: "80px", resize: "vertical" })}
+                        value={editForm.notes}
+                        onChange={function(e) { handleFieldChange("notes", e.target.value); }} />
+                    </div>
+                  </React.Fragment>
+                ) : (
+                  <React.Fragment>
+                    <InfoRow label="Quick Note"     value={contact.note_quick || null} />
+                    <InfoRow label="Permanent Note" value={contact.notes || null} />
+                  </React.Fragment>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
         {/* CARD 2 — Personal Info                                             */}
@@ -2302,101 +2377,6 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
           )}
         </div>
 
-        {/* ═══════════════════════════════════════════════════════════════════ */}
-        {/* CARD 3 — Notes (Internal only)                                     */}
-        {/* ═══════════════════════════════════════════════════════════════════ */}
-        <div style={sectionStyle} onDoubleClick={cardDoubleClick}>{cardNum(3)}
-          <div style={sectionTitleStyle}>Notes (Internal)</div>
-          <div style={{ display: "grid", gridTemplateColumns: isMobileCD ? "1fr" : "1fr 1.4fr", gap: isMobileCD ? "14px" : "24px" }}>
-
-            {/* ── Left: Follow-up fields ── */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-              {editMode ? (
-                <React.Fragment>
-                  <div>
-                    <label style={labelStyle}>FU: Next</label>
-                    <input
-                      type="date"
-                      style={fieldStyle}
-                      value={editForm.fu_date}
-                      onChange={function (e) { handleFieldChange("fu_date", e.target.value); }}
-                    />
-                  </div>
-                  <div>
-                    <label style={labelStyle}>FU: Who</label>
-                    <select
-                      style={fieldStyle}
-                      value={editForm.fu_who}
-                      onChange={function (e) { handleFieldChange("fu_who", e.target.value); }}
-                    >
-                      <option value="">—</option>
-                      <option value="MP">MP</option>
-                      <option value="JW">JW</option>
-                      <option value="TP">TP</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label style={labelStyle}>FU: Priority</label>
-                    <select
-                      style={fieldStyle}
-                      value={editForm.fu_priority}
-                      onChange={function (e) { handleFieldChange("fu_priority", e.target.value); }}
-                    >
-                      <option value="">—</option>
-                      <option value="Low">Low</option>
-                      <option value="High">High</option>
-                    </select>
-                  </div>
-                </React.Fragment>
-              ) : (
-                <React.Fragment>
-                  <InfoRow label="FU: Next"     value={contact.fu_date ? cdFormatDateOnly(contact.fu_date) : null} />
-                  <InfoRow label="FU: Who"      value={contact.fu_who || null} />
-                  <InfoRow label="FU: Priority" value={contact.fu_priority || null} />
-                </React.Fragment>
-              )}
-            </div>
-
-            {/* ── Right: Notes ── */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-              {editMode ? (
-                <React.Fragment>
-                  <div>
-                    <label style={labelStyle}>Note: Quick</label>
-                    <input
-                      type="text"
-                      style={fieldStyle}
-                      maxLength={120}
-                      value={editForm.note_quick}
-                      onChange={function (e) { handleFieldChange("note_quick", e.target.value); }}
-                      placeholder=""
-                    />
-                    <div style={{ fontSize: "11px", color: "#94a3b8", textAlign: "right", marginTop: "3px" }}>
-                      {(editForm.note_quick || "").length}/120
-                    </div>
-                  </div>
-                  {isInternal && (
-                    <div>
-                      <label style={labelStyle}>Internal: Note: Permanent</label>
-                      <textarea
-                        style={Object.assign({}, fieldStyle, { minHeight: "60px", resize: "vertical" })}
-                        value={editForm.notes}
-                        onChange={function (e) { handleFieldChange("notes", e.target.value); }}
-                        placeholder=""
-                      />
-                    </div>
-                  )}
-                </React.Fragment>
-              ) : (
-                <React.Fragment>
-                  <InfoRow label="Note: Quick"     value={contact.note_quick || null} />
-                  {isInternal && <InfoRow label="Internal: Note: Permanent" value={contact.notes || null} />}
-                </React.Fragment>
-              )}
-            </div>
-
-          </div>
-        </div>
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
         {/* Activity Log (internal only)                                       */}
@@ -2461,12 +2441,6 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
             </div>
           )}
         </div>
-
-          </React.Fragment>
-        )}
-
-        {activeView === "contact" && (
-          <React.Fragment>
 
         {/* ═══════════════════════════════════════════════════════════════════ */}
         {/* Contact 2 Info (Person 2 phone/email)                             */}
@@ -3054,7 +3028,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
         )}
 
       </div>
-        </div>{/* end scroll div */}
+      </div>{/* end left column */}
 
       {/* ── Drag handle + Right panel (desktop only) ────────────────────── */}
       {isInternal && !isMobileCD && (
@@ -3063,8 +3037,8 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
           <div
             onMouseDown={startDrag}
             style={{
-              width: 6, flexShrink: 0, cursor: "col-resize", background: "transparent",
-              borderLeft: "1px solid #e2e8f0", position: "relative",
+              cursor: "col-resize", background: "transparent",
+              borderLeft: "1px solid #e2e8f0",
               transition: "background 0.15s",
             }}
             onMouseEnter={function(e) { e.currentTarget.style.background = "#cbd5e1"; }}
@@ -3229,7 +3203,6 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
           </div>
         </div>
       )}
-      </div>
 
     </div>
   );

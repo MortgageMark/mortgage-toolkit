@@ -1112,7 +1112,7 @@ function App() {
         setShowContacts(false); setPendingContactId(null);
         setActiveScenario({ none: true }); restoreCalculatorData({});
       } else if (route.type === "contact") {
-        setPendingContactId(route.id); setShowContacts(true);
+        setPendingContactId(route.id); setShowContacts(true); setContactView("contact");
         setActiveScenario({ none: true }); restoreCalculatorData({});
       } else if (route.type === "scenario") {
         // Just store — the ScenarioDashboard will pick it up
@@ -1165,6 +1165,7 @@ function App() {
             if (initialRoute && initialRoute.type === "contact") {
               setPendingContactId(initialRoute.id);
               setShowContacts(true);
+              setContactView("contact");
             } else if (initialRoute && initialRoute.type === "scenario") {
               // Store for post-load scenario fetch (handled below in normal flow)
               try { sessionStorage.setItem("mtk_pending_scenario_id", initialRoute.id); } catch(e) {}
