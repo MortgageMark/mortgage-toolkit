@@ -269,6 +269,7 @@ function InfoTip({ text }) {
   return React.createElement(React.Fragment, null,
     React.createElement("button", {
       ref: btnRef, type: "button", onClick: handleToggle,
+      tabIndex: -1,
       title: "More info",
       style: {
         display: "inline-flex", alignItems: "center", justifyContent: "center",

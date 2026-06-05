@@ -683,6 +683,27 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
   const [headerContact, setHeaderContact] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [navCollapsed, setNavCollapsed] = useLocalStorage("app_nav_collapsed", false);
+  const [sidebarWidth, setSidebarWidth] = useLocalStorage("app_sidebar_w", 192);
+  const sidebarDragRef = React.useRef(null);
+  const handleSidebarDragStart = React.useCallback(function(e) {
+    if (navCollapsed) return;
+    e.preventDefault();
+    var startX = e.clientX, startW = sidebarWidth;
+    function onMove(ev) {
+      var w = Math.min(320, Math.max(140, startW + ev.clientX - startX));
+      setSidebarWidth(w);
+    }
+    function onUp() {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    }
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, [navCollapsed, sidebarWidth]);
   const [showLenderPanel,  setShowLenderPanel]  = useState(false);
   const [notesOpen,        setNotesOpen]        = useState(false);
   const [sidebarNotes,     setSidebarNotes]     = useState([]);
@@ -726,6 +747,8 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
   const isInternal = (function() {
     if (!user) return false;
     if (user.isInternal === true) return true;
+    const INTERNAL_ROLES = ["super_admin", "admin", "branch_admin", "internal"];
+    if (user.role && INTERNAL_ROLES.includes(user.role)) return true;
     if (user.supabaseUser) return false;
     const r = JSON.parse(localStorage.getItem("mtk_roster") || "[]");
     return r.some(function(m) { return m.id === user.id && m.active; });
@@ -1389,53 +1412,51 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
         {/* ── Left sidebar ── */}
         {(!isMobile || sidebarOpen) && (
           <div className="mtk-no-print" style={isMobile ? {
-            /* Mobile: fixed overlay */
-            position: "fixed", top: 0, left: 0, height: "100%", width: 230, zIndex: 100,
+            /* Mobile: fixed overlay — 100dvh adjusts as browser chrome shows/hides */
+            position: "fixed", top: 0, left: 0, height: "100dvh", width: 230, zIndex: 100,
             background: headerBg, overflow: "hidden",
             display: "flex", flexDirection: "column",
             boxShadow: "4px 0 24px rgba(0,0,0,0.45)",
             paddingTop: "env(safe-area-inset-top, 0px)",
           } : {
             /* Desktop: always full height, overflow hidden — nav scrolls inside, profile pinned bottom */
-            width: navCollapsed ? 44 : 192, flexShrink: 0,
+            width: navCollapsed ? 44 : sidebarWidth, flexShrink: 0,
             background: headerBg, overflow: "hidden",
             display: "flex", flexDirection: "column",
-            transition: "width 0.2s",
+            transition: navCollapsed ? "width 0.2s" : "none",
+            position: "relative",
           }}>
+            {/* Drag-to-resize handle — desktop only, not when collapsed */}
+            {!isMobile && !navCollapsed && (
+              <div
+                onMouseDown={handleSidebarDragStart}
+                title="Drag to resize"
+                style={{ position: "absolute", top: 0, right: 0, width: 5, height: "100%", cursor: "col-resize", zIndex: 10, background: "transparent" }}
+              />
+            )}
             {/* Mobile: close button */}
             {isMobile && (
               <div style={{ display: "flex", justifyContent: "flex-end", padding: "12px 12px 8px" }}>
                 <button onClick={() => setSidebarOpen(false)} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 7, padding: "6px 12px", color: "#fff", fontSize: 16, cursor: "pointer" }}>&#10005;</button>
               </div>
             )}
-            {/* Profile row — shown on both desktop and mobile */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: (isMobile || !navCollapsed) ? "space-between" : "center", padding: (isMobile || !navCollapsed) ? "14px 14px 12px" : "10px 0", borderBottom: "1px solid rgba(255,255,255,0.12)", flexShrink: 0, gap: 10 }}>
-              {(isMobile || !navCollapsed) && (
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: font }}>
-                    {user && (user.name || user.email) || ""}
-                  </div>
-                  {user && user.role && (
-                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: font, textTransform: "capitalize" }}>
-                      {user.role}
-                    </div>
-                  )}
+
+            {/* ── Contact + Scenario name — very top of sidebar ── */}
+            {(isMobile || !navCollapsed) && isInternal && headerContact && (
+              <div style={{ padding: "14px 14px 10px", borderBottom: "1px solid rgba(255,255,255,0.12)", flexShrink: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: font }}>
+                  {[headerContact.prefix, headerContact.first_name, headerContact.last_name].filter(Boolean).join(" ") || "Contact"}
                 </div>
-              )}
-              {window.AppHeader && React.createElement(window.AppHeader, {
-                user: user, darkMode: darkMode, setDarkMode: setDarkMode,
-                userRole: userRole, setUserRole: isInternal ? setUserRole : null,
-                onLogout: onLogout, isInternal: isInternal,
-                isAdmin: !!(user && user.role === "admin"),
-                onContactInfo: onContactInfo,
-                onLoginSettings: onLoginSettings,
-              })}
-            </div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: font }}>
+                  {activeScenario && (activeScenario.clientName || activeScenario.name) ? (activeScenario.clientName || activeScenario.name) : "Scenario"}
+                </div>
+              </div>
+            )}
+
             {/* Collapse/expand toggle — desktop only */}
             {!isMobile && (
               <React.Fragment>
-                {/* Collapse/expand toggle */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: navCollapsed ? "center" : "space-between", padding: "12px 10px 4px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: navCollapsed ? "center" : "space-between", padding: "10px 10px 4px" }}>
                   {!navCollapsed && (
                     <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", color: "rgba(255,255,255,0.55)", textTransform: "uppercase", paddingLeft: 4, whiteSpace: "nowrap" }}>
                       Home Loan Toolkit
@@ -1575,7 +1596,39 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
               );
             })()}
 
-            {/* Profile moved to top of sidebar — no bottom duplicate */}
+            {/* ── Profile row — pinned at bottom ── */}
+            <div style={{
+              display: "flex", alignItems: "center",
+              justifyContent: (isMobile || !navCollapsed) ? "space-between" : "center",
+              padding: (isMobile || !navCollapsed) ? "12px 14px" : "10px 0",
+              paddingBottom: isMobile
+                ? "max(env(safe-area-inset-bottom, 12px), 20px)"
+                : (isMobile || !navCollapsed) ? "12px" : "10px",
+              borderTop: "1px solid rgba(255,255,255,0.12)",
+              flexShrink: 0, gap: 10,
+              background: headerBg,
+            }}>
+              {(isMobile || !navCollapsed) && (
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: font }}>
+                    {user && (user.name || user.email) || ""}
+                  </div>
+                  {user && user.role && (
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: font, textTransform: "capitalize" }}>
+                      {user.role === "internal" ? "Loan Officer" : user.role}
+                    </div>
+                  )}
+                </div>
+              )}
+              {window.AppHeader && React.createElement(window.AppHeader, {
+                user: user, darkMode: darkMode, setDarkMode: setDarkMode,
+                userRole: userRole, setUserRole: isInternal ? setUserRole : null,
+                onLogout: onLogout, isInternal: isInternal,
+                isAdmin: !!(user && user.role === "admin"),
+                onContactInfo: onContactInfo,
+                onLoginSettings: onLoginSettings,
+              })}
+            </div>
           </div>
         )}
 

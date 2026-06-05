@@ -1156,6 +1156,7 @@ function App() {
               isInternal: isInternal,
               supabaseUser: true,
               borrowerPermissions: profile.borrower_permissions || [],
+              fuWhoOptions: profile.fu_who_options || "",
             };
             setLoggedInUser(restoredUser);
             setActiveScenario(null); // always land on Scenario Dashboard after session restore
@@ -2044,31 +2045,7 @@ function App() {
           boxSizing: "border-box",
         }}>
 
-          {/* ── Name + Profile icon at very top ── */}
-          {/* Always visible on desktop; on mobile only when sidebar is open */}
-          {(!isMobile || sidebarPinned) && (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: sidebarPinned ? "space-between" : "center", padding: sidebarPinned ? "14px 14px 12px" : "10px 0", borderBottom: "1px solid rgba(255,255,255,0.12)", flexShrink: 0, gap: 10 }}>
-              {sidebarPinned && (
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "'Inter', system-ui, sans-serif" }}>
-                    {activeContactInfo ? activeContactInfo.name : (loggedInUser && (loggedInUser.name || loggedInUser.email)) || ""}
-                  </div>
-                  {(activeContactInfo ? activeContactInfo.badge : (loggedInUser && loggedInUser.role)) && (
-                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "'Inter', system-ui, sans-serif", textTransform: "capitalize" }}>
-                      {activeContactInfo ? activeContactInfo.badge : (loggedInUser && loggedInUser.role)}
-                    </div>
-                  )}
-                </div>
-              )}
-              {window.AppHeader && React.createElement(window.AppHeader, {
-                user: loggedInUser, darkMode: darkMode, setDarkMode: setDarkMode,
-                userRole: userRole, setUserRole: isInternal ? setUserRole : null,
-                onTeam: (loggedInUser && loggedInUser.role === "admin") ? function() { setShowUsers(true); } : null,
-                onLogout: handleLogout, isInternal: isInternal,
-                isAdmin: !!(loggedInUser && loggedInUser.role === "admin"),
-              })}
-            </div>
-          )}
+          {/* (profile row moved to bottom) */}
 
           {/* Pin / expand button (desktop) OR close button (mobile) */}
           <div style={{
@@ -2167,6 +2144,36 @@ function App() {
               </React.Fragment>
             )}
 
+          </div>
+
+          {/* ── Name + Profile icon — pinned at bottom ── */}
+          <div style={{
+            display: "flex", alignItems: "center",
+            justifyContent: sidebarPinned ? "space-between" : "center",
+            padding: sidebarPinned ? "12px 14px" : "10px 0",
+            paddingBottom: isMobile ? "max(env(safe-area-inset-bottom, 12px), 20px)" : (sidebarPinned ? "12px" : "10px"),
+            borderTop: "1px solid rgba(255,255,255,0.12)",
+            flexShrink: 0, gap: 10,
+          }}>
+            {sidebarPinned && (
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "'Inter', system-ui, sans-serif" }}>
+                  {loggedInUser && (loggedInUser.name || loggedInUser.email) || ""}
+                </div>
+                {loggedInUser && loggedInUser.role && (
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "'Inter', system-ui, sans-serif", textTransform: "capitalize" }}>
+                    {loggedInUser.role === "internal" ? "Loan Officer" : loggedInUser.role}
+                  </div>
+                )}
+              </div>
+            )}
+            {window.AppHeader && React.createElement(window.AppHeader, {
+              user: loggedInUser, darkMode: darkMode, setDarkMode: setDarkMode,
+              userRole: userRole, setUserRole: isInternal ? setUserRole : null,
+              onTeam: (loggedInUser && loggedInUser.role === "admin") ? function() { setShowUsers(true); } : null,
+              onLogout: handleLogout, isInternal: isInternal,
+              isAdmin: !!(loggedInUser && loggedInUser.role === "admin"),
+            })}
           </div>
 
         </div>

@@ -194,6 +194,7 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
         isInternal: isInternal,
         supabaseUser: true,
         borrowerPermissions: profile.borrower_permissions || [],
+        fuWhoOptions: (profile && profile.fu_who_options) || "",
         newContactId: newContactId || null,
         mustChangePassword: !!(profile && profile.must_change_password),
       });
@@ -230,11 +231,23 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
         setLoading(false);
         return;
       }
-      // If email confirmation is required, show a message
+      // Detect "email already registered" via two signals:
+      // 1. identities === [] (email-confirmation-enabled projects)
+      // 2. created_at is more than 30s ago (admin-created users returned by signUp have a non-empty
+      //    identities array but are NOT new — so the elapsed-time check catches them)
       if (data.user && data.user.identities && data.user.identities.length === 0) {
         setError("An account with this email already exists. Try signing in.");
         setLoading(false);
         return;
+      }
+      if (data.user && data.user.created_at) {
+        const ageSeconds = (Date.now() - new Date(data.user.created_at).getTime()) / 1000;
+        if (ageSeconds > 30) {
+          setError("An account with this email already exists. Please sign in instead.");
+          await supabase.auth.signOut();
+          setLoading(false);
+          return;
+        }
       }
       if (data.session) {
         // Auto-confirmed — log them in immediately
@@ -245,11 +258,32 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
           .eq("id", user.id)
           .single();
 
-        const role = (profile && profile.role) ? profile.role : suRole;
+        // If the trigger defaulted the profile to 'borrower' but the user chose a different role,
+        // correct it now. This happens when ON CONFLICT DO NOTHING skips the insert (e.g. a
+        // prior failed signup already created the row) or the trigger doesn't receive metadata.
+        let role = (profile && profile.role) ? profile.role : suRole;
+        if (profile && profile.role === "borrower" && suRole && suRole !== "borrower") {
+          await supabase.from("profiles").update({ role: suRole }).eq("id", user.id);
+          role = suRole;
+        }
         const displayName = (profile && profile.display_name) ? profile.display_name : (suFirstName.trim() + " " + suLastName.trim()).trim();
         const isInternal = (role === "admin" || role === "internal");
 
         syncProfileToRoster(user.id, displayName, role, profile);
+
+        // Seed FU Who options with this LO's initials on first signup
+        if (isInternal && suFirstName.trim() && suLastName.trim()) {
+          const initials = (suFirstName.trim()[0] + suLastName.trim()[0]).toUpperCase();
+          try {
+            // Seed fu_who_options in Supabase profile with this LO's initials
+            var _existing = (profile && profile.fu_who_options) || "";
+            var _opts = _existing ? _existing.split(",").map(function(s) { return s.trim(); }).filter(Boolean) : [];
+            if (!_opts.includes(initials)) {
+              _opts.push(initials);
+              await supabase.from("profiles").update({ fu_who_options: _opts.join(",") }).eq("id", user.id);
+            }
+          } catch(e) {}
+        }
 
         // Save NMLS to profile if provided (LO signup)
         if (suRole === "internal" && suNmls.trim()) {
@@ -284,6 +318,7 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
           isInternal: isInternal,
           supabaseUser: true,
           borrowerPermissions: profile.borrower_permissions || [],
+          fuWhoOptions: (profile && profile.fu_who_options) || "",
           newContactId: newContactId || null,
         });
       } else {

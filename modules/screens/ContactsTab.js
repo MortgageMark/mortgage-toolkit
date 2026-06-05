@@ -3,6 +3,7 @@ const { useState, useEffect, useMemo } = React;
 const supabase                          = window._supabaseClient;
 const fetchContactsFromSupabase         = window.fetchContactsFromSupabase;
 const saveContactToSupabase             = window.saveContactToSupabase;
+const patchContactInSupabase            = window.patchContactInSupabase;
 const archiveContactInSupabase          = window.archiveContactInSupabase;
 const deleteContactFromSupabase         = window.deleteContactFromSupabase;
 const bulkUpdateContactsInSupabase      = window.bulkUpdateContactsInSupabase;
@@ -34,8 +35,15 @@ const CLIENT_CATEGORIES_CT = [
 ];
 
 const TYPE_COLORS_CT = {
-  business: { bg: "rgba(59,130,246,0.15)",  text: "#2563eb" },
-  client:   { bg: "rgba(34,197,94,0.15)",   text: "#16a34a" },
+  business: { bg: "rgba(59,130,246,0.13)",  text: "#2563eb" },
+  client:   { bg: "rgba(34,197,94,0.13)",   text: "#16a34a" },
+};
+// Per-category overrides — more specific than contact_type
+const CATEGORY_COLORS_CT = {
+  "Realtor":       { bg: "rgba(234,88,12,0.12)",   text: "#ea580c" },
+  "Home Builder":  { bg: "rgba(124,58,237,0.12)",  text: "#7c3aed" },
+  "Loan Officer":  { bg: "rgba(59,130,246,0.13)",  text: "#2563eb" },
+  "Client":        { bg: "rgba(34,197,94,0.13)",   text: "#16a34a" },
 };
 
 function ctFormatPhone(val) {
@@ -239,6 +247,34 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
   const isAdmin     = !!(user && user.role === "admin");
   const isTaskView  = pageTitle === "Tasks: Contacts"; // task view has different columns
   const [darkMode, setDarkMode] = useLocalStorage("app_dark", false);
+
+  // ── Column visibility + widths ────────────────────────────────────────────
+  const CT_COL_DEFS = [
+    { id: "category",    label: "Category",    defaultW: 120 },
+    { id: "contact",     label: "Contact",      defaultW: 160 },
+    { id: "contact2",    label: "Contact 2",    defaultW: 140 },
+    { id: "fu_date",     label: "FU Next",      defaultW: 75  },
+    { id: "fu_who",      label: "FU Who",       defaultW: 75  },
+    { id: "fu_priority", label: "FU Priority",  defaultW: 90  },
+    { id: "note_quick",  label: "Quick Notes",  defaultW: 150 },
+    { id: "created_at",  label: "Created",      defaultW: 80  },
+  ];
+  const [ctColHidden,   setCtColHidden]   = useState(function() { try { return JSON.parse(localStorage.getItem("mtk_ct_col_hidden") || "[]"); } catch(e) { return []; } });
+  const [ctColWidths,   setCtColWidths]   = useState(function() { try { return JSON.parse(localStorage.getItem("mtk_ct_col_widths") || "{}"); } catch(e) { return {}; } });
+  const [showCtColPicker, setShowCtColPicker] = useState(false);
+  function ctColVisible(id)  { return !ctColHidden.includes(id); }
+  function ctColW(id, def)   { return ctColWidths[id] || def; }
+  function ctSaveHidden(h)   { setCtColHidden(h); try { localStorage.setItem("mtk_ct_col_hidden", JSON.stringify(h)); } catch(e) {} }
+  function ctSaveWidths(w)   { setCtColWidths(w); try { localStorage.setItem("mtk_ct_col_widths", JSON.stringify(w)); } catch(e) {} }
+  function ctStartResize(e, colId, defaultW) {
+    e.preventDefault();
+    var startX = e.clientX, startW = ctColW(colId, defaultW);
+    function onMove(ev) { ctSaveWidths(Object.assign({}, ctColWidths, { [colId]: Math.max(50, startW + ev.clientX - startX) })); }
+    function onUp() { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+  // ──────────────────────────────────────────────────────────────────────────
 
   const [contacts,        setContacts]        = useState([]);
   const [cloudLoading,    setCloudLoading]    = useState(false);
@@ -882,14 +918,13 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
   const S = {
     page: {
       minHeight: "100vh",
-      background: "linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)",
+      background: "#F5F8FA",
       fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
-      color: "#f8fafc",
+      color: "#1e293b",
     },
     header: {
-      background: "rgba(255,255,255,0.08)",
-      backdropFilter: "blur(10px)",
-      borderBottom: "1px solid rgba(255,255,255,0.12)",
+      background: "#fff",
+      borderBottom: "1px solid #e2e8f0",
       padding: "16px 24px",
       display: "flex",
       alignItems: "center",
@@ -897,20 +932,20 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
     },
     headerLeft: { display: "flex", alignItems: "center", gap: "16px" },
     backBtn: {
-      background: "rgba(255,255,255,0.12)",
-      color: "#fff",
-      border: "1px solid rgba(255,255,255,0.25)",
+      background: "#f1f5f9",
+      color: "#475569",
+      border: "1px solid #e2e8f0",
       borderRadius: "8px",
       padding: "8px 14px",
       cursor: "pointer",
       fontSize: "13px",
       fontWeight: "500",
     },
-    title: { fontSize: "20px", fontWeight: "700", color: "#fff", margin: 0 },
+    title: { fontSize: "20px", fontWeight: "700", color: "#1e293b", margin: 0 },
     logoutBtn: {
-      background: "rgba(255,255,255,0.1)",
-      color: "#cbd5e1",
-      border: "1px solid rgba(255,255,255,0.2)",
+      background: "#f1f5f9",
+      color: "#475569",
+      border: "1px solid #e2e8f0",
       borderRadius: "8px",
       padding: "7px 14px",
       cursor: "pointer",
@@ -929,9 +964,9 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
       minWidth: "200px",
       padding: "9px 14px",
       borderRadius: "8px",
-      border: "1px solid rgba(255,255,255,0.18)",
-      background: "rgba(255,255,255,0.07)",
-      color: "#f8fafc",
+      border: "1px solid #e2e8f0",
+      background: "#fff",
+      color: "#1e293b",
       fontSize: "14px",
       outline: "none",
     },
@@ -958,9 +993,9 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
       style: {
         padding: "6px 14px",
         borderRadius: "20px",
-        border: active ? "none" : "1px solid rgba(255,255,255,0.2)",
-        background: active ? "#2563eb" : "rgba(255,255,255,0.07)",
-        color: active ? "#fff" : "#94a3b8",
+        border: active ? "none" : "1px solid #e2e8f0",
+        background: active ? "#2563eb" : "#fff",
+        color: active ? "#fff" : "#64748b",
         fontSize: "13px",
         fontWeight: active ? "600" : "400",
         cursor: "pointer",
@@ -976,9 +1011,9 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
       onClick: function() { setCategoryFilter(cat); },
       style: {
         padding: "4px 12px", borderRadius: "14px",
-        border: active ? "none" : "1px solid rgba(255,255,255,0.15)",
-        background: active ? "#2563eb" : "rgba(255,255,255,0.05)",
-        color: active ? "#fff" : "#94a3b8",
+        border: active ? "none" : "1px solid #e2e8f0",
+        background: active ? "#2563eb" : "#fff",
+        color: active ? "#fff" : "#64748b",
         fontSize: "12px", fontWeight: active ? "600" : "400",
         cursor: "pointer",
       },
@@ -993,8 +1028,8 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
         padding: "5px 12px",
         borderRadius: "6px",
         border: "none",
-        background: active ? "rgba(255,255,255,0.15)" : "transparent",
-        color: active ? "#fff" : "#64748b",
+        background: active ? "rgba(37,99,235,0.1)" : "transparent",
+        color: active ? "#2563eb" : "#64748b",
         fontSize: "12px",
         fontWeight: active ? "600" : "400",
         cursor: "pointer",
@@ -1007,7 +1042,7 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
     fontWeight: "700", color: "#64748b",
     textTransform: "uppercase", letterSpacing: "0.05em",
     whiteSpace: "nowrap", userSelect: "none",
-    borderBottom: "1px solid rgba(255,255,255,0.1)",
+    borderBottom: "1px solid #e2e8f0",
   };
   var tdStyle = { padding: "10px 12px", verticalAlign: "middle", fontSize: "13px" };
 
@@ -1015,13 +1050,13 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
 
   var inputStyle = {
     width: "100%", padding: "8px 12px", borderRadius: "8px",
-    border: "1px solid rgba(255,255,255,0.15)",
-    background: "rgba(255,255,255,0.07)", color: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    background: "#fff", color: "#1e293b",
     fontSize: "14px", outline: "none", boxSizing: "border-box",
   };
-  var labelStyle  = { fontSize: "12px", color: "#94a3b8", marginBottom: "4px", display: "block" };
+  var labelStyle  = { fontSize: "12px", color: "#64748b", marginBottom: "4px", display: "block", fontWeight: "600" };
   var rowStyle    = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" };
-  var optionStyle = { background: "#1e3a5f", color: "#f8fafc" };
+  var optionStyle = { background: "#fff", color: "#1e293b" };
 
   function setAddField(field, value) {
     setAddForm(function(p) {
@@ -1050,9 +1085,9 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
           style: {
             display: "flex", flexWrap: "wrap", gap: "6px",
             padding: "10px 14px",
-            background: "rgba(255,255,255,0.05)",
+            background: "#f8fafc",
             borderRadius: "10px",
-            border: "1px solid rgba(255,255,255,0.1)",
+            border: "1px solid #e2e8f0",
           },
         },
           [null].concat(typeFilter === "business" ? BUSINESS_CATEGORIES_CT : CLIENT_CATEGORIES_CT)
@@ -1077,8 +1112,8 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
           onClick: function() { setFuWhoFilter(""); setFuPriorityFilter(""); setFuDateFilter(""); setCategoryFilter(null); setTypeFilter("all"); },
           style: {
             padding: "7px 12px", borderRadius: "8px", cursor: "pointer",
-            background: "rgba(239,68,68,0.15)", color: "#fca5a5",
-            border: "1px solid rgba(239,68,68,0.3)", fontSize: "12px", fontWeight: "600",
+            background: "rgba(239,68,68,0.08)", color: "#dc2626",
+            border: "1px solid rgba(239,68,68,0.25)", fontSize: "12px", fontWeight: "600",
             whiteSpace: "nowrap",
           },
         }, "✕ Clear"),
@@ -1089,14 +1124,14 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
           title: "Export " + filteredContacts.length + " contact" + (filteredContacts.length === 1 ? "" : "s") + " to CSV",
           style: {
             padding: "8px 14px", borderRadius: "8px", cursor: "pointer",
-            background: "rgba(255,255,255,0.07)", color: "#94a3b8",
-            border: "1px solid rgba(255,255,255,0.18)",
+            background: "#f1f5f9", color: "#64748b",
+            border: "1px solid #e2e8f0",
             fontSize: "13px", fontWeight: "500", whiteSpace: "nowrap",
           },
         }, "↓ CSV (" + filteredContacts.length + ")"),
 
         React.createElement("div", {
-          style: { display: "flex", gap: "4px", background: "rgba(255,255,255,0.06)", borderRadius: "8px", padding: "3px" }
+          style: { display: "flex", gap: "4px", background: "#f1f5f9", borderRadius: "8px", padding: "3px" }
         },
           React.createElement(StatusTab, { val: "active",    label: "Active"    }),
           React.createElement(StatusTab, { val: "archived",  label: "Archived"  }),
@@ -1325,9 +1360,9 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
           onChange: function(e) { setBulkField(e.target.value); setBulkValue(""); setBulkResult(null); },
           style: {
             padding: "5px 8px", borderRadius: "6px",
-            border: "1px solid rgba(255,255,255,0.18)",
-            background: bulkField ? "rgba(37,99,235,0.12)" : "rgba(255,255,255,0.07)",
-            color: bulkField ? "#93c5fd" : "#94a3b8",
+            border: "1px solid #e2e8f0",
+            background: bulkField ? "rgba(37,99,235,0.08)" : "#fff",
+            color: bulkField ? "#2563eb" : "#64748b",
             fontSize: "12px", cursor: "pointer", outline: "none",
           },
         },
@@ -1347,7 +1382,7 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
         (isInternal || isPartner) && bulkField === "contact_type" && React.createElement("select", {
           value: bulkValue,
           onChange: function(e) { setBulkValue(e.target.value); },
-          style: { padding: "5px 8px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.07)", color: "#f8fafc", fontSize: "12px", outline: "none" },
+          style: { padding: "5px 8px", borderRadius: "6px", border: "1px solid #e2e8f0", background: "#fff", color: "#1e293b", fontSize: "12px", outline: "none" },
         },
           React.createElement("option", { value: "" }, "Pick type…"),
           React.createElement("option", { value: "client" },   "Client"),
@@ -1356,7 +1391,7 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
         (isInternal || isPartner) && bulkField === "contact_category" && React.createElement("select", {
           value: bulkValue,
           onChange: function(e) { setBulkValue(e.target.value); },
-          style: { padding: "5px 8px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.07)", color: "#f8fafc", fontSize: "12px", outline: "none" },
+          style: { padding: "5px 8px", borderRadius: "6px", border: "1px solid #e2e8f0", background: "#fff", color: "#1e293b", fontSize: "12px", outline: "none" },
         },
           React.createElement("option", { value: "" }, "Pick category…"),
           React.createElement("optgroup", { label: "— Business —" },
@@ -1369,7 +1404,7 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
         (isInternal || isPartner) && bulkField === "status" && React.createElement("select", {
           value: bulkValue,
           onChange: function(e) { setBulkValue(e.target.value); },
-          style: { padding: "5px 8px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.07)", color: "#f8fafc", fontSize: "12px", outline: "none" },
+          style: { padding: "5px 8px", borderRadius: "6px", border: "1px solid #e2e8f0", background: "#fff", color: "#1e293b", fontSize: "12px", outline: "none" },
         },
           React.createElement("option", { value: "" }, "Pick status…"),
           React.createElement("option", { value: "active" },    "Active"),
@@ -1379,7 +1414,7 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
         (isInternal || isPartner) && bulkField === "fu_priority" && React.createElement("select", {
           value: bulkValue,
           onChange: function(e) { setBulkValue(e.target.value); },
-          style: { padding: "5px 8px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.07)", color: "#f8fafc", fontSize: "12px", outline: "none" },
+          style: { padding: "5px 8px", borderRadius: "6px", border: "1px solid #e2e8f0", background: "#fff", color: "#1e293b", fontSize: "12px", outline: "none" },
         },
           React.createElement("option", { value: "" }, "Pick priority…"),
           React.createElement("option", { value: "High" },   "🔴 High"),
@@ -1390,12 +1425,12 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
         (isInternal || isPartner) && bulkField === "fu_date" && React.createElement("input", {
           type: "date", value: bulkValue,
           onChange: function(e) { setBulkValue(e.target.value); },
-          style: { padding: "5px 8px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.07)", color: "#f8fafc", fontSize: "12px", outline: "none" },
+          style: { padding: "5px 8px", borderRadius: "6px", border: "1px solid #e2e8f0", background: "#fff", color: "#1e293b", fontSize: "12px", outline: "none" },
         }),
         (isInternal || isPartner) && (bulkField === "fu_who" || bulkField === "note_quick" || bulkField === "source" || bulkField === "company") && React.createElement("input", {
           type: "text", value: bulkValue, placeholder: "New value…",
           onChange: function(e) { setBulkValue(e.target.value); },
-          style: { padding: "5px 8px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.07)", color: "#f8fafc", fontSize: "12px", outline: "none", width: "140px" },
+          style: { padding: "5px 8px", borderRadius: "6px", border: "1px solid #e2e8f0", background: "#fff", color: "#1e293b", fontSize: "12px", outline: "none", width: "140px" },
         }),
 
         // Apply button
@@ -1441,8 +1476,8 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
           onClick: function() { setSelectedCIds([]); setBulkField(""); setBulkValue(""); setBulkResult(null); },
           style: {
             padding: "5px 10px", borderRadius: "6px",
-            border: "1px solid rgba(255,255,255,0.18)",
-            background: "transparent", color: "#94a3b8",
+            border: "1px solid #e2e8f0",
+            background: "transparent", color: "#64748b",
             fontSize: "12px", cursor: "pointer", whiteSpace: "nowrap",
           },
         }, "✕ Deselect"),
@@ -1463,12 +1498,40 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
       // ── Merge modal ───────────────────────────────────────────────────
       showMerge && React.createElement(MergeContactsModal, null),
 
+      // ── Columns picker ────────────────────────────────────────────────────
+      !cloudLoading && !cloudError && filteredContacts.length > 0 &&
+        React.createElement("div", { style: { display: "flex", justifyContent: "flex-end", marginBottom: 6, position: "relative", zIndex: 400 } },
+          React.createElement("button", {
+            onClick: function() { setShowCtColPicker(function(v) { return !v; }); },
+            style: { fontSize: 12, fontWeight: 600, padding: "6px 12px", borderRadius: 7, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }
+          }, "⚙ Columns " + (showCtColPicker ? "▲" : "▼")),
+          showCtColPicker && React.createElement(React.Fragment, null,
+            // Click-outside backdrop
+            React.createElement("div", { onClick: function() { setShowCtColPicker(false); }, style: { position: "fixed", inset: 0, zIndex: 9998 } }),
+            React.createElement("div", {
+              style: { position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 9999, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, boxShadow: "0 8px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.10)", padding: "14px 18px", minWidth: 220 }
+            },
+              React.createElement("div", { style: { fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b", marginBottom: 12, borderBottom: "1px solid #f1f5f9", paddingBottom: 8 } }, "Show / Hide Columns"),
+              CT_COL_DEFS.map(function(col) {
+                var visible = ctColVisible(col.id);
+                return React.createElement("label", { key: col.id, style: { display: "flex", alignItems: "center", gap: 10, padding: "5px 0", cursor: "pointer", fontSize: 13, fontWeight: 500, color: "#1e293b", userSelect: "none" } },
+                  React.createElement("input", { type: "checkbox", checked: visible, style: { width: 15, height: 15, cursor: "pointer", accentColor: "#2563eb" }, onChange: function() { ctSaveHidden(visible ? [...ctColHidden, col.id] : ctColHidden.filter(function(x) { return x !== col.id; })); } }),
+                  col.label
+                );
+              }),
+              React.createElement("div", { style: { marginTop: 10, borderTop: "1px solid #f1f5f9", paddingTop: 10 } },
+                React.createElement("button", { onClick: function() { ctSaveHidden([]); ctSaveWidths({}); setShowCtColPicker(false); }, style: { fontSize: 12, color: "#2563eb", background: "none", border: "none", cursor: "pointer", padding: 0, fontWeight: 600 } }, "Reset to defaults")
+              )
+            )
+          )
+        ),
+
       // ── Contact table ─────────────────────────────────────────────────
       !cloudLoading && !cloudError && filteredContacts.length > 0 &&
         React.createElement("div", {
           style: {
-            background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.1)",
+            background: "#fff",
+            border: "1px solid #e2e8f0",
             borderRadius: "10px",
             overflowX: "auto",
           }
@@ -1476,23 +1539,33 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
           React.createElement("table", {
             style: {
               width: "100%", borderCollapse: "collapse", tableLayout: "fixed",
-              minWidth: "1100px", fontSize: "13px",
+              minWidth: "600px", fontSize: "13px",
             }
           },
+          React.createElement("colgroup", null,
+            (isInternal || isPartner) ? React.createElement("col", { style: { width: "36px" } }) : null,
+            CT_COL_DEFS.map(function(col) {
+              return ctColVisible(col.id) ? React.createElement("col", { key: col.id, style: { width: ctColW(col.id, col.defaultW) + "px" } }) : null;
+            }),
+            isAdmin ? React.createElement("col", { style: { width: "80px" } }) : null
+          ),
             React.createElement("thead", null,
-              React.createElement("tr", { style: { background: "rgba(255,255,255,0.06)" } },
+              React.createElement("tr", { style: { background: "#f8fafc" } },
                 (function() {
                   // Sort arrow helper
                   function arrow(col) {
                     if (sortBy !== col) return React.createElement("span", { style: { opacity: 0.3, marginLeft: 3 } }, "⇅");
                     return React.createElement("span", { style: { marginLeft: 3, color: "#60a5fa" } }, sortDir === "asc" ? "↑" : "↓");
                   }
-                  var clkTh = Object.assign({}, thStyle, { cursor: "pointer", verticalAlign: "top" });
+                  var clkTh = Object.assign({}, thStyle, { cursor: "pointer", verticalAlign: "top", position: "relative" });
+                  function rh(colId, defW) {
+                    return React.createElement("div", { onMouseDown: function(e) { e.stopPropagation(); ctStartResize(e, colId, defW); }, style: { position: "absolute", right: 0, top: 0, width: 5, height: "100%", cursor: "col-resize", zIndex: 1 } });
+                  }
                   var fltSel = {
                     marginTop: "4px", display: "block", width: "100%",
                     fontSize: "10px", padding: "2px 4px",
-                    borderRadius: "4px", border: "1px solid rgba(255,255,255,0.18)",
-                    background: "rgba(255,255,255,0.07)", color: "#94a3b8",
+                    borderRadius: "4px", border: "1px solid #e2e8f0",
+                    background: "#fff", color: "#64748b",
                     cursor: "pointer", outline: "none",
                   };
                   var allFilteredIds = filteredContacts.map(function(c) { return c.id; });
@@ -1520,77 +1593,52 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
                         },
                       })
                     ),
-                    // Category — sortable + filterable
-                    React.createElement("th", { key: "cat", style: Object.assign({}, clkTh, { width: "160px" }) },
-                      React.createElement("div", { onClick: function() { handleSort("category"); }, style: { display: "inline-block" } },
-                        React.createElement("span", null, "Category"), arrow("category")
-                      ),
-                      React.createElement("select", {
-                        value: categoryFilter || "",
-                        onChange: function(e) { e.stopPropagation(); setCategoryFilter(e.target.value || null); setTypeFilter("all"); },
-                        onClick: function(e) { e.stopPropagation(); },
-                        style: fltSel,
-                      },
+                    // Category
+                    ctColVisible("category") && React.createElement("th", { key: "cat", style: Object.assign({}, clkTh, { position: "relative" }) },
+                      React.createElement("div", { onClick: function() { handleSort("category"); }, style: { display: "inline-block" } }, React.createElement("span", null, "Category"), arrow("category")),
+                      React.createElement("select", { value: categoryFilter || "", onChange: function(e) { e.stopPropagation(); setCategoryFilter(e.target.value || null); setTypeFilter("all"); }, onClick: function(e) { e.stopPropagation(); }, style: fltSel },
                         React.createElement("option", { value: "" }, "All"),
-                        React.createElement("optgroup", { label: "── Business ──" },
-                          BUSINESS_CATEGORIES_CT.map(function(c) { return React.createElement("option", { key: c, value: c }, c); })
-                        ),
-                        React.createElement("optgroup", { label: "── Client ──" },
-                          CLIENT_CATEGORIES_CT.map(function(c) { return React.createElement("option", { key: c, value: c }, c); })
-                        )
-                      )
-                    ),
-                    // Contact — sortable by name
-                    React.createElement("th", { key: "name", style: clkTh,
-                      onClick: function() { handleSort("name"); } },
-                      React.createElement("span", null, "Contact"), arrow("name")
-                    ),
-                    // Contact 2 — always visible
-                    React.createElement("th", { key: "contact2", style: thStyle }, "Contact 2"),
-                    // FU Next — sortable
-                    React.createElement("th", { key: "fu_date", style: Object.assign({}, clkTh, { width: "80px" }),
-                      onClick: function() { handleSort("fu_date"); } },
-                      React.createElement("span", null, "FU Next"), arrow("fu_date")
-                    ),
-                    // FU Who — sortable + filterable
-                    React.createElement("th", { key: "fu_who", style: Object.assign({}, clkTh, { width: "110px" }) },
-                      React.createElement("div", { onClick: function() { handleSort("fu_who"); }, style: { display: "inline-block" } },
-                        React.createElement("span", null, "FU Who"), arrow("fu_who")
+                        React.createElement("optgroup", { label: "── Business ──" }, BUSINESS_CATEGORIES_CT.map(function(c) { return React.createElement("option", { key: c, value: c }, c); })),
+                        React.createElement("optgroup", { label: "── Client ──" }, CLIENT_CATEGORIES_CT.map(function(c) { return React.createElement("option", { key: c, value: c }, c); }))
                       ),
-                      React.createElement("select", {
-                        value: fuWhoFilter,
-                        onChange: function(e) { e.stopPropagation(); setFuWhoFilter(e.target.value); },
-                        onClick: function(e) { e.stopPropagation(); },
-                        style: fltSel,
-                      },
+                      rh("category", 120)
+                    ),
+                    // Contact name
+                    ctColVisible("contact") && React.createElement("th", { key: "name", style: clkTh, onClick: function() { handleSort("name"); } },
+                      React.createElement("span", null, "Contact"), arrow("name"), rh("contact", 160)
+                    ),
+                    // Contact 2
+                    ctColVisible("contact2") && React.createElement("th", { key: "contact2", style: Object.assign({}, thStyle, { position: "relative" }) }, "Contact 2", rh("contact2", 140)),
+                    // FU Next
+                    ctColVisible("fu_date") && React.createElement("th", { key: "fu_date", style: clkTh, onClick: function() { handleSort("fu_date"); } },
+                      React.createElement("span", null, "FU Next"), arrow("fu_date"), rh("fu_date", 75)
+                    ),
+                    // FU Who
+                    ctColVisible("fu_who") && React.createElement("th", { key: "fu_who", style: clkTh },
+                      React.createElement("div", { onClick: function() { handleSort("fu_who"); }, style: { display: "inline-block" } }, React.createElement("span", null, "FU Who"), arrow("fu_who")),
+                      React.createElement("select", { value: fuWhoFilter, onChange: function(e) { e.stopPropagation(); setFuWhoFilter(e.target.value); }, onClick: function(e) { e.stopPropagation(); }, style: fltSel },
                         React.createElement("option", { value: "" }, "All"),
                         React.createElement("option", { value: "_none" }, "— None —"),
                         fuWhoOptions.map(function(w) { return React.createElement("option", { key: w, value: w }, w); })
-                      )
-                    ),
-                    // FU Priority — sortable + filterable
-                    React.createElement("th", { key: "fu_priority", style: Object.assign({}, clkTh, { width: "100px" }) },
-                      React.createElement("div", { onClick: function() { handleSort("fu_priority"); }, style: { display: "inline-block" } },
-                        React.createElement("span", null, "FU Priority"), arrow("fu_priority")
                       ),
-                      React.createElement("select", {
-                        value: fuPriorityFilter,
-                        onChange: function(e) { e.stopPropagation(); setFuPriorityFilter(e.target.value); },
-                        onClick: function(e) { e.stopPropagation(); },
-                        style: fltSel,
-                      },
+                      rh("fu_who", 75)
+                    ),
+                    // FU Priority
+                    ctColVisible("fu_priority") && React.createElement("th", { key: "fu_priority", style: clkTh },
+                      React.createElement("div", { onClick: function() { handleSort("fu_priority"); }, style: { display: "inline-block" } }, React.createElement("span", null, "FU Priority"), arrow("fu_priority")),
+                      React.createElement("select", { value: fuPriorityFilter, onChange: function(e) { e.stopPropagation(); setFuPriorityFilter(e.target.value); }, onClick: function(e) { e.stopPropagation(); }, style: fltSel },
                         React.createElement("option", { value: "" }, "All"),
                         React.createElement("option", { value: "_none" }, "— None —"),
                         React.createElement("option", { value: "High" }, "High"),
                         React.createElement("option", { value: "Medium" }, "Medium"),
                         React.createElement("option", { value: "Low" }, "Low")
-                      )
+                      ),
+                      rh("fu_priority", 90)
                     ),
-                    React.createElement("th", { key: "note_quick",  style: Object.assign({}, thStyle, { minWidth: "140px" }) }, "Quick Notes"),
+                    ctColVisible("note_quick") && React.createElement("th", { key: "note_quick", style: Object.assign({}, thStyle, { position: "relative" }) }, "Quick Notes", rh("note_quick", 150)),
                     // Created (hidden in task view)
-                    !isTaskView && React.createElement("th", { key: "created", style: Object.assign({}, clkTh, { width: "95px" }),
-                      onClick: function() { handleSort("created_at"); } },
-                      React.createElement("span", null, "Created"), arrow("created_at")
+                    !isTaskView && ctColVisible("created_at") && React.createElement("th", { key: "created", style: clkTh, onClick: function() { handleSort("created_at"); } },
+                      React.createElement("span", null, "Created"), arrow("created_at"), rh("created_at", 80)
                     ),
                     // Creator (admin only, hidden in task view)
                     !isTaskView && isAdmin && React.createElement("th", { key: "creator", style: Object.assign({}, clkTh, { width: "120px" }),
@@ -1607,7 +1655,7 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
               filteredContacts.map(function(contact) {
                 var fullName  = ((contact.first_name || "") + " " + (contact.last_name || "")).trim() || "Unnamed";
                 var category  = contact.contact_category || contact.contact_type || "client";
-                var tc        = TYPE_COLORS_CT[contact.contact_type] || TYPE_COLORS_CT.business;
+                var tc        = CATEGORY_COLORS_CT[contact.contact_category] || TYPE_COLORS_CT[contact.contact_type] || TYPE_COLORS_CT.business;
                 var phone     = ctFormatPhone(contact.phone_cell || contact.phone_work || contact.phone || "");
                 var email     = contact.email_personal || contact.email_work || contact.email || "";
                 var subLine   = phone || email || "";
@@ -1627,11 +1675,11 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
                   key: contact.id,
                   onClick: function() { setSelectedContact(contact); },
                   style: {
-                    borderBottom: "1px solid rgba(255,255,255,0.07)", cursor: "pointer",
-                    background: isChecked ? "rgba(37,99,235,0.07)" : "",
+                    borderBottom: "1px solid #f1f5f9", cursor: "pointer",
+                    background: isChecked ? "rgba(37,99,235,0.06)" : "#fff",
                   },
-                  onMouseEnter: function(e) { if (!isChecked) e.currentTarget.style.background = "rgba(255,255,255,0.06)"; },
-                  onMouseLeave: function(e) { e.currentTarget.style.background = isChecked ? "rgba(37,99,235,0.07)" : ""; },
+                  onMouseEnter: function(e) { if (!isChecked) e.currentTarget.style.background = "#f8fafc"; },
+                  onMouseLeave: function(e) { e.currentTarget.style.background = isChecked ? "rgba(37,99,235,0.06)" : "#fff"; },
                 },
 
                   // Checkbox cell
@@ -1653,7 +1701,7 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
                   ),
 
                   // Category badge
-                  React.createElement("td", { style: tdStyle },
+                  ctColVisible("category") && React.createElement("td", { style: tdStyle },
                     React.createElement("span", {
                       style: {
                         display: "inline-block",
@@ -1665,12 +1713,12 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
                   ),
 
                   // Contact Name + scenario badge
-                  React.createElement("td", { style: tdStyle },
-                    React.createElement("div", { style: { fontWeight: "600", color: "#f8fafc" } }, fullName),
+                  ctColVisible("contact") && React.createElement("td", { style: tdStyle },
+                    React.createElement("div", { style: { fontWeight: "600", color: "#1e293b" } }, fullName),
                     scCount > 0 && React.createElement("span", {
                       style: {
                         display: "inline-block", marginTop: "3px",
-                        background: "rgba(37,99,235,0.18)", color: "#60a5fa",
+                        background: "rgba(37,99,235,0.1)", color: "#2563eb",
                         borderRadius: "10px", padding: "1px 7px",
                         fontSize: "10px", fontWeight: "600",
                       }
@@ -1678,10 +1726,10 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
                   ),
 
                   // Contact 2
-                  React.createElement("td", { style: Object.assign({}, tdStyle, { color: "#94a3b8" }) },
+                  ctColVisible("contact2") && React.createElement("td", { style: Object.assign({}, tdStyle, { color: "#64748b" }) },
                     (name2 || phone2 || email2)
                       ? React.createElement("div", null,
-                          name2 && React.createElement("div", { style: { fontWeight: "600", color: "#f8fafc", whiteSpace: "nowrap" } }, name2),
+                          name2 && React.createElement("div", { style: { fontWeight: "600", color: "#1e293b", whiteSpace: "nowrap" } }, name2),
                           phone2 && React.createElement("div", { style: { fontSize: "11px", whiteSpace: "nowrap" } }, phone2),
                           email2 && React.createElement("div", {
                             title: email2,
@@ -1691,34 +1739,103 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
                       : React.createElement("span", { style: { color: "#334155" } }, "—")
                   ),
 
-                  // FU Next
-                  React.createElement("td", { style: Object.assign({}, tdStyle, { whiteSpace: "nowrap", fontSize: "12px" }) },
-                    contact.fu_date
-                      ? new Date(contact.fu_date + "T00:00:00").toLocaleDateString("en-US", { month: "2-digit", day: "2-digit" })
-                      : React.createElement("span", { style: { color: "#334155" } }, "—")
+                  // FU Next — inline editable, displays MM/DD
+                  ctColVisible("fu_date") && React.createElement("td", { style: Object.assign({}, tdStyle, { whiteSpace: "nowrap", fontSize: "13px", padding: "6px 12px" }), onClick: function(e) { e.stopPropagation(); } },
+                    React.createElement("input", {
+                      type: "text",
+                      defaultValue: contact.fu_date ? (function(d) { var p = d.split("-"); return p.length >= 3 ? p[1] + "/" + p[2] : d; })(contact.fu_date) : "",
+                      placeholder: "",
+                      onFocus: function(e) { e.target.style.boxShadow = "0 1px 0 #2563eb"; },
+                      onBlur: function(e) {
+                        e.target.style.boxShadow = "none";
+                        var raw = e.target.value.trim();
+                        if (!raw) {
+                          patchContactInSupabase && patchContactInSupabase(contact.id, { fu_date: null }).then(function(r) {
+                            if (!r.error) setContacts(function(prev) { return prev.map(function(x) { return x.id === contact.id ? Object.assign({}, x, { fu_date: null }) : x; }); });
+                          });
+                          return;
+                        }
+                        var m = raw.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
+                        if (!m) return;
+                        var yr = m[3] ? (m[3].length === 2 ? "20" + m[3] : m[3]) : (contact.fu_date ? contact.fu_date.split("-")[0] : new Date().getFullYear().toString());
+                        var iso = yr + "-" + m[1].padStart(2,"0") + "-" + m[2].padStart(2,"0");
+                        patchContactInSupabase && patchContactInSupabase(contact.id, { fu_date: iso }).then(function(r) {
+                          if (!r.error) setContacts(function(prev) { return prev.map(function(x) { return x.id === contact.id ? Object.assign({}, x, { fu_date: iso }) : x; }); });
+                        });
+                      },
+                      style: { border: "none", background: "transparent", fontSize: "13px", color: "#1e293b", width: "52px", outline: "none", padding: 0, fontFamily: "inherit" }
+                    })
                   ),
 
-                  // FU Who
-                  React.createElement("td", { style: Object.assign({}, tdStyle, { whiteSpace: "nowrap", fontSize: "12px" }) },
-                    contact.fu_who || React.createElement("span", { style: { color: "#334155" } }, "—")
+                  // FU Who — inline editable with datalist
+                  ctColVisible("fu_who") && React.createElement("td", { style: Object.assign({}, tdStyle, { whiteSpace: "nowrap", fontSize: "13px", padding: "6px 12px" }), onClick: function(e) { e.stopPropagation(); } },
+                    (function() {
+                      var fuOpts = ((user && user.fuWhoOptions) || "").split(",").map(function(s) { return s.trim(); }).filter(Boolean);
+                      var listId = "fu-who-ct-" + contact.id;
+                      return React.createElement(React.Fragment, null,
+                        React.createElement("input", {
+                          type: "text", list: listId, defaultValue: contact.fu_who || "", placeholder: "—",
+                          onFocus: function(e) { e.target.style.boxShadow = "0 1px 0 #2563eb"; },
+                          onBlur: function(e) {
+                            e.target.style.boxShadow = "none";
+                            var val = e.target.value.trim() || null;
+                            patchContactInSupabase && patchContactInSupabase(contact.id, { fu_who: val }).then(function(r) {
+                              if (!r.error) setContacts(function(prev) { return prev.map(function(x) { return x.id === contact.id ? Object.assign({}, x, { fu_who: val }) : x; }); });
+                            });
+                          },
+                          style: { border: "none", background: "transparent", fontSize: "13px", color: "#1e293b", width: "60px", outline: "none", padding: 0, fontFamily: "inherit" }
+                        }),
+                        React.createElement("datalist", { id: listId },
+                          fuOpts.map(function(o) { return React.createElement("option", { key: o, value: o }); })
+                        )
+                      );
+                    })()
                   ),
 
-                  // FU Priority
-                  React.createElement("td", { style: Object.assign({}, tdStyle, { whiteSpace: "nowrap", fontSize: "12px" }) },
-                    contact.fu_priority || React.createElement("span", { style: { color: "#334155" } }, "—")
+                  // FU Priority — inline editable, shown as colored badge
+                  ctColVisible("fu_priority") && React.createElement("td", { style: Object.assign({}, tdStyle, { whiteSpace: "nowrap", fontSize: "13px", padding: "6px 12px" }), onClick: function(e) { e.stopPropagation(); } },
+                    React.createElement("select", {
+                      defaultValue: contact.fu_priority || "",
+                      onChange: function(e) {
+                        var val = e.target.value || null;
+                        patchContactInSupabase && patchContactInSupabase(contact.id, { fu_priority: val }).then(function(r) {
+                          if (!r.error) setContacts(function(prev) { return prev.map(function(x) { return x.id === contact.id ? Object.assign({}, x, { fu_priority: val }) : x; }); });
+                        });
+                      },
+                      style: {
+                        border: "none", background: "transparent", fontSize: "13px", outline: "none",
+                        cursor: "pointer", padding: 0, fontFamily: "inherit",
+                        color: contact.fu_priority === "High" ? "#dc2626" : contact.fu_priority === "Medium" ? "#d97706" : contact.fu_priority === "Low" ? "#16a34a" : "#94a3b8",
+                        fontWeight: contact.fu_priority ? "600" : "400",
+                      }
+                    },
+                      React.createElement("option", { value: "" }, "—"),
+                      React.createElement("option", { value: "High" }, "High"),
+                      React.createElement("option", { value: "Medium" }, "Medium"),
+                      React.createElement("option", { value: "Low" }, "Low")
+                    )
                   ),
 
-                  // Quick Notes
-                  React.createElement("td", { style: Object.assign({}, tdStyle, { fontSize: "12px" }) },
-                    contact.note_quick
-                      ? React.createElement("span", { style: { display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, contact.note_quick)
-                      : React.createElement("span", { style: { color: "#334155" } }, "—")
+                  // Quick Notes — inline editable
+                  ctColVisible("note_quick") && React.createElement("td", { style: Object.assign({}, tdStyle, { fontSize: "13px", padding: "6px 12px" }), onClick: function(e) { e.stopPropagation(); } },
+                    React.createElement("input", {
+                      type: "text", defaultValue: contact.note_quick || "", placeholder: "—",
+                      onFocus: function(e) { e.target.style.boxShadow = "0 1px 0 #2563eb"; },
+                      onBlur: function(e) {
+                        e.target.style.boxShadow = "none";
+                        var val = e.target.value.trim() || null;
+                        patchContactInSupabase && patchContactInSupabase(contact.id, { note_quick: val }).then(function(r) {
+                          if (!r.error) setContacts(function(prev) { return prev.map(function(x) { return x.id === contact.id ? Object.assign({}, x, { note_quick: val }) : x; }); });
+                        });
+                      },
+                      style: { border: "none", background: "transparent", fontSize: "13px", color: "#1e293b", width: "100%", outline: "none", padding: 0, fontFamily: "inherit" }
+                    })
                   ),
 
                   // Created (hidden in task view)
-                  !isTaskView && React.createElement("td", {
-                    style: Object.assign({}, tdStyle, { color: "#475569", whiteSpace: "nowrap" }),
-                  }, created),
+                  !isTaskView && ctColVisible("created_at") && React.createElement("td", {
+                    style: Object.assign({}, tdStyle, { color: "#64748b", whiteSpace: "nowrap", fontSize: "12px" }),
+                  }, contact.created_at ? new Date(contact.created_at).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "2-digit" }) : "—"),
 
                   // Creator (admin only, hidden in task view)
                   !isTaskView && isAdmin && React.createElement("td", {

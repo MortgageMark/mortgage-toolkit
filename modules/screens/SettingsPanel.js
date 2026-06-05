@@ -26,6 +26,25 @@ function SettingsPanel({ open, onClose, darkMode, allModules, openTab }) {
   const [shareMode, setShareMode] = useLocalStorage("share_mode", "all");
   const [settingsTab, setSettingsTab] = useState("branding");
   const [portalModule, setPortalModule] = useState(allModules[0]?.id || "payment");
+  // fu_who_options — source of truth is Supabase; local state mirrors it for immediate UI feedback
+  const [fuWhoOptions, setFuWhoOptions] = useState(function() {
+    try { var u = JSON.parse(localStorage.getItem("mtk_app_user") || "null"); return (u && u.fuWhoOptions) || ""; } catch(e) { return ""; }
+  });
+  const [fuWhoInput, setFuWhoInput] = useState("");
+  const [fuWhoSaving, setFuWhoSaving] = useState(false);
+
+  async function saveFuWhoOptions(newVal) {
+    setFuWhoOptions(newVal);
+    try {
+      var u = JSON.parse(localStorage.getItem("mtk_app_user") || "null");
+      if (!u || !u.id || !_supabase) return;
+      setFuWhoSaving(true);
+      await _supabase.from("profiles").update({ fu_who_options: newVal }).eq("id", u.id);
+      // Mirror into cached user so next session restore reads it correctly
+      localStorage.setItem("mtk_app_user", JSON.stringify(Object.assign({}, u, { fuWhoOptions: newVal })));
+    } catch(e) {}
+    setFuWhoSaving(false);
+  }
 
   // ── Template management state ──────────────────────────────────────────
   const [tplList,       setTplList]       = useState([]);
@@ -244,6 +263,7 @@ function SettingsPanel({ open, onClose, darkMode, allModules, openTab }) {
             <button onClick={() => setSettingsTab("scenarios")} style={tabStyle(settingsTab === "scenarios")}>Scenarios</button>
             <button onClick={() => setSettingsTab("sharing")} style={tabStyle(settingsTab === "sharing")}>Share Tabs</button>
             <button onClick={() => setSettingsTab("portal")} style={tabStyle(settingsTab === "portal")}>Client Portal</button>
+            {_spIsInternal && <button onClick={() => setSettingsTab("followup")} style={tabStyle(settingsTab === "followup")}>Follow-Up</button>}
             {_spIsInternal && <button onClick={() => setSettingsTab("warnings")} style={tabStyle(settingsTab === "warnings")}>Warnings</button>}
             <button onClick={() => setSettingsTab("language")} style={tabStyle(settingsTab === "language")}>🌐 Language</button>
           </div>
@@ -505,6 +525,57 @@ function SettingsPanel({ open, onClose, darkMode, allModules, openTab }) {
               </div>
             </div>
           )}
+          {settingsTab === "followup" && _spIsInternal && (() => {
+            const opts = fuWhoOptions ? fuWhoOptions.split(",").map(s => s.trim()).filter(Boolean) : [];
+            return (
+              <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, fontFamily: font }}>Follow-Up Team</div>
+                <div style={{ fontSize: 12, color: c.textSecondary, fontFamily: font }}>
+                  These names / initials appear in the "FU: Who" dropdown on every scenario and contact row. Add one per line or separated by commas.
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, display: "block", marginBottom: 6, fontFamily: font }}>CURRENT OPTIONS</label>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+                    {opts.length === 0 && <span style={{ fontSize: 12, color: c.textSecondary, fontFamily: font }}>No options yet.</span>}
+                    {opts.map((opt, i) => (
+                      <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(37,99,235,0.1)", color: "#1d4ed8", borderRadius: 99, padding: "3px 10px", fontSize: 12, fontWeight: 600, fontFamily: font }}>
+                        {opt}
+                        <button onClick={() => {
+                          const updated = opts.filter((_, j) => j !== i).join(",");
+                          saveFuWhoOptions(updated);
+                        }} style={{ background: "none", border: "none", cursor: "pointer", color: "#1d4ed8", fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
+                      </span>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input
+                      value={fuWhoInput}
+                      onChange={e => setFuWhoInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter" && fuWhoInput.trim()) {
+                          const toAdd = fuWhoInput.trim().split(/[,\n]+/).map(s => s.trim()).filter(s => s && !opts.includes(s));
+                          if (toAdd.length) saveFuWhoOptions([...opts, ...toAdd].join(","));
+                          setFuWhoInput("");
+                        }
+                      }}
+                      placeholder="e.g. MP or Mark P."
+                      style={{ flex: 1, padding: "8px 12px", border: `1px solid ${c.border}`, borderRadius: 6, fontSize: 13, fontFamily: font, background: c.bg, color: c.text }}
+                    />
+                    <button onClick={() => {
+                      const toAdd = fuWhoInput.trim().split(/[,\n]+/).map(s => s.trim()).filter(s => s && !opts.includes(s));
+                      if (toAdd.length) saveFuWhoOptions([...opts, ...toAdd].join(","));
+                      setFuWhoInput("");
+                    }} style={{ padding: "8px 16px", background: COLORS.blue, color: "#fff", border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: font }}>
+                      {fuWhoSaving ? "Saving…" : "Add"}
+                    </button>
+                  </div>
+                </div>
+                <div style={{ fontSize: 11, color: c.textSecondary, fontFamily: font }}>
+                  💡 Tip: Use short initials (MP, PJ) for fast scanning in the dashboard.
+                </div>
+              </div>
+            );
+          })()}
           {settingsTab === "language" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               <div style={{ fontSize: 13, fontWeight: 600, fontFamily: font }}>Choose your preferred language for the app.</div>

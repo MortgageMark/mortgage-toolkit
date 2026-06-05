@@ -907,7 +907,9 @@ function ActivityNotesPanel({ contactId, userName, font, isMobile, width }) {
 }
 
 function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onLogout, onSelectScenario, contacts, onSelectContact, onScenarios, onTasksScenarios, onTasksContacts, activeView, onSetView }) {
-  const isInternal = !!(user && user.isInternal);
+  // "lo" included as a legacy fallback — some cached user objects may still carry the old role string
+  const INTERNAL_ROLES_CD = ["super_admin", "admin", "branch_admin", "internal", "lo"];
+  const isInternal = !!(user && (user.isInternal === true || (user.role && INTERNAL_ROLES_CD.includes(user.role))));
   const isAdmin    = !!(user && user.role === "admin");
   const isPartner  = !!(user && (user.role === "realtor" || user.role === "builder"));
   const canManage  = isInternal || isPartner;
@@ -971,9 +973,13 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
   const [cdBranches,  setCdBranches]  = useState([]);
   const isBusiness = contact.contact_type === "business";
   // True when the logged-in LO is viewing their own contact card
-  const isOwnProfile = isInternal && user && isBusiness && (
-    contact.email_work === user.email || contact.email_personal === user.email || contact.email === user.email
-  );
+  // Requires user.email to be a real non-empty string so null/undefined never accidentally match
+  const _userEmail = (user && user.email && typeof user.email === "string" && user.email.trim()) ? user.email.toLowerCase() : null;
+  const isOwnProfile = !!(isInternal && _userEmail && isBusiness && (
+    (contact.email_work      && contact.email_work.toLowerCase()      === _userEmail) ||
+    (contact.email_personal  && contact.email_personal.toLowerCase()  === _userEmail) ||
+    (contact.email           && contact.email.toLowerCase()           === _userEmail)
+  ));
   useEffectCD(function() {
     if (!supabaseCD || !isAdmin || !isBusiness) return;
     // Fetch all business contacts for team lead picker
@@ -1345,13 +1351,16 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
 
   async function handleNewScenario() {
     if (!supabaseCD || !onSelectScenario || !cdSaveScenario) return;
-    setCreatingScenario(true);
     const contactName = [contact.first_name, contact.last_name].filter(Boolean).join(" ") || "New Scenario";
+    const scenarioName = window.prompt("Scenario name:", contactName);
+    if (scenarioName === null) return; // user cancelled
+    setCreatingScenario(true);
+    const finalName = scenarioName.trim() || contactName;
     try {
       const uid = "s_" + Date.now();
       const { data, error } = await cdSaveScenario({
         uid:             uid,
-        name:            contactName,
+        name:            finalName,
         notes:           "",
         calculationData: { uid: uid },
         contact_id:      contact.id,
@@ -2027,7 +2036,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
               </div>
               {/* Right column: Person 2 fields */}
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                <div style={isMobileCD ? { borderTop: "1px solid #cbd5e1", marginTop: 8, paddingTop: 14, fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0C4160", marginBottom: 4 } : { borderTop: "1px solid #e2e8f0", paddingTop: 10, fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0C4160", marginBottom: 4 }}>Person 2</div>
+                <div style={isMobileCD ? { borderTop: "1px solid #cbd5e1", marginTop: 8, paddingTop: 14, fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0C4160", marginBottom: 4 } : { fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0C4160", marginBottom: 4 }}>Person 2</div>
                 <div>
                   <label style={labelStyle}>Prefix (2)</label>
                   <select style={fieldStyle} value={editForm.prefix2}
@@ -2092,7 +2101,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
               {/* Right: Person 2 — only shown when first_name2 exists */}
               {contact.first_name2 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                  <div style={isMobileCD ? { borderTop: "1px solid #cbd5e1", marginTop: 8, paddingTop: 14, fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0C4160", marginBottom: 4 } : { borderTop: "1px solid #e2e8f0", paddingTop: 10, fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0C4160", marginBottom: 4 }}>Person 2</div>
+                  <div style={isMobileCD ? { borderTop: "1px solid #cbd5e1", marginTop: 8, paddingTop: 14, fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0C4160", marginBottom: 4 } : { fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0C4160", marginBottom: 4 }}>Person 2</div>
                   <InfoRow label="Prefix (2)"     value={contact.prefix2} />
                   <InfoRow label="First Name (2)" value={contact.first_name2} />
                   <InfoRow label="Nickname (2)"   value={contact.nickname2} />
@@ -2106,8 +2115,8 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
 
         </div>
 
-        {/* Internal Info - LO/Admin only */}
-        {(isInternal || isAdmin) && (
+        {/* Internal Info - LO/Admin only, hidden when LO views their own card */}
+        {(isInternal || isAdmin) && !isOwnProfile && (
           <div style={sectionStyle} onDoubleClick={cardDoubleClick}>
             <div style={sectionTitleStyle}>Lead Details (Internal)</div>
             {editMode ? (

@@ -31,7 +31,7 @@ const setDefaultTemplateInSupabase = window.setDefaultTemplateInSupabase;
 // Grouping is derived from the lead_status string value — no separate column needed.
 
 const LEAD_GROUPS = ["active", "waiting", "archived"];
-const LEAD_GROUP_LABELS = { active: "Active", waiting: "Waiting", archived: "Archived" };
+const LEAD_GROUP_LABELS = { pre: "All", active: "Active", waiting: "Waiting", archived: "Archived" };
 
 function getLeadGroup(leadStatus) {
   if (!leadStatus) return "active";
@@ -248,7 +248,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
   const [scenarios, setScenarios] = useLocalStorage("scenarios", []);
   // Keep window ref in sync so _openActivityReport can access latest scenarios
   React.useEffect(function() { window._sdScenarios = scenarios; }, [scenarios]);
-  const [groupFilterInternal, setGroupFilterInternal] = useState("active");
+  const [groupFilterInternal, setGroupFilterInternal] = useState("pre");
   // Use controlled value from App.js sidebar if provided, otherwise internal state
   const groupFilter    = groupFilterProp    !== undefined ? groupFilterProp    : groupFilterInternal;
   const setGroupFilter = setGroupFilterProp !== undefined ? setGroupFilterProp : setGroupFilterInternal;
@@ -339,6 +339,41 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
   const [bulkDeleting,  setBulkDeleting]  = useState(false);
   const [bulkResult,    setBulkResult]    = useState(null); // null | { ok, failed }
 
+  // ── Column visibility + widths ────────────────────────────────────────────
+  const SD_COL_DEFS = [
+    { id: "contact",     label: "Contact",     defaultW: 150 },
+    { id: "scenario",    label: "Scenario",    defaultW: 160 },
+    { id: "lead_status", label: "Lead Status", defaultW: 130 },
+    { id: "purpose",     label: "Purpose",     defaultW: 90  },
+    { id: "fu_date",     label: "FU Next",     defaultW: 75  },
+    { id: "fu_who",      label: "FU Who",      defaultW: 80  },
+    { id: "fu_priority", label: "FU Priority", defaultW: 90  },
+    { id: "note_quick",  label: "Quick Notes", defaultW: 150 },
+    { id: "createdAt",   label: "Created",     defaultW: 75  },
+    { id: "creator",     label: "Creator",     defaultW: 110 },
+  ];
+  const [sdColHidden,  setSdColHidden]  = useLocalStorage("sd_col_hidden",  []);
+  const [sdColWidths,  setSdColWidths]  = useLocalStorage("sd_col_widths",  {});
+  const [showColPicker, setShowColPicker] = useState(false);
+  const sdResizeRef = React.useRef(null);
+  function sdColVisible(id)  { return !sdColHidden.includes(id); }
+  function sdColW(id, def)   { return sdColWidths[id] || def; }
+  function sdStartResize(e, colId, defaultW) {
+    e.preventDefault();
+    var startX = e.clientX, startW = sdColW(colId, defaultW);
+    function onMove(ev) {
+      var w = Math.max(50, startW + ev.clientX - startX);
+      setSdColWidths(function(prev) { return Object.assign({}, prev, { [colId]: w }); });
+    }
+    function onUp() {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup",   onUp);
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup",   onUp);
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   const [filterLeadStatus, setFilterLeadStatus] = useState(""); // "" | "pre" | "active" | "waiting" | "archived"
   const [filterPurpose,    setFilterPurpose]    = useState(""); // "" | "purchase" | "refi"
   const [filterFuPriority, setFilterFuPriority] = useState(""); // "" | "High" | "Medium" | "Low"
@@ -350,15 +385,20 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
   const [saving, setSaving] = useState(false);
   const [cloudError, setCloudError] = useState(null);
   const [openMenuId,       setOpenMenuId]       = useState(null);
+  const [menuPos,          setMenuPos]          = useState(null); // {top, right} in viewport px for fixed positioning
   const [noteModalScenario, setNoteModalScenario] = useState(null); // scenario for quick-note modal
   const [noteText,          setNoteText]          = useState("");
   const [noteSaving,        setNoteSaving]        = useState(false);
   const [noteSaved,         setNoteSaved]         = useState(false);
   useEffect(function() {
     if (!openMenuId) return;
-    function handleClick() { setOpenMenuId(null); }
-    document.addEventListener("click", handleClick);
-    return function() { document.removeEventListener("click", handleClick); };
+    function closeMenu() { setOpenMenuId(null); setMenuPos(null); }
+    document.addEventListener("click", closeMenu);
+    window.addEventListener("scroll", closeMenu, true); // capture scroll anywhere
+    return function() {
+      document.removeEventListener("click", closeMenu);
+      window.removeEventListener("scroll", closeMenu, true);
+    };
   }, [openMenuId]);
 
   const [auditLogOpen, setAuditLogOpen] = useState(null);
@@ -840,6 +880,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
       alert("Please link this scenario to a contact before creating it.");
       return;
     }
+    // For borrowers: we'll resolve their contact below — if it fails we'll abort there
     // Seed calculationData from selected template (if any)
     const selectedTemplate = templates.find(function(t) { return t.id === newTemplateId; });
     const templateCalcData = selectedTemplate ? (selectedTemplate.calculation_data || {}) : {};
@@ -872,14 +913,26 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
           }
           if (resolvedBorrowerContactId) setBorrowerContactId(resolvedBorrowerContactId);
         } catch (_) {}
+        // Borrowers must have a contact to link the scenario to
+        if (!user.isInternal && !resolvedBorrowerContactId) {
+          alert("Could not link scenario to your contact record. Please try again.");
+          setSaving(false);
+          return;
+        }
       }
       try {
+        const finalContactId = requiresContact ? (newContactId || null) : (resolvedBorrowerContactId || null);
+        if (!finalContactId) {
+          alert("Please link this scenario to a contact before creating it.");
+          setSaving(false);
+          return;
+        }
         const { data, error } = await saveScenarioToSupabase({
           uid:              newUid,
           name:             newClientName.trim(),
           notes:            "",
           calculationData:  { ...templateCalcData, uid: newUid },
-          contact_id:       requiresContact ? (newContactId || null) : (resolvedBorrowerContactId || null),
+          contact_id:       finalContactId,
           lead_status:      "?",
           loan_purpose:     newLoanPurpose,
           property_address: null,
@@ -1019,6 +1072,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
           name:             (scenario.clientName || "Untitled") + " (Copy)",
           notes:            scenario.notes || "",
           calculationData:  { ...(scenario.calculatorData || scenario.calculation_data || {}), uid: generateScenarioId() },
+          contact_id:       scenario.contact_id || null,
           lead_status:      scenario.lead_status || "?",
           loan_purpose:     scenario.loan_purpose || "purchase",
           property_address: scenario.property_address || null,
@@ -1352,12 +1406,32 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
     waiting: scenarios.filter(function(s) { return getLeadGroup(s.lead_status) === "waiting"; }).length,
   };
 
-  // "Closing this month" — target_close_date in current month, not archived
+  // Helper: get closing date from scenario — checks target_close_date first,
+  // then falls back to fs_closing_date stored inside the scenario's calculatorData
+  // (the Fee Sheet closing date picker, stored as mtk_fs_closing_date in localStorage).
+  function getClosingDate(s) {
+    if (s.target_close_date) return s.target_close_date + "";
+    var cd = s.calculatorData && s.calculatorData["fs_closing_date"];
+    if (!cd) return null;
+    try { var p = JSON.parse(cd); return typeof p === "string" ? p : null; } catch(e) { return typeof cd === "string" ? cd : null; }
+  }
+
+  // Helper: lead status is 01. Contract/Go through 15. Funded
+  function isContractToFunded(leadStatus) {
+    if (!leadStatus) return false;
+    var m = leadStatus.match(/^(\d+)\./);
+    if (!m) return false;
+    var n = parseInt(m[1], 10);
+    return n >= 1 && n <= 15;
+  }
+
+  // "Closing this month" — closing date in current month AND status is 01–15
   const _now = new Date();
   const closingThisMonth = scenarios.filter(function(s) {
-    if (!s.target_close_date) return false;
-    if (getLeadGroup(s.lead_status) === "archived") return false;
-    const parts = (s.target_close_date + "").split("-");
+    if (!isContractToFunded(s.lead_status)) return false;
+    var dateStr = getClosingDate(s);
+    if (!dateStr) return false;
+    const parts = dateStr.split("-");
     return parts.length >= 2 &&
       parseInt(parts[0], 10) === _now.getFullYear() &&
       parseInt(parts[1], 10) - 1 === _now.getMonth();
@@ -1384,9 +1458,10 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
   const filtered = scenarios
     .filter(function(s) {
       if (closingFilter) {
-        if (getLeadGroup(s.lead_status) === "archived") return false;
-        if (!s.target_close_date) return false;
-        const parts = (s.target_close_date + "").split("-");
+        if (!isContractToFunded(s.lead_status)) return false;
+        var dateStr = getClosingDate(s);
+        if (!dateStr) return false;
+        const parts = dateStr.split("-");
         return parts.length >= 2 &&
           parseInt(parts[0], 10) === _now.getFullYear() &&
           parseInt(parts[1], 10) - 1 === _now.getMonth();
@@ -1399,6 +1474,8 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
         var m2 = LEAD_STATUSES_ALL.find(function(x) { return x.value === s.lead_status; });
         return m2 ? m2.group === "active" : false;
       }
+      // "All" tab (groupFilter === "pre") shows everything except archived
+      if (groupFilter === "pre") return getLeadGroup(s.lead_status) !== "archived";
       return getLeadGroup(s.lead_status) === groupFilter;
     })
     .filter(function(s) {
@@ -1917,8 +1994,8 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
         {user.isInternal && (
           <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
             {[
-              { label: t("All"),              count: pipelineMetrics.pre + pipelineMetrics.active, bg: "rgba(59,130,246,0.08)",  border: "rgba(59,130,246,0.2)",  color: "#1d4ed8",
-                onClick: function() { setClosingFilter(false); setGroupFilter("active"); setPipelineSubFilter(null); } },
+              { label: t("All"),              count: pipelineMetrics.pre + pipelineMetrics.active + pipelineMetrics.waiting, bg: "rgba(59,130,246,0.08)",  border: "rgba(59,130,246,0.2)",  color: "#1d4ed8",
+                onClick: function() { setClosingFilter(false); setGroupFilter("pre"); setPipelineSubFilter(null); } },
               { label: t("Active Pipeline"),  count: pipelineMetrics.active,  bg: "rgba(34,197,94,0.08)",   border: "rgba(34,197,94,0.2)",   color: "#16a34a",
                 onClick: function() { setClosingFilter(false); setGroupFilter("active"); setPipelineSubFilter("pipeline"); } },
               { label: t("Waiting"),          count: pipelineMetrics.waiting, bg: "rgba(245,158,11,0.08)",  border: "rgba(245,158,11,0.2)",  color: "#b45309",
@@ -1928,7 +2005,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
             ].map(function(m) {
               const isActive = closingFilter
                 ? m.label === "Closing This Month"
-                : m.label === "All" ? (!pipelineSubFilter && groupFilter !== "waiting")
+                : m.label === "All" ? (groupFilter === "pre" && !pipelineSubFilter && !closingFilter)
                 : m.label === "Active Pipeline" ? pipelineSubFilter === "pipeline"
                 : m.label === "Waiting" ? groupFilter === "waiting" && !closingFilter
                 : false;
@@ -2335,11 +2412,11 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
             <p style={{ color: c.textSecondary || "#888", margin: "0 0 20px" }}>
               {searchTerm
                 ? "Try a different search term"
-                : groupFilter === "active"
+                : (groupFilter === "active" || groupFilter === "pre")
                   ? t("Create your first scenario to get started")
                   : (LEAD_GROUP_LABELS[groupFilter] + (user.isInternal ? " leads" : " scenarios") + " will appear here")}
             </p>
-            {!searchTerm && groupFilter === "active" && (
+            {!searchTerm && (groupFilter === "active" || groupFilter === "pre") && (
               <button
                 onClick={openNewForm}
                 style={{
@@ -2504,10 +2581,64 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
           </div>
         )}
 
+        {/* ── Columns picker ───────────────────────────────────────── */}
+        {user.isInternal && filtered.length > 0 && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6, position: "relative", zIndex: 400 }}>
+            <button
+              onClick={function() { setShowColPicker(function(v) { return !v; }); }}
+              style={{ fontSize: 12, fontWeight: 600, padding: "6px 12px", borderRadius: 7, border: "1px solid " + c.border, background: c.cardBg, color: c.text, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}
+            >⚙ Columns {showColPicker ? "▲" : "▼"}</button>
+            {showColPicker && (
+              <>
+                {/* Click-outside backdrop */}
+                <div onClick={function() { setShowColPicker(false); }} style={{ position: "fixed", inset: 0, zIndex: 9998 }} />
+                <div style={{
+                  position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 9999,
+                  background: "#fff", border: "1px solid #e2e8f0",
+                  borderRadius: 12, boxShadow: "0 8px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.10)",
+                  padding: "14px 18px", minWidth: 220,
+                }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b", marginBottom: 12, borderBottom: "1px solid #f1f5f9", paddingBottom: 8 }}>
+                    Show / Hide Columns
+                  </div>
+                  {SD_COL_DEFS.map(function(col) {
+                    var visible = sdColVisible(col.id);
+                    return React.createElement("label", { key: col.id, style: { display: "flex", alignItems: "center", gap: 10, padding: "5px 0", cursor: "pointer", fontSize: 13, fontWeight: 500, color: "#1e293b", userSelect: "none" } },
+                      React.createElement("input", {
+                        type: "checkbox", checked: visible,
+                        style: { width: 15, height: 15, cursor: "pointer", accentColor: "#2563eb" },
+                        onChange: function() {
+                          setSdColHidden(function(prev) {
+                            return visible ? [...prev, col.id] : prev.filter(function(x) { return x !== col.id; });
+                          });
+                        }
+                      }),
+                      col.label
+                    );
+                  })}
+                  <div style={{ marginTop: 10, borderTop: "1px solid #f1f5f9", paddingTop: 10 }}>
+                    <button onClick={function() { setSdColHidden([]); setSdColWidths({}); setShowColPicker(false); }}
+                      style={{ fontSize: 12, color: "#2563eb", background: "none", border: "none", cursor: "pointer", padding: 0, fontWeight: 600 }}>
+                      Reset to defaults
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
         {/* ── Scenario Table ───────────────────────────────────────── */}
         {user.isInternal && filtered.length > 0 && (
           <div style={{ overflowX: "auto", background: c.cardBg, border: "1px solid " + c.border, borderRadius: "12px" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+              <colgroup>
+                <col style={{ width: 36 }} />
+                {SD_COL_DEFS.map(function(col) {
+                  return sdColVisible(col.id) ? <col key={col.id} style={{ width: sdColW(col.id, col.defaultW) }} /> : null;
+                })}
+                <col style={{ width: 40 }} />
+              </colgroup>
               <thead>
                 <tr style={{ borderBottom: "2px solid " + c.border }}>
                   {/* ── sortable + filterable column headers ── */}
@@ -2518,7 +2649,11 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                       return <span style={{ marginLeft: 3, color: "#2563eb" }}>{sortDir === "asc" ? "↑" : "↓"}</span>;
                     }
                     // Shared header click style
-                    const clickTh = { ...thStyle, cursor: "pointer", userSelect: "none" };
+                    const clickTh = { ...thStyle, cursor: "pointer", userSelect: "none", position: "relative" };
+                    // Resize handle for column headers
+                    function rh(colId, defW) {
+                      return <div onMouseDown={function(e) { e.stopPropagation(); sdStartResize(e, colId, defW); }} style={{ position: "absolute", right: 0, top: 0, width: 5, height: "100%", cursor: "col-resize", zIndex: 1 }} />;
+                    }
                     const filterSelectStyle = {
                       marginTop: 4, display: "block", width: "100%",
                       fontSize: "10px", padding: "2px 4px",
@@ -2545,17 +2680,17 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                         </th>
 
                         {/* Contact — sortable */}
-                        <th style={clickTh} onClick={function() { handleSort("contact"); }}>
-                          Contact {arrow("contact")}
-                        </th>
+                        {sdColVisible("contact") && <th style={clickTh} onClick={function() { handleSort("contact"); }}>
+                          Contact {arrow("contact")}{rh("contact",150)}
+                        </th>}
 
                         {/* Scenario Name — sortable */}
-                        <th style={clickTh} onClick={function() { handleSort("clientName"); }}>
-                          Scenario Name {arrow("clientName")}
-                        </th>
+                        {sdColVisible("scenario") && <th style={clickTh} onClick={function() { handleSort("clientName"); }}>
+                          Scenario Name {arrow("clientName")}{rh("scenario",160)}
+                        </th>}
 
                         {/* Lead Status — sortable + filterable by group */}
-                        <th style={clickTh}>
+                        {sdColVisible("lead_status") && <th style={{ ...clickTh, position: "relative" }}>
                           <div onClick={function() { handleSort("lead_status"); }} style={{ display: "inline-block" }}>
                             Lead Status {arrow("lead_status")}
                           </div>
@@ -2570,77 +2705,59 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                               return <option key={g.value} value={g.value}>{g.label}</option>;
                             })}
                           </select>
-                        </th>
+                        </th>}
 
-                        {/* Purpose — sortable + filterable */}
-                        <th style={clickTh}>
+                        {/* Purpose - sortable + filterable */}
+                        {sdColVisible("purpose") && <th style={{ ...clickTh, position: "relative" }}>
                           <div onClick={function() { handleSort("loan_purpose"); }} style={{ display: "inline-block" }}>
                             Purpose {arrow("loan_purpose")}
                           </div>
-                          <select
-                            value={filterPurpose}
-                            onChange={function(e) { e.stopPropagation(); setFilterPurpose(e.target.value); }}
-                            onClick={function(e) { e.stopPropagation(); }}
-                            style={{ ...filterSelectStyle, minWidth: 80 }}
-                          >
+                          <select value={filterPurpose} onChange={function(e) { e.stopPropagation(); setFilterPurpose(e.target.value); }} onClick={function(e) { e.stopPropagation(); }} style={{ ...filterSelectStyle, minWidth: 80 }}>
                             <option value="">All</option>
                             <option value="purchase">Purchase</option>
                             <option value="refi">Refi</option>
                           </select>
-                        </th>
+                          {rh("purpose",90)}
+                        </th>}
 
-                        {/* FU columns — sortable; Who + Priority also filterable */}
-                        <th style={clickTh} onClick={function() { handleSort("fu_date"); }}>
-                          FU Next {arrow("fu_date")}
-                        </th>
+                        {/* FU columns */}
+                        {sdColVisible("fu_date") && <th style={{ ...clickTh, position: "relative" }} onClick={function() { handleSort("fu_date"); }}>
+                          FU Next {arrow("fu_date")}{rh("fu_date",75)}
+                        </th>}
 
-                        <th style={clickTh}>
-                          <div onClick={function() { handleSort("fu_who"); }} style={{ display: "inline-block" }}>
-                            FU Who {arrow("fu_who")}
-                          </div>
-                          <select
-                            value={filterFuWho}
-                            onChange={function(e) { e.stopPropagation(); setFilterFuWho(e.target.value); }}
-                            onClick={function(e) { e.stopPropagation(); }}
-                            style={{ ...filterSelectStyle, minWidth: 80 }}
-                          >
+                        {sdColVisible("fu_who") && <th style={{ ...clickTh, position: "relative" }}>
+                          <div onClick={function() { handleSort("fu_who"); }} style={{ display: "inline-block" }}>FU Who {arrow("fu_who")}</div>
+                          <select value={filterFuWho} onChange={function(e) { e.stopPropagation(); setFilterFuWho(e.target.value); }} onClick={function(e) { e.stopPropagation(); }} style={{ ...filterSelectStyle, minWidth: 80 }}>
                             <option value="">All</option>
                             <option value="_none">— None —</option>
-                            {[...new Set(Object.values(contactsMap).map(function(c) { return c.fu_who; }).filter(Boolean))].sort().map(function(w) {
-                              return <option key={w} value={w}>{w}</option>;
-                            })}
+                            {[...new Set(Object.values(contactsMap).map(function(c) { return c.fu_who; }).filter(Boolean))].sort().map(function(w) { return <option key={w} value={w}>{w}</option>; })}
                           </select>
-                        </th>
+                          {rh("fu_who",80)}
+                        </th>}
 
-                        <th style={clickTh}>
-                          <div onClick={function() { handleSort("fu_priority"); }} style={{ display: "inline-block" }}>
-                            FU Priority {arrow("fu_priority")}
-                          </div>
-                          <select
-                            value={filterFuPriority}
-                            onChange={function(e) { e.stopPropagation(); setFilterFuPriority(e.target.value); }}
-                            onClick={function(e) { e.stopPropagation(); }}
-                            style={{ ...filterSelectStyle, minWidth: 80 }}
-                          >
+                        {sdColVisible("fu_priority") && <th style={{ ...clickTh, position: "relative" }}>
+                          <div onClick={function() { handleSort("fu_priority"); }} style={{ display: "inline-block" }}>FU Priority {arrow("fu_priority")}</div>
+                          <select value={filterFuPriority} onChange={function(e) { e.stopPropagation(); setFilterFuPriority(e.target.value); }} onClick={function(e) { e.stopPropagation(); }} style={{ ...filterSelectStyle, minWidth: 80 }}>
                             <option value="">All</option>
                             <option value="_none">— None —</option>
                             <option value="High">High</option>
                             <option value="Medium">Medium</option>
                             <option value="Low">Low</option>
                           </select>
-                        </th>
+                          {rh("fu_priority",90)}
+                        </th>}
 
-                        <th style={{ ...thStyle, minWidth: 140 }}>Quick Notes</th>
+                        {sdColVisible("note_quick") && <th style={{ ...thStyle, position: "relative" }}>Quick Notes{rh("note_quick",150)}</th>}
 
                         {/* Created — sortable (hidden in task view) */}
-                        {!isTaskView && (
-                          <th style={clickTh} onClick={function() { handleSort("createdAt"); }}>
-                            Created {arrow("createdAt")}
+                        {!isTaskView && sdColVisible("createdAt") && (
+                          <th style={{ ...clickTh, position: "relative" }} onClick={function() { handleSort("createdAt"); }}>
+                            Created {arrow("createdAt")}{rh("createdAt",75)}
                           </th>
                         )}
 
                         {/* Loan Officer (hidden in task view) */}
-                        {!isTaskView && <th style={thStyle}>Creator</th>}
+                        {!isTaskView && sdColVisible("creator") && <th style={{ ...thStyle, position: "relative" }}>Creator{rh("creator",110)}</th>}
 
                         {/* Three-dot menu column */}
                         {!isTaskView && <th style={{ ...thStyle, width: 40 }}></th>}
@@ -2698,116 +2815,86 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                         </td>
 
                         {/* Contact Name */}
-                        <td style={tdStyle} onClick={function(e) { e.stopPropagation(); }}>
+                        {sdColVisible("contact") && <td style={tdStyle} onClick={function(e) { e.stopPropagation(); }}>
                           {(contactName && onOpenContact && scenario.contact_id)
-                            ? <span
-                                style={{ fontWeight: 500, whiteSpace: "nowrap", color: "#60a5fa", cursor: "pointer", textDecoration: "underline" }}
-                                onClick={function() { onOpenContact(scenario.contact_id); }}
-                              >{contactName}</span>
-                            : <span style={{ fontWeight: 500, whiteSpace: "nowrap" }}>
-                                {contactName || <span style={{ color: c.textSecondary || "#aaa" }}>—</span>}
-                              </span>
-                          }
-                        </td>
+                            ? <a href={"/contacts/" + scenario.contact_id} onClick={function(e) { e.preventDefault(); onOpenContact(scenario.contact_id); }} style={{ fontWeight: 500, whiteSpace: "nowrap", color: "#60a5fa", cursor: "pointer", textDecoration: "underline" }}>{contactName}</a>
+                            : <span style={{ fontWeight: 500, whiteSpace: "nowrap" }}>{contactName || <span style={{ color: c.textSecondary || "#aaa" }}>—</span>}</span>}
+                        </td>}
 
                         {/* Scenario Name */}
-                        <td style={tdStyle}>
+                        {sdColVisible("scenario") && <td style={tdStyle}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                            <span style={{ fontWeight: 500, color: "#60a5fa", textDecoration: "underline", cursor: "pointer", whiteSpace: "nowrap" }}>{scenario.clientName}</span>
+                            <a href={"/scenarios/" + scenario.id} onClick={function(e) { e.preventDefault(); onSelectScenario(scenario); }} style={{ fontWeight: 500, color: "#60a5fa", textDecoration: "underline", cursor: "pointer", whiteSpace: "nowrap" }}>{scenario.clientName}</a>
                             {user.isInternal && referralScenarioIds.has(scenario.id) && (
-                              <span title="Referred by a partner" style={{
-                                fontSize: "10px", fontWeight: 700,
-                                background: "rgba(124,58,237,0.12)", color: "#7c3aed",
-                                border: "1px solid rgba(124,58,237,0.25)",
-                                borderRadius: 99, padding: "1px 7px", whiteSpace: "nowrap",
-                              }}>⭐ Referred</span>
+                              <span title="Referred by a partner" style={{ fontSize: "10px", fontWeight: 700, background: "rgba(124,58,237,0.12)", color: "#7c3aed", border: "1px solid rgba(124,58,237,0.25)", borderRadius: 99, padding: "1px 7px", whiteSpace: "nowrap" }}>⭐ Referred</span>
                             )}
                             {(shareCountsMap[scenario.id] || 0) > 0 && (
-                              <span title="Shared with partner(s)" style={{
-                                fontSize: "10px", fontWeight: 700,
-                                background: "rgba(37,99,235,0.1)", color: "#2563eb",
-                                border: "1px solid rgba(37,99,235,0.25)",
-                                borderRadius: 99, padding: "1px 7px", whiteSpace: "nowrap",
-                              }}>🔗 {shareCountsMap[scenario.id]} shared</span>
+                              <span title="Shared with partner(s)" style={{ fontSize: "10px", fontWeight: 700, background: "rgba(37,99,235,0.1)", color: "#2563eb", border: "1px solid rgba(37,99,235,0.25)", borderRadius: 99, padding: "1px 7px", whiteSpace: "nowrap" }}>🔗 {shareCountsMap[scenario.id]} shared</span>
                             )}
                           </div>
-                        </td>
+                        </td>}
 
                         {/* Lead Status */}
-                        <td style={tdStyle} onClick={function(e) { e.stopPropagation(); }}>
-                          <LeadStatusSelect
-                            value={ls}
-                            onChange={function(e) { changeLeadStatus(scenario, e.target.value); }}
-                            style={{
-                              padding: "3px 5px", borderRadius: "5px",
-                              border: "1px solid " + c.border,
-                              background: lsColor.bg, color: lsColor.text,
-                              fontSize: "11px", fontWeight: 600, cursor: "pointer",
-                              outline: "none", maxWidth: "150px", width: "100%",
-                            }}
-                          />
-                        </td>
+                        {sdColVisible("lead_status") && <td style={tdStyle} onClick={function(e) { e.stopPropagation(); }}>
+                          <LeadStatusSelect value={ls} onChange={function(e) { changeLeadStatus(scenario, e.target.value); }} style={{ padding: "3px 5px", borderRadius: "5px", border: "1px solid " + c.border, background: lsColor.bg, color: lsColor.text, fontSize: "11px", fontWeight: 600, cursor: "pointer", outline: "none", maxWidth: "150px", width: "100%" }} />
+                        </td>}
 
                         {/* Purpose */}
-                        <td style={tdStyle}>
+                        {sdColVisible("purpose") && <td style={tdStyle}>
                           {(() => {
                             const lp = scenario.loan_purpose || "purchase";
                             const isRefi = lp.startsWith("refi");
                             return (
-                              <span style={{
-                                display: "inline-block", padding: "2px 8px", borderRadius: "10px",
-                                fontSize: "11px", fontWeight: 700, whiteSpace: "nowrap",
-                                background: isRefi ? "rgba(59,130,246,0.12)" : "rgba(34,197,94,0.12)",
-                                color:      isRefi ? "#1d4ed8"               : "#15803d",
-                              }}>
+                              <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: "10px", fontSize: "11px", fontWeight: 700, whiteSpace: "nowrap", background: isRefi ? "rgba(59,130,246,0.12)" : "rgba(34,197,94,0.12)", color: isRefi ? "#1d4ed8" : "#15803d" }}>
                                 {isRefi ? "Refi" : "Purchase"}
                               </span>
                             );
                           })()}
-                        </td>
+                        </td>}
 
-                        {/* FU fields from linked contact */}
+                        {/* FU fields from linked contact — inline editable */}
                         {(true) && (() => {
-                          const ct = contactsMap[scenario.contact_id] || {};
-                          const fuDate = ct.fu_date
-                            ? new Date(ct.fu_date + "T00:00:00").toLocaleDateString("en-US", { month: "2-digit", day: "2-digit" })
-                            : "";
+                          const cid = scenario.contact_id;
+                          const ct = contactsMap[cid] || {};
+                          const noCt = !cid;
+                          const fuWhoOpts = ((user && user.fuWhoOptions) || "").split(",").map(function(s) { return s.trim(); }).filter(Boolean);
+                          const inCell = { padding: "0 2px", margin: 0, border: "none", borderBottom: "1px solid " + (c.border || "#ddd"), background: "transparent", fontFamily: font, fontSize: "12px", color: c.text, width: "100%", outline: "none" };
+                          async function patchFu(field, value) {
+                            if (!cid || !patchContactInSupabase) return;
+                            const patch = { [field]: value || null };
+                            const { error } = await patchContactInSupabase(cid, patch);
+                            if (!error) setContactsMap(function(prev) { return { ...prev, [cid]: { ...(prev[cid] || {}), ...patch } }; });
+                          }
                           const dash = <span style={{ color: c.textSecondary || "#aaa" }}>—</span>;
                           return (
                             <React.Fragment>
-                              <td style={{ ...tdStyle, whiteSpace: "nowrap", fontSize: "12px" }}>
-                                {fuDate ? fuDate : dash}
-                              </td>
-                              <td style={{ ...tdStyle, whiteSpace: "nowrap", fontSize: "12px" }}>
-                                {ct.fu_who || dash}
-                              </td>
-                              <td style={{ ...tdStyle, whiteSpace: "nowrap", fontSize: "12px" }}>
-                                {ct.fu_priority || dash}
-                              </td>
-                              <td style={{ ...tdStyle, fontSize: "12px", maxWidth: 160 }}>
-                                {ct.note_quick
-                                  ? <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ct.note_quick}</span>
-                                  : dash}
-                              </td>
+                              {sdColVisible("fu_date") && <td style={{ ...tdStyle, whiteSpace: "nowrap", fontSize: "12px" }} onClick={function(e) { e.stopPropagation(); }}>
+                                {noCt ? dash : <input type="text" defaultValue={ct.fu_date ? (function(d){ var p=d.split("-"); return p.length>=3?p[1]+"/"+p[2]:d; })(ct.fu_date) : ""} placeholder="" onBlur={function(e) { var raw=e.target.value.trim(); if(!raw){patchFu("fu_date",null);return;} var m=raw.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/); if(!m)return; var yr=m[3]?(m[3].length===2?"20"+m[3]:m[3]):(ct.fu_date?ct.fu_date.split("-")[0]:new Date().getFullYear().toString()); patchFu("fu_date",yr+"-"+m[1].padStart(2,"0")+"-"+m[2].padStart(2,"0")); }} style={{ ...inCell, width: "48px" }} />}
+                              </td>}
+                              {sdColVisible("fu_who") && <td style={{ ...tdStyle, whiteSpace: "nowrap", fontSize: "12px" }} onClick={function(e) { e.stopPropagation(); }}>
+                                {noCt ? dash : (<React.Fragment><input type="text" list={"fu-who-list-" + scenario.id} defaultValue={ct.fu_who || ""} placeholder="" onBlur={function(e) { patchFu("fu_who", e.target.value); }} style={inCell} /><datalist id={"fu-who-list-" + scenario.id}>{fuWhoOpts.map(function(o) { return <option key={o} value={o} />; })}</datalist></React.Fragment>)}
+                              </td>}
+                              {sdColVisible("fu_priority") && <td style={{ ...tdStyle, whiteSpace: "nowrap", fontSize: "12px" }} onClick={function(e) { e.stopPropagation(); }}>
+                                {noCt ? dash : <select defaultValue={ct.fu_priority || ""} onChange={function(e) { patchFu("fu_priority", e.target.value); }} style={{ ...inCell, cursor: "pointer" }}><option value="">—</option><option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option></select>}
+                              </td>}
+                              {sdColVisible("note_quick") && <td style={{ ...tdStyle, fontSize: "12px", maxWidth: 160 }} onClick={function(e) { e.stopPropagation(); }}>
+                                {noCt ? dash : <input type="text" defaultValue={ct.note_quick || ""} placeholder="" onBlur={function(e) { patchFu("note_quick", e.target.value); }} style={{ ...inCell, maxWidth: 150 }} />}
+                              </td>}
                             </React.Fragment>
                           );
                         })()}
 
                         {/* Created (hidden in task view) */}
-                        {!isTaskView && (
+                        {!isTaskView && sdColVisible("createdAt") && (
                           <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
-                            <span style={{ color: c.textSecondary || "#888", fontSize: "12px" }}>
-                              {formatDate(scenario.createdAt)}
-                            </span>
+                            <span style={{ color: c.textSecondary || "#888", fontSize: "12px" }}>{formatDate(scenario.createdAt)}</span>
                           </td>
                         )}
 
                         {/* Loan Officer (hidden in task view) */}
-                        {!isTaskView && (
+                        {!isTaskView && sdColVisible("creator") && (
                           <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
-                            <span style={{ fontSize: "12px", color: c.text }}>
-                              {scenario.createdByName || <span style={{ color: c.textSecondary || "#aaa" }}>—</span>}
-                            </span>
+                            <span style={{ fontSize: "12px", color: c.text }}>{scenario.createdByName || <span style={{ color: c.textSecondary || "#aaa" }}>—</span>}</span>
                           </td>
                         )}
 
@@ -2818,7 +2905,13 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                               <button
                                 onClick={function(e) {
                                   e.stopPropagation();
-                                  setOpenMenuId(function(prev) { return prev === scenario.id ? null : scenario.id; });
+                                  if (openMenuId === scenario.id) {
+                                    setOpenMenuId(null); setMenuPos(null);
+                                  } else {
+                                    var rect = e.currentTarget.getBoundingClientRect();
+                                    setOpenMenuId(scenario.id);
+                                    setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+                                  }
                                 }}
                                 style={{
                                   background: openMenuId === scenario.id ? (c.bgAlt || "rgba(0,0,0,0.06)") : "transparent",
@@ -2829,11 +2922,11 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                                 }}
                               >⋯</button>
 
-                              {openMenuId === scenario.id && (
+                              {openMenuId === scenario.id && menuPos && (
                                 <div
                                   onClick={function(e) { e.stopPropagation(); }}
                                   style={{
-                                    position: "absolute", right: 0, top: "calc(100% + 4px)", zIndex: 200,
+                                    position: "fixed", top: menuPos.top, right: menuPos.right, zIndex: 9999,
                                     background: c.bg || "#fff",
                                     border: "1px solid " + c.border,
                                     borderRadius: 10, boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
@@ -2857,6 +2950,15 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                                       }, label);
                                     };
                                     const items = [];
+                                    if (isCloudUser && user.isInternal)
+                                      items.push(menuItem("✏️  Rename", async function() {
+                                        const current = scenario.clientName || scenario.name || "";
+                                        const newName = window.prompt("Rename scenario:", current);
+                                        if (newName === null || newName.trim() === "" || newName.trim() === current) return;
+                                        const { error } = await saveScenarioToSupabase({ scenarioId: scenario.id, name: newName.trim() });
+                                        if (error) { alert("Could not rename: " + error.message); return; }
+                                        setScenarios(function(prev) { return prev.map(function(s) { return s.id === scenario.id ? Object.assign({}, s, { clientName: newName.trim() }) : s; }); });
+                                      }));
                                     if (isCloudUser && scenario.contact_id)
                                       items.push(menuItem("📝  Add Note", function() { setNoteModalScenario(scenario); setNoteText(""); setNoteSaved(false); }));
                                     if (isCloudUser)
@@ -3123,11 +3225,12 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                                   ⭐ Refer
                                 </button>
                           )}
-                          <button
-                            onClick={function() { onSelectScenario(scenario); }}
-                            style={{ background: "#2563eb", color: "#fff", border: "none", borderRadius: 6, padding: "6px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                          <a
+                            href={"/scenarios/" + scenario.id}
+                            onClick={function(e) { e.preventDefault(); onSelectScenario(scenario); }}
+                            style={{ background: "#2563eb", color: "#fff", border: "none", borderRadius: 6, padding: "6px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", textDecoration: "none", display: "inline-block" }}>
                             Open →
-                          </button>
+                          </a>
                         </div>
                       </td>
                     </tr>
@@ -3211,10 +3314,11 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                                   : <span style={{ color: c.textSecondary }}>—</span>}
                               </td>
                               <td style={{ ...tdStyle, textAlign: "right" }} onClick={function(e) { e.stopPropagation(); }}>
-                                <button onClick={function() { onSelectScenario(scenario); }}
-                                  style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 6, padding: "6px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                                <a href={"/scenarios/" + scenario.id}
+                                  onClick={function(e) { e.preventDefault(); onSelectScenario(scenario); }}
+                                  style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 6, padding: "6px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", textDecoration: "none", display: "inline-block" }}>
                                   Open →
-                                </button>
+                                </a>
                               </td>
                             </tr>
                           );
@@ -3290,7 +3394,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                           {/* Scenario Name */}
                           <td style={tdStyle}>
                             <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                              <span style={{ fontWeight: 500, color: "#60a5fa", textDecoration: "underline", cursor: "pointer", whiteSpace: "nowrap" }}>{scenario.clientName}</span>
+                              <a href={"/scenarios/" + scenario.id} onClick={function(e) { e.preventDefault(); onSelectScenario(scenario); }} style={{ fontWeight: 500, color: "#60a5fa", textDecoration: "underline", cursor: "pointer", whiteSpace: "nowrap" }}>{scenario.clientName}</a>
                               {referredIds.has(scenario.id) && (
                                 <span style={{ fontSize: 12, fontWeight: 700, background: "rgba(124,58,237,0.12)", color: "#7c3aed", border: "1px solid rgba(124,58,237,0.25)", borderRadius: 99, padding: "1px 7px", whiteSpace: "nowrap" }}>⭐ Referred</span>
                               )}
@@ -3331,10 +3435,11 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                                     ⭐ Refer
                                   </button>
                               }
-                              <button onClick={function() { onSelectScenario(scenario); }}
-                                style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 6, padding: "6px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                              <a href={"/scenarios/" + scenario.id}
+                                onClick={function(e) { e.preventDefault(); onSelectScenario(scenario); }}
+                                style={{ background: "#7c3aed", color: "#fff", border: "none", borderRadius: 6, padding: "6px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", textDecoration: "none", display: "inline-block" }}>
                                 Open →
-                              </button>
+                              </a>
                             </div>
                           </td>
                         </tr>
