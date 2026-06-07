@@ -643,6 +643,7 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
     !isInternal ? null : React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end", marginTop: "4px", marginBottom: "8px" } },
       React.createElement(Button, { label: "🖨️ Print PQ", small: true, onClick: () => printLetter() }),
       React.createElement(Button, { label: pdfLoading ? "Generating…" : "⬇️ Download PQ PDF", small: true, primary: true, onClick: downloadPDF, disabled: pdfLoading }),
+      React.createElement(Button, { label: shareLoading ? "Preparing…" : "📤 Email PDF", small: true, primary: true, onClick: sharePDF, disabled: shareLoading }),
       isAdmin && React.createElement(Button, { label: "🖨️ Print Heartburn", small: true, onClick: () => printHeartburnLetter() }),
       isAdmin && React.createElement(Button, { label: "⬇️ Download Heartburn PDF", small: true, onClick: () => downloadHeartburnPDF() })
     ),
@@ -1013,6 +1014,7 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
   };
 
   const [pdfLoading, setPdfLoading] = React.useState(false);
+  const [shareLoading, setShareLoading] = React.useState(false);
 
   // ── PDF DOWNLOAD ─────────────────────────────────────────────────────────────
   // Strategy: mutate the live element directly before capture, restore after.
@@ -1070,6 +1072,108 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
     if (savedStyle) el.setAttribute("style", savedStyle);
     else el.removeAttribute("style");
   }
+
+  // ── CAPTURE TO BLOB (for sharing) ────────────────────────────────────────────
+  async function captureToPDFBlob(elementId) {
+    const wrapper = document.getElementById(elementId);
+    if (!wrapper || !window.html2canvas || !window.jspdf) return null;
+    const el = wrapper.querySelector(".mtk-prequal-letter") || wrapper;
+    const savedStyle = el.getAttribute("style") || "";
+    el.style.cssText = [
+      savedStyle,
+      "width:760px !important", "max-width:760px !important", "min-width:760px !important",
+      "margin:0 !important", "box-shadow:none !important", "border-radius:0 !important",
+      "zoom:1 !important", "transform:none !important", "padding:24px 20px !important",
+    ].join(";");
+    let blob = null;
+    try {
+      const { jsPDF } = window.jspdf;
+      const pdf    = new jsPDF({ orientation: "portrait", unit: "in", format: "letter" });
+      const margin = 0.25, printW = 8.0, maxH = 10.5;
+      const canvas = await window.html2canvas(el, { scale: 2, useCORS: true, backgroundColor: "#ffffff", logging: false });
+      const ratio  = canvas.height / canvas.width;
+      const imgH   = Math.min(printW * ratio, maxH);
+      const imgW   = imgH < maxH ? printW : maxH / ratio;
+      pdf.addImage(canvas.toDataURL("image/png"), "PNG", margin, margin, imgW, imgH);
+      blob = pdf.output("blob");
+    } catch(e) {
+      console.error("PDF blob error:", e);
+    }
+    if (savedStyle) el.setAttribute("style", savedStyle);
+    else el.removeAttribute("style");
+    return blob;
+  }
+
+  // ── BUILD EMAIL SUBJECT + BODY ────────────────────────────────────────────────
+  function buildEmailContent(d) {
+    const name   = d.applicantLine || "Borrower";
+    const pp     = d.purchasePrice ? parseFloat(String(d.purchasePrice).replace(/,/g,"")) : 0;
+    const la     = d.loanAmount    ? parseFloat(String(d.loanAmount).replace(/,/g,""))    : 0;
+    const dpPct  = pp > 0 && la > 0 ? Math.round((1 - la / pp) * 100) : null;
+    const prog   = d.loanType  || "Conventional";
+    const term   = d.loanTerm  || "30 Year";
+    const ppFmt  = pp > 0 ? "$" + pp.toLocaleString("en-US") : null;
+    const laFmt  = la > 0 ? "$" + la.toLocaleString("en-US") : null;
+    const dpStr  = dpPct !== null ? dpPct + "% down" : null;
+
+    const subjectParts = ["Pre-Qualification Letter for " + name];
+    if (ppFmt) subjectParts.push(ppFmt);
+    if (dpStr) subjectParts.push(dpStr);
+    if (prog)  subjectParts.push(prog + " Loan");
+    const subject = subjectParts.join(" · ");
+
+    const bodyLines = [
+      "Please find the attached Pre-Qualification Letter for " + name + ".",
+      "",
+    ];
+    if (ppFmt) bodyLines.push("Sales Price:   " + ppFmt);
+    if (laFmt) bodyLines.push("Loan Amount:   " + laFmt);
+    if (dpStr) bodyLines.push("Down Payment:  " + dpStr);
+    bodyLines.push("Loan Program:  " + prog + " — " + term);
+    if (d.propertyAddress) bodyLines.push("Property:      " + d.propertyAddress);
+    bodyLines.push("");
+    bodyLines.push("This letter is valid as of today's date and is subject to full underwriting review.");
+    bodyLines.push("");
+    const loSig = [d.loName, d.loTitle, d.loNMLS ? "NMLS #" + d.loNMLS : null, d.loCell || d.loPhone, d.loEmail].filter(Boolean);
+    if (loSig.length) { bodyLines.push(...loSig); }
+
+    return { subject, body: bodyLines.join("\n"), fileName: name.replace(/\s+/g, "-") + "-PreQual-Letter" };
+  }
+
+  // ── SHARE / EMAIL PDF ─────────────────────────────────────────────────────────
+  // Mobile (Web Share API with files): opens native share sheet with PDF attached.
+  // Desktop fallback: downloads PDF + opens pre-filled mailto link.
+  const sharePDF = async () => {
+    setShareLoading(true);
+    const d = activeData;
+    const { subject, body, fileName } = buildEmailContent(d);
+    const blob = await captureToPDFBlob("pq-letter-page1");
+    setShareLoading(false);
+    if (!blob) { alert("PDF generation failed. Please try again."); return; }
+
+    const file = new File([blob], fileName + ".pdf", { type: "application/pdf" });
+
+    // Try Web Share API with file (works on iOS Safari, Android Chrome)
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: subject, text: body });
+        return;
+      } catch(e) {
+        if (e.name === "AbortError") return; // user cancelled — don't fall through to download
+      }
+    }
+
+    // Desktop fallback: download PDF + open mailto
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = fileName + ".pdf"; a.click();
+    URL.revokeObjectURL(url);
+
+    // Open pre-filled email after a brief delay so the download starts first
+    setTimeout(function() {
+      window.location.href = "mailto:?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body + "\n\n(Attach the downloaded PDF file to this email.)");
+    }, 800);
+  };
 
   const downloadPDF = async () => {
     setPdfLoading(true);
@@ -1156,6 +1260,7 @@ function PreQualLetter({ user, scenario, isInternal, contact }) {
             : React.createElement("div", null),
           React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } },
             !isInternal && React.createElement(Button, { label: pdfLoading ? "Generating..." : "⬇️ Download PDF", small: true, primary: true, onClick: downloadPDF, disabled: pdfLoading }),
+            React.createElement(Button, { label: shareLoading ? "Preparing…" : "📤 Email PDF", small: true, primary: true, onClick: sharePDF, disabled: shareLoading }),
             displaySnap && React.createElement(Button, { label: "Back to Live", small: true, onClick: () => { setDisplaySnap(null); } })
           )
         ),
