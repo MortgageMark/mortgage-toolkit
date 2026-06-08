@@ -535,7 +535,7 @@ function AdminPanel({ currentUser, onClose }) {
     // Filter by selected tab
     var actFiltered = actAllUsers.filter(function(u) {
       if (actTab === "all") return true;
-      if (actTab === "internal") return u.role === "admin" || u.role === "internal";
+      if (actTab === "internal") return ["admin","branch_admin","internal"].includes(u.role);
       return u.role === actTab;
     });
 
@@ -602,7 +602,7 @@ function AdminPanel({ currentUser, onClose }) {
           var countInTab = tab.id === "all"
             ? actAllUsers.length
             : actAllUsers.filter(function(u) {
-                if (tab.id === "internal") return u.role === "admin" || u.role === "internal";
+                if (tab.id === "internal") return ["admin","branch_admin","internal"].includes(u.role);
                 return u.role === tab.id;
               }).length;
           var isActive = actTab === tab.id;

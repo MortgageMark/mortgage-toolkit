@@ -63,6 +63,16 @@ function formatPhoneInput(raw) {
   return "(" + digits.slice(0, 3) + ") " + digits.slice(3, 6) + "-" + digits.slice(6);
 }
 
+// Generate a random 6-char uppercase invite code (no ambiguous chars)
+function generateInviteCode() {
+  var chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  var code = "";
+  for (var i = 0; i < 6; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
+}
+
 function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches, viewerRole, isSelf }) {
   const [form, setForm] = useState({
     display_name:    profile.display_name    || "",
@@ -84,9 +94,34 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches, 
     team_lead_id:  profile.team_lead_id  || "",
     branch_id:     profile.branch_id     || "",
   });
-  const [saving, setSaving] = useState(false);
-  const [saved,  setSaved]  = useState(false);
-  const [error,  setError]  = useState("");
+  const [saving,      setSaving]      = useState(false);
+  const [saved,       setSaved]       = useState(false);
+  const [error,       setError]       = useState("");
+  const [myCode,        setMyCode]        = useState(profile.team_invite_code || "");
+  const [joinCode,      setJoinCode]      = useState("");
+  const [joinCodeErr,   setJoinCodeErr]   = useState("");
+  const [joinBranch,    setJoinBranch]    = useState("");
+  const [joinBranchErr, setJoinBranchErr] = useState("");
+  const [copied,        setCopied]        = useState(false);
+
+  // Auto-generate invite code for LO profiles that don't have one yet
+  React.useEffect(function() {
+    if (!supabase || !profile || !profile.id) return;
+    if (profile.team_invite_code) return;  // already has one
+    var isLO = profile.role !== "borrower" && profile.role !== "realtor" && profile.role !== "builder";
+    if (!isLO) return;
+    var newCode = generateInviteCode();
+    supabase.from("profiles").update({ team_invite_code: newCode }).eq("id", profile.id)
+      .then(function(res) { if (!res.error) setMyCode(newCode); });
+  }, []);
+
+  function handleCopyCode() {
+    if (!myCode) return;
+    navigator.clipboard.writeText(myCode).then(function() {
+      setCopied(true);
+      setTimeout(function() { setCopied(false); }, 2000);
+    });
+  }
 
   function setField(key, val) {
     setForm(function(prev) { return Object.assign({}, prev, { [key]: val }); });
@@ -117,6 +152,42 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches, 
       team_lead_id:  safeUUID(form.team_lead_id),
       branch_id:     safeUUID(form.branch_id),
     };
+    // Resolve branch join code → branch_id
+    setJoinBranchErr("");
+    if (joinBranch.trim()) {
+      var { data: branchMatch, error: branchCodeErr } = await supabase
+        .from("branches")
+        .select("id, name")
+        .eq("invite_code", joinBranch.trim().toUpperCase())
+        .single();
+      if (branchCodeErr || !branchMatch) {
+        setJoinBranchErr("Branch code not found — double-check it with your branch admin.");
+        setSaving(false);
+        return;
+      }
+      payload.branch_id = branchMatch.id;
+    }
+
+    // Resolve join code → team_lead_id
+    setJoinCodeErr("");
+    if (joinCode.trim()) {
+      var { data: leadProfile, error: codeErr } = await supabase
+        .from("profiles")
+        .select("id, display_name")
+        .eq("team_invite_code", joinCode.trim().toUpperCase())
+        .single();
+      if (codeErr || !leadProfile) {
+        setJoinCodeErr("Code not found — double-check it with your team lead.");
+        setSaving(false);
+        return;
+      }
+      if (leadProfile.id === profile.id) {
+        setJoinCodeErr("You can't join your own team.");
+        setSaving(false);
+        return;
+      }
+      payload.team_lead_id = leadProfile.id;
+    }
     // Only admins can set is_branch_manager
     if (viewerRole === "admin" || viewerRole === "super_admin") {
       payload.is_branch_manager = !!form.is_branch_manager;
@@ -220,6 +291,53 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches, 
                   return <option key={b.id} value={b.id}>{b.name}{b.nmls ? " (NMLS " + b.nmls + ")" : ""}</option>;
                 })}
               </select>
+            </div>
+          </div>}
+
+          {/* ── Team Invite Code (LO roles only) ──────────────────────────── */}
+          {isLORole && <div style={{ marginBottom: 18, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 20px" }}>
+
+            {/* My Team Code — share this with LOAs */}
+            <div>
+              <label style={LABEL_ST}>My Team Code <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, fontSize: 10 }}>(share with your LOAs)</span></label>
+              <div style={{ display: "flex", gap: 6 }}>
+                <div style={Object.assign({}, INPUT_ST, { background: "#EEF2F6", color: "#0C4160", fontWeight: 700, letterSpacing: 2, cursor: "default", flex: 1 })}>
+                  {myCode || <span style={{ opacity: 0.4, fontWeight: 400 }}>Generating…</span>}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCopyCode}
+                  style={{ padding: "0 14px", borderRadius: 8, border: "1px solid #C8D8E8", background: copied ? "#D1FAE5" : "#fff", color: copied ? "#065F46" : "#0C4160", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", fontFamily: UP_FONT }}
+                >
+                  {copied ? "✓ Copied" : "Copy"}
+                </button>
+              </div>
+            </div>
+
+            {/* Join a Team — enter your LO's code */}
+            <div>
+              <label style={LABEL_ST}>Join a Team <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, fontSize: 10 }}>(enter your LO's code)</span></label>
+              <input
+                style={Object.assign({}, INPUT_ST, { letterSpacing: 2, textTransform: "uppercase" })}
+                value={joinCode}
+                placeholder="e.g. MARK42"
+                maxLength={6}
+                onChange={function(e) { setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "")); setJoinCodeErr(""); }}
+              />
+              {joinCodeErr && <div style={{ fontSize: 11, color: "#DC2626", marginTop: 4, fontFamily: UP_FONT }}>{joinCodeErr}</div>}
+            </div>
+
+            {/* Join a Branch — enter branch code */}
+            <div>
+              <label style={LABEL_ST}>Join a Branch <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, fontSize: 10 }}>(enter your branch code)</span></label>
+              <input
+                style={Object.assign({}, INPUT_ST, { letterSpacing: 2, textTransform: "uppercase" })}
+                value={joinBranch}
+                placeholder="e.g. CMG42"
+                maxLength={6}
+                onChange={function(e) { setJoinBranch(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "")); setJoinBranchErr(""); }}
+              />
+              {joinBranchErr && <div style={{ fontSize: 11, color: "#DC2626", marginTop: 4, fontFamily: UP_FONT }}>{joinBranchErr}</div>}
             </div>
           </div>}
 
@@ -422,6 +540,15 @@ function UsersPanel({ user, onBack, onLogout }) {
   const [confirmDelBranch, setConfirmDelBranch] = useState(null);
 
   // â"€â"€ Activity tab â"€â"€â"€â"€
+  // My Branch (branch_admin self-service)
+  const [myBranch,        setMyBranch]        = useState(null);
+  const [myBranchLoaded,  setMyBranchLoaded]  = useState(false);
+  const [myBranchForm,    setMyBranchForm]    = useState(null);
+  const [myBranchSaving,  setMyBranchSaving]  = useState(false);
+  const [myBranchError,   setMyBranchError]   = useState("");
+  const [myBranchCopied,  setMyBranchCopied]  = useState(false);
+  const [myBranchMembers, setMyBranchMembers] = useState([]);
+
   const [actSessions,   setActSessions]   = useState(null);
   const [actLoading,    setActLoading]    = useState(false);
   const [actLoaded,     setActLoaded]     = useState(false);
@@ -442,8 +569,9 @@ function UsersPanel({ user, onBack, onLogout }) {
   const [teamContactsLoading, setTeamContactsLoading] = useState(false);
   const [myContactId,         setMyContactId]         = useState(null);
 
-  const isAdmin      = user && ["super_admin", "admin", "branch_admin"].includes(user.role);
-  const isSuperAdmin = user && user.role === "super_admin";
+  const isAdmin        = user && ["super_admin", "admin", "branch_admin"].includes(user.role);
+  const isSuperAdmin   = user && user.role === "super_admin";
+  const isBranchAdmin  = user && user.role === "branch_admin";
 
   // â"€â"€ Load profiles â"€â"€â"€â"€
   // Admins see all; non-admins see only themselves
@@ -492,7 +620,25 @@ function UsersPanel({ user, onBack, onLogout }) {
     });
   }, [branchesLoaded, isAdmin]);
 
-  // â"€â"€ Lazy-load activity sessions when Activity tab opens â"€â"€â"€â"€
+  // Load My Branch when My Branch tab opens (branch_admin only)
+  useEffect(function() {
+    if (activeTab !== "mybranch" || myBranchLoaded || !supabase || !isBranchAdmin) return;
+    setMyBranchLoaded(true);
+    var branchId = user && user.branch_id;
+    if (branchId) {
+      supabase.from("branches").select("*").eq("id", branchId).single()
+        .then(function(res) {
+          if (!res.error && res.data) {
+            setMyBranch(res.data);
+            // load members
+            supabase.from("profiles").select("id, display_name, email, role, nmls").eq("branch_id", branchId)
+              .then(function(r) { if (!r.error) setMyBranchMembers(r.data || []); });
+          }
+        });
+    }
+  }, [activeTab, myBranchLoaded, isBranchAdmin]);
+
+  // Lazy-load activity sessions when Activity tab opens
   useEffect(function() {
     if (activeTab !== "activity" || actLoaded || !supabase || !isAdmin) return;
     var fetchFn = window.fetchUserSessions;
@@ -634,10 +780,12 @@ function UsersPanel({ user, onBack, onLogout }) {
       if (error) { setBranchError(error.message); return; }
       setBranches(function(prev) { return prev.map(function(b) { return b.id === branchForm.id ? Object.assign({}, b, branchForm) : b; }); });
     } else {
-      // Insert
+      // Insert — auto-generate invite code
+      var newBranchCode = generateInviteCode();
       const { data, error } = await supabase.from("branches").insert({
         name: branchForm.name.trim(), nmls: branchForm.nmls || "", address: branchForm.address || "",
         city: branchForm.city || "", state: branchForm.state || "", zip: branchForm.zip || "",
+        invite_code: newBranchCode,
       }).select().single();
       setBranchSaving(false);
       if (error) { setBranchError(error.message); return; }
@@ -886,6 +1034,7 @@ function UsersPanel({ user, onBack, onLogout }) {
           return allIds.filter(function(id) { return teamContacts.some(function(c) { return c.team_lead_contact_id === id; }); }).length;
         })())}
         {isAdmin && tabBtn("branches", "Branches", branches.length)}
+        {isBranchAdmin && tabBtn("mybranch", "My Branch", "")}
         {(isAdmin || isViewerBranchManager) && tabBtn("access", "Access Control", allProfiles.length)}
         {isAdmin && tabBtn("activity", "Activity", actActiveCount !== null ? actActiveCount + " active" : "...")}
       </div>
@@ -1217,7 +1366,7 @@ function UsersPanel({ user, onBack, onLogout }) {
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
                     <tr style={{ background: "#F7FAFB" }}>
-                      {["Branch Name", "NMLS #", "Address", "City", "State", "Zip", ""].map(function(h) {
+                      {["Branch Name", "NMLS #", "Join Code", "City", "State", ""].map(function(h) {
                         return <th key={h} style={{ padding: "8px 12px", fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "#8A99A8", textAlign: "left", borderBottom: "2px solid #E8EEF4", whiteSpace: "nowrap" }}>{h}</th>;
                       })}
                     </tr>
@@ -1229,10 +1378,17 @@ function UsersPanel({ user, onBack, onLogout }) {
                         <tr key={b.id}>
                           <td style={{ ...TD, fontWeight: 600 }}>{b.name}</td>
                           <td style={{ ...TD, color: "#6B7D8A" }}>{b.nmls || "--"}</td>
-                          <td style={{ ...TD, color: "#6B7D8A" }}>{b.address || "--"}</td>
+                          <td style={{ ...TD }}>
+                            {b.invite_code
+                              ? <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                  <span style={{ fontWeight: 700, letterSpacing: 2, color: "#0C4160", fontSize: 12 }}>{b.invite_code}</span>
+                                  <button onClick={function() { navigator.clipboard.writeText(b.invite_code); }}
+                                    style={{ padding: "2px 8px", fontSize: 10, borderRadius: 5, border: "1px solid #C8D8E8", background: "#F0F4F8", color: "#0C4160", cursor: "pointer", fontFamily: UP_FONT }}>Copy</button>
+                                </div>
+                              : <span style={{ color: "#94A3B0", fontSize: 11 }}>--</span>}
+                          </td>
                           <td style={{ ...TD, color: "#6B7D8A" }}>{b.city || "--"}</td>
                           <td style={{ ...TD, color: "#6B7D8A" }}>{b.state || "--"}</td>
-                          <td style={{ ...TD, color: "#6B7D8A" }}>{b.zip || "--"}</td>
                           <td style={{ ...TD, whiteSpace: "nowrap" }}>
                             <div style={{ display: "flex", gap: 6 }}>
                               <button onClick={function() { setBranchForm(Object.assign({}, b)); setBranchError(""); }}
@@ -1268,6 +1424,138 @@ function UsersPanel({ user, onBack, onLogout }) {
         )}
 
         {/* â"€â"€ ACTIVITY TAB â"€â"€ */}
+        {/* MY BRANCH TAB */}
+        {activeTab === "mybranch" && isBranchAdmin && (
+          <div>
+            {!myBranchLoaded && <div style={{ textAlign: "center", padding: 40, color: "#6B7D8A" }}>Loading...</div>}
+
+            {/* No branch yet */}
+            {myBranchLoaded && !myBranch && (
+              <div>
+                <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 12, padding: "16px 20px", marginBottom: 24, fontSize: 13, color: "#1D4ED8", lineHeight: 1.5 }}>
+                  You don't have a branch set up yet. Fill in your branch details and save — you'll get a join code to share with your team.
+                </div>
+                <div style={{ background: "#fff", borderRadius: 14, padding: "24px 28px", boxShadow: "0 2px 14px rgba(0,0,0,0.07)" }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: "#0C4160", marginBottom: 18 }}>Create My Branch</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 20px", marginBottom: 16 }}>
+                    {[["Branch Name *","name","e.g. Dallas - Addison","1 / -1"],["NMLS #","nmls","",""],["Address","address","Street address","1 / -1"],["City","city","",""],["State","state","TX",""],["Zip","zip","",""]].map(function(row) {
+                      return (
+                        <div key={row[1]} style={row[3] ? { gridColumn: row[3] } : {}}>
+                          <label style={LABEL_ST}>{row[0]}</label>
+                          <input type="text" style={INPUT_ST} value={(myBranchForm || {})[row[1]] || ""} placeholder={row[2]}
+                            onChange={function(e) { var v = e.target.value; setMyBranchForm(function(p) { return Object.assign({}, p || {}, { [row[1]]: v }); }); }} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {myBranchError && <div style={{ color: "#B91C1C", fontSize: 13, marginBottom: 12 }}>! {myBranchError}</div>}
+                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                    <button disabled={myBranchSaving} style={Object.assign({}, BTN_PRIMARY, myBranchSaving ? { opacity: 0.6 } : {})}
+                      onClick={async function() {
+                        if (!myBranchForm || !myBranchForm.name || !myBranchForm.name.trim()) { setMyBranchError("Branch name is required."); return; }
+                        setMyBranchSaving(true); setMyBranchError("");
+                        var code = generateInviteCode();
+                        var { data: newB, error: bErr } = await supabase.from("branches").insert({
+                          name: myBranchForm.name.trim(), nmls: myBranchForm.nmls || "",
+                          address: myBranchForm.address || "", city: myBranchForm.city || "",
+                          state: myBranchForm.state || "", zip: myBranchForm.zip || "",
+                          invite_code: code,
+                        }).select().single();
+                        if (bErr) { setMyBranchError(bErr.message); setMyBranchSaving(false); return; }
+                        await supabase.from("profiles").update({ branch_id: newB.id }).eq("id", user.id);
+                        setMyBranch(newB); setMyBranchForm(null); setMyBranchSaving(false);
+                      }}>
+                      {myBranchSaving ? "Creating..." : "Create Branch"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Branch exists */}
+            {myBranch && (
+              <div>
+                {/* Code card */}
+                <div style={{ background: "#fff", borderRadius: 14, padding: "20px 24px", marginBottom: 20, boxShadow: "0 2px 14px rgba(0,0,0,0.07)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6B7D8A", marginBottom: 4 }}>Branch Join Code</div>
+                    <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: 6, color: "#0C4160", fontFamily: "monospace" }}>{myBranch.invite_code || "--"}</div>
+                    <div style={{ fontSize: 12, color: "#6B7D8A", marginTop: 4 }}>Share with your LOs and LOAs so they can join this branch.</div>
+                  </div>
+                  <button onClick={function() { navigator.clipboard.writeText(myBranch.invite_code || ""); setMyBranchCopied(true); setTimeout(function() { setMyBranchCopied(false); }, 2000); }}
+                    style={Object.assign({}, BTN_PRIMARY, { fontSize: 13, padding: "10px 20px", background: myBranchCopied ? "#065F46" : "#0C4160" })}>
+                    {myBranchCopied ? "✓ Copied!" : "Copy Code"}
+                  </button>
+                </div>
+
+                {/* Edit details */}
+                <div style={{ background: "#fff", borderRadius: 14, padding: "20px 24px", marginBottom: 20, boxShadow: "0 2px 14px rgba(0,0,0,0.07)" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#0C4160", marginBottom: 14 }}>Branch Details</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 20px", marginBottom: 14 }}>
+                    {[["Branch Name *","name","","1 / -1"],["NMLS #","nmls","",""],["Address","address","","1 / -1"],["City","city","",""],["State","state","",""],["Zip","zip","",""]].map(function(row) {
+                      var val = myBranchForm ? (myBranchForm[row[1]] || "") : (myBranch[row[1]] || "");
+                      return (
+                        <div key={row[1]} style={row[3] ? { gridColumn: row[3] } : {}}>
+                          <label style={LABEL_ST}>{row[0]}</label>
+                          <input type="text" style={INPUT_ST} value={val} placeholder={row[2]}
+                            onChange={function(e) { var v = e.target.value; setMyBranchForm(function(p) { return Object.assign({}, p || myBranch, { [row[1]]: v }); }); }} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {myBranchError && <div style={{ color: "#B91C1C", fontSize: 13, marginBottom: 10 }}>! {myBranchError}</div>}
+                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                    <button disabled={myBranchSaving || !myBranchForm} style={Object.assign({}, BTN_PRIMARY, (!myBranchForm || myBranchSaving) ? { opacity: 0.5, cursor: "default" } : {})}
+                      onClick={async function() {
+                        if (!myBranchForm || !myBranchForm.name || !myBranchForm.name.trim()) { setMyBranchError("Branch name is required."); return; }
+                        setMyBranchSaving(true); setMyBranchError("");
+                        var { error: bErr } = await supabase.from("branches").update({
+                          name: myBranchForm.name.trim(), nmls: myBranchForm.nmls || "",
+                          address: myBranchForm.address || "", city: myBranchForm.city || "",
+                          state: myBranchForm.state || "", zip: myBranchForm.zip || "",
+                        }).eq("id", myBranch.id);
+                        setMyBranchSaving(false);
+                        if (bErr) { setMyBranchError(bErr.message); return; }
+                        setMyBranch(Object.assign({}, myBranch, myBranchForm));
+                        setMyBranchForm(null);
+                      }}>
+                      {myBranchSaving ? "Saving..." : "Save Changes"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Members list */}
+                <div style={{ background: "#fff", borderRadius: 14, padding: "20px 24px", boxShadow: "0 2px 14px rgba(0,0,0,0.07)" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#0C4160", marginBottom: 14 }}>Branch Members ({myBranchMembers.length})</div>
+                  {myBranchMembers.length === 0
+                    ? <div style={{ fontSize: 13, color: "#94A3B0" }}>No members yet. Share your branch code with your team.</div>
+                    : <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                        <thead><tr style={{ background: "#F7FAFB" }}>
+                          {["Name","Email","Role","NMLS #"].map(function(h) {
+                            return <th key={h} style={{ padding: "7px 12px", fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "#8A99A8", textAlign: "left", borderBottom: "2px solid #E8EEF4" }}>{h}</th>;
+                          })}
+                        </tr></thead>
+                        <tbody>
+                          {myBranchMembers.map(function(m) {
+                            var TD2 = { padding: "8px 12px", fontSize: 13, color: "#0C4160", borderBottom: "1px solid #F0F4F8" };
+                            return (
+                              <tr key={m.id}>
+                                <td style={{ ...TD2, fontWeight: 600 }}>{m.display_name || "--"}</td>
+                                <td style={{ ...TD2, color: "#6B7D8A" }}>{m.email || "--"}</td>
+                                <td style={{ ...TD2 }}><span style={{ background: "#E0E7FF", color: "#3730A3", borderRadius: 5, padding: "2px 7px", fontSize: 11, fontWeight: 600 }}>{ROLE_LABELS[m.role] || m.role}</span></td>
+                                <td style={{ ...TD2, color: "#6B7D8A" }}>{m.nmls || "--"}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                  }
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === "activity" && isAdmin && (
           <div>
 

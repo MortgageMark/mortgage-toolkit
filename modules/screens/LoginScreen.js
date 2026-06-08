@@ -121,9 +121,16 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
         .eq("id", user.id)
         .single();
 
-      const role = (profile && profile.role) ? profile.role : "borrower";
+      // If the DB still has the default 'borrower' role but the user signed up
+      // with a different role (stored in auth metadata), correct it now.
+      const metaRole = (user.user_metadata && user.user_metadata.role) || null;
+      let role = (profile && profile.role) ? profile.role : "borrower";
+      if (role === "borrower" && metaRole && metaRole !== "borrower") {
+        const { error: roleFixErr } = await supabase.from("profiles").update({ role: metaRole }).eq("id", user.id);
+        if (!roleFixErr) role = metaRole;
+      }
       const displayName = (profile && profile.display_name) ? profile.display_name : (user.email || "User");
-      const isInternal = (role === "admin" || role === "internal");
+      const isInternal = ["admin", "internal", "branch_admin"].includes(role);
 
       // Also sync profile data into the legacy roster for admin panel compatibility
       syncProfileToRoster(user.id, displayName, role, profile);
@@ -267,7 +274,7 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
           role = suRole;
         }
         const displayName = (profile && profile.display_name) ? profile.display_name : (suFirstName.trim() + " " + suLastName.trim()).trim();
-        const isInternal = (role === "admin" || role === "internal");
+        const isInternal = ["admin", "internal", "branch_admin"].includes(role);
 
         syncProfileToRoster(user.id, displayName, role, profile);
 
@@ -388,8 +395,8 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
         email:           email.toLowerCase(),
         email_personal:  email.toLowerCase(),
         phone_cell:      (phone || "").replace(/\D/g, ""),
-        contact_type:    (role === "internal" || role === "realtor" || role === "builder") ? "business" : "client",
-        contact_category: role === "internal" ? "Loan Officer"
+        contact_type:    (role === "internal" || role === "branch_admin" || role === "realtor" || role === "builder") ? "business" : "client",
+        contact_category: (role === "internal" || role === "branch_admin") ? "Loan Officer"
                         : role === "realtor"  ? "Realtor"
                         : role === "builder"  ? "Home Builder"
                         : null,

@@ -1859,7 +1859,7 @@ function App() {
         onLogout={handleLogout}
         onContacts={isInternal ? function() { setShowTasksScenarios(false); setShowContacts(true); } : null}
         onOpenContact={isInternal ? function(contactId) { setPendingContactId(contactId); setShowTasksScenarios(false); setShowContacts(true); } : null}
-        onUsers={loggedInUser && loggedInUser.role === "admin" ? function() { setShowTasksScenarios(false); setShowUsers(true); } : null}
+        onUsers={loggedInUser && ["admin","branch_admin"].includes(loggedInUser.role) ? function() { setShowTasksScenarios(false); setShowUsers(true); } : null}
         onMyInfo={null}
         pageTitle="Tasks: Scenarios"
       />
@@ -1875,7 +1875,7 @@ function App() {
         onBack={function() { setShowTasksContacts(false); setPendingContactId(null); }}
         onLogout={handleLogout}
         onSelectScenario={function(scenario) { setShowTasksContacts(false); handleSelectScenario(scenario); }}
-        onUsers={loggedInUser && loggedInUser.role === "admin" ? function() { setShowTasksContacts(false); setShowUsers(true); } : null}
+        onUsers={loggedInUser && ["admin","branch_admin"].includes(loggedInUser.role) ? function() { setShowTasksContacts(false); setShowUsers(true); } : null}
         onTasksScenarios={isInternal ? function() { setShowTasksContacts(false); setShowTasksScenarios(true); } : null}
         activeView={contactView}
         onSetView={setContactView}
@@ -1933,7 +1933,7 @@ function App() {
         onOpenProfile={isInternal ? handleOpenMyProfile : function() { setShowMyInfo(true); }}
         onContactInfo={isInternal ? handleOpenMyProfile : function() { setShowMyInfo(true); }}
         onLoginSettings={!isInternal && loggedInUser && loggedInUser.supabaseUser ? function() { setShowLoginSettings(true); } : null}
-        onTeam={loggedInUser && loggedInUser.role === "admin" ? function() { setShowUsers(true); } : null}
+        onTeam={loggedInUser && ["admin","branch_admin"].includes(loggedInUser.role) ? function() { setShowUsers(true); } : null}
       />
     );
   }
@@ -2220,9 +2220,9 @@ function App() {
             {window.AppHeader && React.createElement(window.AppHeader, {
               user: loggedInUser, darkMode: darkMode, setDarkMode: setDarkMode,
               userRole: userRole, setUserRole: isInternal ? setUserRole : null,
-              onTeam: (loggedInUser && loggedInUser.role === "admin") ? function() { setShowUsers(true); } : null,
+              onTeam: (loggedInUser && ["admin","branch_admin"].includes(loggedInUser.role)) ? function() { setShowUsers(true); } : null,
               onLogout: handleLogout, isInternal: isInternal,
-              isAdmin: !!(loggedInUser && loggedInUser.role === "admin"),
+              isAdmin: !!(loggedInUser && ["admin","branch_admin"].includes(loggedInUser.role)),
               onMyProfile: isInternal ? function() { setShowMyProfile(true); } : null,
             })}
           </div>
