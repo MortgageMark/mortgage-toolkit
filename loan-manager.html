@@ -57,7 +57,7 @@
       justify-content: space-between;
       position: sticky;
       top: 0;
-      z-index: 100;
+      z-index: 300;
       box-shadow: 0 2px 8px rgba(0,0,0,0.2);
     }
     .lmt-logo { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; }
@@ -329,6 +329,11 @@
       width: 100%; min-width: 0; box-sizing: border-box;
     }
     .ms-input:focus { outline: none; border-color: var(--blue); }
+    .date-empty::-webkit-datetime-edit-text,
+    .date-empty::-webkit-datetime-edit-month-field,
+    .date-empty::-webkit-datetime-edit-day-field,
+    .date-empty::-webkit-datetime-edit-year-field { color: #D1D5DB; }
+    .ms-input::placeholder { color: #E5E7EB; }
     .ms-check {
       display: flex; align-items: center; gap: 6px;
       font-size: 12px; color: var(--text2); margin-top: 8px;
@@ -432,9 +437,11 @@
       background: white; border: 1px solid var(--border);
       border-radius: 10px; margin-bottom: 20px; overflow: hidden;
     }
+    .settings-section.overflow-visible { overflow: visible; }
     .settings-section-header {
       background: var(--navy); color: white;
       padding: 12px 20px; font-size: 14px; font-weight: 700;
+      border-radius: 10px 10px 0 0;
     }
     .settings-section-body { padding: 20px; }
     .preset-row {
@@ -933,7 +940,7 @@ function LoginScreen({ onLogin }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [jobTitle, setJobTitle] = useState('internal');
+  const [jobTitle, setJobTitle] = useState('lo');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -948,8 +955,16 @@ function LoginScreen({ onLogin }) {
   const handleSignUp = async () => {
     if (!name.trim()) { setError('Please enter your name.'); return; }
     setLoading(true); setError('');
+    const roleMap = {
+      lo:        { role: 'internal', lmt_role: 'lo' },
+      loa:       { role: 'internal', lmt_role: 'loa' },
+      processor: { role: 'internal', lmt_role: 'processor' },
+      internal:  { role: 'internal', lmt_role: 'setup' },
+      admin:     { role: 'admin',    lmt_role: null },
+    };
+    const { role, lmt_role } = roleMap[jobTitle] || roleMap.lo;
     const { data, error: err } = await sb.auth.signUp({ email, password, options: {
-      data: { display_name: name, role: jobTitle }
+      data: { display_name: name, role, lmt_role }
     }});
     setLoading(false);
     if (err) { setError(err.message); return; }
@@ -986,10 +1001,10 @@ function LoginScreen({ onLogin }) {
             <div className="login-field">
               <label>Role</label>
               <select value={jobTitle} onChange={e=>setJobTitle(e.target.value)}>
-                <option value="internal">Loan Officer</option>
-                <option value="internal">LOA / Loan Partner</option>
-                <option value="internal">Processor</option>
-                <option value="internal">Operations</option>
+                <option value="lo">Loan Officer</option>
+                <option value="loa">LOA / Loan Partner</option>
+                <option value="processor">Processor</option>
+                <option value="internal">Operations / Setup</option>
                 <option value="admin">Branch Manager / Admin</option>
               </select>
             </div>
@@ -1027,36 +1042,84 @@ function LoginScreen({ onLogin }) {
 // ─────────────────────────────────────────────
 // ADD / EDIT DEAL MODAL
 // ─────────────────────────────────────────────
+// PROFILE PICKER (for LOA / Processor — searches in-memory profiles)
+// ─────────────────────────────────────────────
+function ProfilePicker({ valueId, profiles, onChange, placeholder }) {
+  const [query, setQuery] = React.useState('');
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+  const selected = profiles.find(p => p.id === valueId);
+  const filtered = (profiles || []).filter(p =>
+    !query || (p.display_name || p.email || '').toLowerCase().includes(query.toLowerCase())
+  );
+  return (
+    <div ref={ref} style={{position:'relative'}}>
+      <div style={{display:'flex',gap:4,alignItems:'center'}}>
+        <input value={open ? query : (selected ? selected.display_name || selected.email : '')}
+          onChange={e=>setQuery(e.target.value)}
+          onFocus={()=>{ setQuery(''); setOpen(true); }}
+          onBlur={()=>setTimeout(()=>setOpen(false),150)}
+          placeholder={placeholder||'Search…'}
+          style={{flex:1,padding:'6px 8px',border:'1px solid #E5E7EB',borderRadius:6,fontSize:13}} />
+        {valueId && <button onMouseDown={e=>{e.preventDefault();onChange(null);setQuery('');}}
+          style={{background:'none',border:'none',cursor:'pointer',color:'#9CA3AF',fontSize:15,padding:'0 2px',lineHeight:1}}>×</button>}
+      </div>
+      {open && (
+        <div style={{position:'absolute',top:'100%',left:0,right:0,zIndex:1100,background:'white',border:'1px solid #E5E7EB',borderRadius:8,boxShadow:'0 4px 20px rgba(0,0,0,0.15)',marginTop:2,maxHeight:200,overflowY:'auto'}}>
+          <div onMouseDown={e=>{e.preventDefault();onChange(null);setOpen(false);setQuery('');}}
+            style={{padding:'8px 12px',fontSize:12,color:'#9CA3AF',cursor:'pointer',borderBottom:'1px solid #F3F4F6'}}
+            onMouseEnter={e=>e.currentTarget.style.background='#F8FAFC'}
+            onMouseLeave={e=>e.currentTarget.style.background='white'}>— None —</div>
+          {filtered.map(p => (
+            <div key={p.id} onMouseDown={e=>{e.preventDefault();onChange(p.id);setOpen(false);setQuery('');}}
+              style={{padding:'8px 12px',fontSize:13,cursor:'pointer',fontWeight:600,color:'#1B2A4A',borderBottom:'1px solid #F3F4F6'}}
+              onMouseEnter={e=>e.currentTarget.style.background='#F8FAFC'}
+              onMouseLeave={e=>e.currentTarget.style.background='white'}>
+              {p.display_name||p.email}
+              {p.lmt_role && <span style={{fontSize:10,color:'#9CA3AF',marginLeft:6,fontWeight:400}}>
+                {({lo:'LO',loa:'LOA',processor:'Processor',setup:'Setup',admin:'Admin'})[p.lmt_role]||p.lmt_role}
+              </span>}
+            </div>
+          ))}
+          {filtered.length === 0 && <div style={{padding:'8px 12px',fontSize:12,color:'#9CA3AF'}}>No matches</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────
 // AGENT CONTACT PICKER
 // ─────────────────────────────────────────────
-function AgentPicker({ label, value, onChange }) {
+function AgentPicker({ label, value, onChange, saveCategory }) {
   const [query, setQuery] = useState(value || '');
   const [results, setResults] = useState([]);
   const [open, setOpen] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedToHlt, setSavedToHlt] = useState(false);
   const ref = useRef(null);
 
-  // Close on outside click
   useEffect(() => {
     const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const [savedToHlt, setSavedToHlt] = useState(false);
-  const isManual = query && results.every(r => `${r.first_name||''} ${r.last_name||''}`.trim() !== query);
-
   const search = async (q) => {
     setQuery(q);
-    // Always fire onChange on every keystroke so manual typing saves
     onChange({ name: q, email: '', phone: '', contact_id: null });
     setSavedToHlt(false);
     if (!q.trim() || q.length < 2) { setResults([]); setOpen(false); return; }
     setSearching(true);
-    const { data } = await sb.from('contacts')
-      .select('id,first_name,last_name,email,phone,contact_category')
-      .or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%,email.ilike.%${q}%`)
+    const { data } = await sb.from('lmt_contacts')
+      .select('id,category,first_name,last_name,company,email,phone')
+      .or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%,email.ilike.%${q}%,company.ilike.%${q}%`)
       .limit(8);
     setResults(data || []);
     setOpen(true);
@@ -1064,26 +1127,24 @@ function AgentPicker({ label, value, onChange }) {
   };
 
   const select = (contact) => {
-    const name = `${contact.first_name||''} ${contact.last_name||''}`.trim();
-    setQuery(name);
-    setOpen(false);
-    setSavedToHlt(true); // already in HLT
+    const name = [contact.first_name,contact.last_name].filter(Boolean).join(' ') || contact.company || '';
+    setQuery(name); setOpen(false); setSavedToHlt(true);
     onChange({ name, email: contact.email||'', phone: contact.phone||'', contact_id: contact.id });
   };
 
-  const saveToHlt = async () => {
-    if (!query.trim()) return;
+  const addToContacts = async () => {
+    if (!query.trim() || saving) return;
+    setSaving(true);
     const parts = query.trim().split(' ');
-    const first = parts[0] || '';
-    const last = parts.slice(1).join(' ') || '';
-    const { data, error } = await sb.from('contacts').insert({
-      first_name: first, last_name: last,
-      contact_type: 'business', contact_category: 'Realtor',
+    const { data, error } = await sb.from('lmt_contacts').insert({
+      first_name: parts[0]||'', last_name: parts.slice(1).join(' ')||'',
+      category: saveCategory||'Realtor',
+      email:'', phone:'', cell_phone:'', license_nmls:'', notes:'',
     }).select().single();
+    setSaving(false);
     if (!error && data) {
-      setSavedToHlt(true);
+      setSavedToHlt(true); setOpen(false);
       onChange({ name: query, email: '', phone: '', contact_id: data.id });
-      alert(`✅ ${query} saved to HLT as a Realtor contact!`);
     }
   };
 
@@ -1095,122 +1156,57 @@ function AgentPicker({ label, value, onChange }) {
   return (
     <div ref={ref} style={{position:'relative'}}>
       <div style={{display:'flex',gap:6}}>
-        <input
-          value={query}
-          onChange={e=>search(e.target.value)}
+        <input value={query} onChange={e=>search(e.target.value)}
           onFocus={()=>query.length>=2&&setOpen(true)}
           placeholder={`Search ${label} by name…`}
-          style={{flex:1,padding:'8px 10px',border:'1px solid #E5E7EB',borderRadius:6,fontSize:13}}
-        />
-        {query && !savedToHlt && (
-          <button onClick={saveToHlt} title="Save to HLT contacts"
-            style={{background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:6,cursor:'pointer',color:'#2563EB',fontSize:11,fontWeight:700,padding:'0 8px',whiteSpace:'nowrap'}}>
-            + HLT
-          </button>
-        )}
-        {savedToHlt && <span style={{fontSize:11,color:'#16A34A',alignSelf:'center',whiteSpace:'nowrap'}}>✓ In HLT</span>}
+          style={{flex:1,padding:'8px 10px',border:'1px solid #E5E7EB',borderRadius:6,fontSize:13}} />
+        {savedToHlt && <span style={{fontSize:11,color:'#16A34A',alignSelf:'center',whiteSpace:'nowrap'}}>✓ Saved</span>}
         {query && <button onClick={clear} style={{background:'none',border:'none',cursor:'pointer',color:'#9CA3AF',fontSize:16,padding:'0 4px'}}>×</button>}
       </div>
       {searching && <div style={{fontSize:12,color:'#9CA3AF',marginTop:4}}>Searching…</div>}
-      {open && results.length > 0 && (
+      {open && (
         <div style={{position:'absolute',top:'100%',left:0,right:0,zIndex:999,background:'white',border:'1px solid #E5E7EB',borderRadius:8,boxShadow:'0 4px 20px rgba(0,0,0,0.15)',marginTop:4,maxHeight:220,overflowY:'auto'}}>
           {results.map(c => (
             <div key={c.id} onClick={()=>select(c)}
               style={{padding:'9px 14px',cursor:'pointer',borderBottom:'1px solid #F3F4F6',fontSize:13}}
               onMouseEnter={e=>e.currentTarget.style.background='#F8FAFC'}
               onMouseLeave={e=>e.currentTarget.style.background='white'}>
-              <div style={{fontWeight:600}}>{c.first_name} {c.last_name}</div>
-              <div style={{fontSize:11,color:'#6B7280'}}>
-                {c.contact_category||'Contact'}{c.email?' · '+c.email:''}{c.phone?' · '+c.phone:''}
-              </div>
+              <div style={{fontWeight:600}}>{[c.first_name,c.last_name].filter(Boolean).join(' ') || c.company || ''}</div>
+              <div style={{fontSize:11,color:'#6B7280'}}>{c.category||'Contact'}{c.company && (c.first_name||c.last_name)?' · '+c.company:''}{c.email?' · '+c.email:''}{c.phone?' · '+c.phone:''}</div>
             </div>
           ))}
-        </div>
-      )}
-      {open && results.length === 0 && !searching && query.length >= 2 && (
-        <div style={{position:'absolute',top:'100%',left:0,right:0,zIndex:999,background:'white',border:'1px solid #E5E7EB',borderRadius:8,boxShadow:'0 4px 20px rgba(0,0,0,0.15)',marginTop:4,padding:'10px 14px',fontSize:13,color:'#9CA3AF'}}>
-          Not in HLT yet — click <strong style={{color:'#2563EB'}}>+ HLT</strong> to save them as a Realtor contact.
+          {results.length === 0 && !searching && query.length >= 2 && (
+            <div onMouseDown={addToContacts}
+              style={{padding:'9px 14px',cursor:'pointer',fontSize:13,color:'#2563EB',fontWeight:600,display:'flex',alignItems:'center',gap:6}}
+              onMouseEnter={e=>e.currentTarget.style.background='#EFF6FF'}
+              onMouseLeave={e=>e.currentTarget.style.background='white'}>
+              {saving ? 'Saving…' : `➕ Add "${query}" as contact`}
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-// ── Address Autocomplete using OpenStreetMap Nominatim (free, no API key) ──
 function AddressSearch({ address, city, state, zip, onChange }) {
-  const [query, setQuery] = useState(address || '');
-  const [suggestions, setSuggestions] = useState([]);
-  const [open, setOpen] = useState(false);
-  const [searching, setSearching] = useState(false);
-  const timer = useRef(null);
-
-  const search = async (q) => {
-    if (!q || q.length < 5) { setSuggestions([]); setOpen(false); return; }
-    setSearching(true);
-    try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&addressdetails=1&limit=6&countrycodes=us`);
-      const data = await res.json();
-      setSuggestions(data);
-      setOpen(data.length > 0);
-    } catch(e) {}
-    setSearching(false);
-  };
-
-  const handleChange = (val) => {
-    setQuery(val);
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => search(val), 400);
-  };
-
-  const pick = (item) => {
-    const a = item.address || {};
-    const streetNum = a.house_number || '';
-    const street    = a.road || '';
-    const fullStreet = [streetNum, street].filter(Boolean).join(' ');
-    const cityVal   = a.city || a.town || a.village || a.hamlet || a.county || '';
-    const stateVal  = a.state || '';
-    // Abbreviate state
-    const STATE_ABBR = {'Alabama':'AL','Alaska':'AK','Arizona':'AZ','Arkansas':'AR','California':'CA','Colorado':'CO','Connecticut':'CT','Delaware':'DE','Florida':'FL','Georgia':'GA','Hawaii':'HI','Idaho':'ID','Illinois':'IL','Indiana':'IN','Iowa':'IA','Kansas':'KS','Kentucky':'KY','Louisiana':'LA','Maine':'ME','Maryland':'MD','Massachusetts':'MA','Michigan':'MI','Minnesota':'MN','Mississippi':'MS','Missouri':'MO','Montana':'MT','Nebraska':'NE','Nevada':'NV','New Hampshire':'NH','New Jersey':'NJ','New Mexico':'NM','New York':'NY','North Carolina':'NC','North Dakota':'ND','Ohio':'OH','Oklahoma':'OK','Oregon':'OR','Pennsylvania':'PA','Rhode Island':'RI','South Carolina':'SC','South Dakota':'SD','Tennessee':'TN','Texas':'TX','Utah':'UT','Vermont':'VT','Virginia':'VA','Washington':'WA','West Virginia':'WV','Wisconsin':'WI','Wyoming':'WY'};
-    const stateAbbr = STATE_ABBR[stateVal] || stateVal.slice(0,2).toUpperCase();
-    const zipVal    = a.postcode || '';
-    setQuery(fullStreet);
-    setOpen(false);
-    onChange({ address: fullStreet, city: cityVal, state: stateAbbr, zip: zipVal });
-  };
-
   return (
-    <div style={{position:'relative'}}>
+    <div>
       <div className="form-group" style={{marginBottom:8}}>
         <label>Street Address</label>
-        <div style={{position:'relative'}}>
-          <input value={query} onChange={e=>handleChange(e.target.value)}
-            onFocus={()=>query.length>=5&&setOpen(true)}
-            placeholder="Start typing address… (auto-fills city, state, zip)"
-            style={{width:'100%',padding:'8px 32px 8px 10px',border:'1px solid #E5E7EB',borderRadius:6,fontSize:13}} />
-          {searching && <span style={{position:'absolute',right:8,top:'50%',transform:'translateY(-50%)',fontSize:11,color:'#9CA3AF'}}>…</span>}
-        </div>
-        {open && suggestions.length > 0 && (
-          <div style={{position:'absolute',top:'100%',left:0,right:0,zIndex:9999,background:'white',border:'1px solid #E5E7EB',borderRadius:8,boxShadow:'0 4px 20px rgba(0,0,0,0.15)',maxHeight:220,overflowY:'auto',marginTop:4}}>
-            {suggestions.map((s,i) => (
-              <div key={i} onClick={()=>pick(s)}
-                style={{padding:'8px 12px',cursor:'pointer',fontSize:12,color:'#374151',borderBottom:'1px solid #F3F4F6'}}
-                onMouseEnter={e=>e.currentTarget.style.background='#F8FAFC'}
-                onMouseLeave={e=>e.currentTarget.style.background='white'}>
-                {s.display_name}
-              </div>
-            ))}
-          </div>
-        )}
+        <input value={address||''} onChange={e=>onChange({address:e.target.value,city,state,zip})}
+          placeholder=""
+          style={{width:'100%',padding:'8px 10px',border:'1px solid #E5E7EB',borderRadius:6,fontSize:13}} />
       </div>
       <div className="form-group" style={{marginBottom:8}}>
         <label>City</label>
-        <input value={city} onChange={e=>onChange({address,city:e.target.value,state,zip})}
+        <input value={city||''} onChange={e=>onChange({address,city:e.target.value,state,zip})}
           style={{padding:'8px 10px',border:'1px solid #E5E7EB',borderRadius:6,fontSize:13,width:'100%'}} />
       </div>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
         <div className="form-group" style={{marginBottom:0}}>
           <label>State</label>
-          <input value={state} onChange={e=>onChange({address,city,state:e.target.value,zip})} maxLength={2}
+          <input value={state||''} onChange={e=>onChange({address,city,state:e.target.value,zip})} maxLength={2}
             style={{padding:'8px 10px',border:'1px solid #E5E7EB',borderRadius:6,fontSize:13,width:'100%'}} />
         </div>
         <div className="form-group" style={{marginBottom:0}}>
@@ -1239,12 +1235,12 @@ function DealModal({ deal, profiles, statuses, branches, existingDeals, onSave, 
     loan_program: '',
     loan_term: 30,
     rate: '',
-    trans_type: 'purchase',
-    prop_type: 'SFR',
+    trans_type: '',
+    prop_type: '',
     status: statuses?.[0]?.label || 'Not Submitted',
     closing_date: '',
     lock_expiration_date: '',
-    occupancy: 'primary',
+    occupancy: '',
     funding_date: '',
     hlt_scenario_name: '',
     branch: '',
@@ -1375,7 +1371,10 @@ function DealModal({ deal, profiles, statuses, branches, existingDeals, onSave, 
       primary_last_name:  form.primary_last_name  || '',
       primary_nickname:   form.primary_nickname   || '',
       primary_borrower_name: [form.primary_first_name||'', form.primary_last_name||''].filter(Boolean).join(' ') || form.primary_borrower_name || '',
-      assigned_lo_id: form.assigned_lo_id || null,
+      assigned_lo_id: form.assigned_lo_id || (
+        !isEdit && currentProfile && ['internal','branch_admin'].includes(currentProfile.role)
+          ? currentProfile.id : null
+      ),
       assigned_loa_id: form.assigned_loa_id || null,
       assigned_processor_id: form.assigned_processor_id || null,
       title_contact_name:     form.title_contact_name    || '',
@@ -1534,7 +1533,8 @@ function DealModal({ deal, profiles, statuses, branches, existingDeals, onSave, 
             <div style={{display:'flex',flexDirection:'column',gap:10}}>
               <div className="form-group">
                 <label>Transaction Type</label>
-                <select value={form.trans_type} onChange={e=>{const tt=e.target.value;setForm(p=>({...p,trans_type:tt,funding_date:calcFundingDate(p.closing_date,tt,p.occupancy)}));}}>
+                <select value={form.trans_type||''} onChange={e=>{const tt=e.target.value;setForm(p=>({...p,trans_type:tt,funding_date:calcFundingDate(p.closing_date,tt,p.occupancy)}));}}>
+                  <option value="">—</option>
                   <option value="purchase">Purchase</option>
                   <option value="refinance">Refinance</option>
                   <option value="heloc">HELOC</option>
@@ -1543,7 +1543,8 @@ function DealModal({ deal, profiles, statuses, branches, existingDeals, onSave, 
               </div>
               <div className="form-group">
                 <label>Occupancy</label>
-                <select value={form.occupancy||'primary'} onChange={e=>{const occ=e.target.value;setForm(p=>({...p,occupancy:occ,funding_date:calcFundingDate(p.closing_date,p.trans_type,occ)}));}}>
+                <select value={form.occupancy||''} onChange={e=>{const occ=e.target.value;setForm(p=>({...p,occupancy:occ,funding_date:calcFundingDate(p.closing_date,p.trans_type,occ)}));}}>
+                  <option value="">—</option>
                   <option value="primary">Primary Residence</option>
                   <option value="secondary">Secondary / Vacation</option>
                   <option value="investment">Investment / Non-Owner</option>
@@ -1551,7 +1552,8 @@ function DealModal({ deal, profiles, statuses, branches, existingDeals, onSave, 
               </div>
               <div className="form-group">
                 <label>Property Type</label>
-                <select value={form.prop_type} onChange={e=>set('prop_type',e.target.value)}>
+                <select value={form.prop_type||''} onChange={e=>set('prop_type',e.target.value)}>
+                  <option value="">—</option>
                   {['SFR','Condo','Townhome','Multi-Family','Manufactured','Other'].map(t=><option key={t}>{t}</option>)}
                 </select>
               </div>
@@ -1601,7 +1603,7 @@ function DealModal({ deal, profiles, statuses, branches, existingDeals, onSave, 
             <div style={{display:'flex',flexDirection:'column',gap:10}}>
               <div className="form-group">
                 <label>Closing</label>
-                <input type="date" value={form.closing_date||''} onChange={e=>{
+                <input type="date" className={form.closing_date ? '' : 'date-empty'} value={form.closing_date||''} onChange={e=>{
                   const cd=e.target.value;
                   const fd=calcFundingDate(cd,form.trans_type||'purchase',form.occupancy||'primary');
                   setForm(p=>({...p,closing_date:cd,funding_date:fd}));
@@ -1612,11 +1614,11 @@ function DealModal({ deal, profiles, statuses, branches, existingDeals, onSave, 
                   Funding
                   {!form.funding_date_manual && <span style={{fontSize:10,background:'#EDE9FE',color:'#6D28D9',borderRadius:3,padding:'1px 5px',fontWeight:600}}>Auto</span>}
                 </label>
-                <input type="date" value={form.funding_date||''} onChange={e=>setForm(p=>({...p,funding_date:e.target.value,funding_date_manual:true}))} />
+                <input type="date" className={form.funding_date ? '' : 'date-empty'} value={form.funding_date||''} onChange={e=>setForm(p=>({...p,funding_date:e.target.value,funding_date_manual:true}))} />
               </div>
               <div className="form-group">
                 <label>Lock Expiration</label>
-                <input type="date" value={form.lock_expiration_date||''} onChange={e=>set('lock_expiration_date',e.target.value)} />
+                <input type="date" className={form.lock_expiration_date ? '' : 'date-empty'} value={form.lock_expiration_date||''} onChange={e=>set('lock_expiration_date',e.target.value)} />
               </div>
             </div>
           </div>
@@ -1725,7 +1727,9 @@ function DealModal({ deal, profiles, statuses, branches, existingDeals, onSave, 
                     </div>
                     <div className="form-group">
                       <label>Contact Name</label>
-                      <input value={form[v.contactKey]||''} onChange={e=>set(v.contactKey,e.target.value)} placeholder="" />
+                      <AgentPicker label="Contact" value={form[v.contactKey]||''}
+                        saveCategory={v.label==='Title Company'?'Title':v.label==='Appraiser'?'Appraisal':v.label==='HOI Company'?'HOI':'Other'}
+                        onChange={a=>setForm(p=>({...p,[v.contactKey]:a.name,[v.emailKey]:a.email||p[v.emailKey]||'',...(v.phoneKey?{[v.phoneKey]:a.phone||p[v.phoneKey]||''}:{})}))} />
                     </div>
                     <div className="form-group">
                       <label>Email</label>
@@ -1761,7 +1765,8 @@ function DealModal({ deal, profiles, statuses, branches, existingDeals, onSave, 
                     </div>
                     <div className="form-group">
                       <label>Contact Name</label>
-                      <input value={v.contact||''} onChange={e=>setAddl(addlVendors.map((x,idx)=>idx===i?{...x,contact:e.target.value}:x))} placeholder="" />
+                      <AgentPicker label="Contact" value={v.contact||''} saveCategory="Other"
+                        onChange={a=>setAddl(addlVendors.map((x,idx)=>idx===i?{...x,contact:a.name,email:a.email||x.email||''}:x))} />
                     </div>
                     <div className="form-group">
                       <label>Email</label>
@@ -1796,41 +1801,69 @@ function DealModal({ deal, profiles, statuses, branches, existingDeals, onSave, 
 // ─────────────────────────────────────────────
 // MILESTONE CARD
 // ─────────────────────────────────────────────
-// Smart date input: blank when empty, MM/DD display when filled, native picker
 function SmartDate({ value, onChange, disabled }) {
-  const [editing, setEditing] = useState(false);
-  const inputRef = useRef(null);
+  const CY = new Date().getFullYear();
 
-  const display = value ? (() => {
-    const parts = value.split('-');
-    if (parts.length === 3) return `${parseInt(parts[1])}/${parseInt(parts[2])}`;
-    return value;
-  })() : '';
+  const toDisplay = (iso) => {
+    if (!iso) return '';
+    const [y, m, d] = iso.split('-');
+    if (!m || !d) return '';
+    const yr = parseInt(y);
+    return yr === CY ? `${m}/${d}` : `${m}/${d}/${y}`;
+  };
 
-  if (editing || !value) {
-    return (
-      <input
-        ref={inputRef}
-        type="date"
-        className="ms-input"
-        value={value || ''}
-        onChange={onChange}
-        disabled={disabled}
-        autoFocus={editing}
-        onBlur={() => setEditing(false)}
-        style={{color: value ? undefined : 'transparent', width:'100%'}}
-      />
-    );
-  }
+  const parseDate = (input) => {
+    const s = (input || '').trim().replace(/-/g, '/');
+    if (!s) return '';
+    const parts = s.split('/');
+    const mo = parseInt(parts[0]);
+    const dy = parseInt(parts[1]);
+    if (!parts[1] || isNaN(mo) || isNaN(dy) || mo < 1 || mo > 12 || dy < 1 || dy > 31) return '';
+    let yr = parts[2] ? parseInt(parts[2]) : CY;
+    if (yr >= 0 && yr < 100) yr += 2000;
+    if (yr < 1900 || yr > 2100) yr = CY;
+    return `${yr}-${String(mo).padStart(2,'0')}-${String(dy).padStart(2,'0')}`;
+  };
+
+  const [text, setText] = React.useState(() => toDisplay(value));
+  const [focused, setFocused] = React.useState(false);
+  const prevValue = React.useRef(value);
+
+  React.useEffect(() => {
+    if (!focused && value !== prevValue.current) {
+      prevValue.current = value;
+      setText(toDisplay(value));
+    }
+  }, [value, focused]);
+
+  const handleFocus = (e) => {
+    setFocused(true);
+    if (value) {
+      const [y, m, d] = value.split('-');
+      setText(`${m}/${d}/${y}`);
+    }
+    setTimeout(() => e.target.select(), 0);
+  };
+
+  const handleBlur = () => {
+    setFocused(false);
+    const iso = parseDate(text);
+    prevValue.current = iso;
+    setText(iso ? toDisplay(iso) : '');
+    onChange({ target: { value: iso } });
+  };
 
   return (
-    <div
-      className="ms-input"
-      onClick={() => { if (!disabled) { setEditing(true); setTimeout(() => inputRef.current?.focus(), 10); } }}
-      style={{cursor: disabled ? 'default' : 'pointer', display:'flex', alignItems:'center', color:'#111', userSelect:'none'}}
-    >
-      {display}
-    </div>
+    <input
+      value={text}
+      onChange={e => setText(e.target.value)}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+      disabled={disabled}
+      placeholder="MM/DD"
+      className={`ms-input${value ? '' : ' date-empty'}`}
+      style={{width:'100%'}}
+    />
   );
 }
 
@@ -2213,7 +2246,7 @@ function MilestoneSetupTab({ deal, milestones, onMilestonesChange, coborrowers }
 // ─────────────────────────────────────────────
 // DEAL DATES TAB
 // ─────────────────────────────────────────────
-function DealDatesTab({ deal, profile, onDealChange }) {
+function DealDatesTab({ deal, profile, onDealChange, milestones, saveMilestone, customStatuses }) {
   // Resolve turntimes: loan override → user template → system defaults
   const systemDefaults = DATE_CALC_STATUSES.reduce((acc, s) => { acc[s.key] = s.default; return acc; }, {});
   const userTemplate   = profile?.date_turntimes_template || {};
@@ -2266,19 +2299,113 @@ function DealDatesTab({ deal, profile, onDealChange }) {
   const [actuals, setActuals] = React.useState(deal?.status_actual_dates || {});
   const [savingActuals, setSavingActuals] = React.useState(false);
 
+  // Contract milestone — drives row '01' actual
+  const contractMs = (milestones || []).find(m => m.milestone_type === 'contract');
+
+  // On mount: if stored status doesn't match what the dates imply, correct it
+  React.useEffect(() => {
+    if (!deal?.id || actuals['override']) return;
+    // computeAutoStatus isn't defined yet here, so inline the logic
+    const eff = {
+      ...actuals,
+      '01': contractMs?.received_date || actuals['01'] || '',
+      '14': deal?.closing_date || '',
+    };
+    const todayStr = today();
+    let computedStatus = null;
+    if (eff['sus']) {
+      computedStatus = '16. Suspended';
+    } else {
+      const numericKeys = Object.keys(eff)
+        .filter(k => /^\d+$/.test(k) && eff[k])
+        .filter(k => {
+          if (k === '14') return eff['13'] && deal?.closing_date === todayStr;
+          if (k === '15') return !!actuals['15'];
+          return true;
+        });
+      if (numericKeys.length) {
+        const highestKey = numericKeys.sort((a,b) => parseInt(a)-parseInt(b)).pop();
+        computedStatus = DATE_CALC_STATUSES.find(s => s.key === highestKey)?.label || null;
+      }
+    }
+    if (computedStatus && computedStatus !== deal.status) {
+      sb.from('lmt_deals').update({ status: computedStatus }).eq('id', deal.id);
+      if (onDealChange) onDealChange({ ...deal, status: computedStatus });
+    }
+  }, [deal?.id]);
+  // Effective actuals: '01' from contract milestone, '14' from closing_date
+  const effectiveActuals = {
+    ...actuals,
+    '01': contractMs?.received_date || actuals['01'] || '',
+    '14': deal?.closing_date || '',
+  };
+
+  // Compute which status the dates imply (ignoring override)
+  const computeAutoStatus = (updActuals) => {
+    if (updActuals['sus']) return '16. Suspended';
+    const numericKeys = Object.keys(updActuals)
+      .filter(k => /^\d+$/.test(k) && updActuals[k])
+      .filter(k => {
+        // '14' (Closed) only counts if '13' also has a date AND today IS the closing date
+        if (k === '14') return updActuals['13'] && deal?.closing_date === today();
+        // '15' (Funded) only counts if explicitly stored in actuals (not auto-derived)
+        if (k === '15') return !!actuals['15'];
+        return true;
+      });
+    if (!numericKeys.length) return null;
+    const highestKey = numericKeys.sort((a,b) => parseInt(a)-parseInt(b)).pop();
+    return DATE_CALC_STATUSES.find(s => s.key === highestKey)?.label || null;
+  };
+
   const setActual = async (key, val) => {
+    if (key === '14') return; // read-only — set in Loan Details
+    if (key === '01' && contractMs && saveMilestone) {
+      await saveMilestone({ ...contractMs, received_date: val || null, is_done: !!val });
+    }
     const updated = { ...actuals, [key]: val || undefined };
     if (!val) delete updated[key];
     setActuals(updated);
     setSavingActuals(true);
-    await sb.from('lmt_deals').update({ status_actual_dates: updated }).eq('id', deal.id);
+
+    // Build deal patch — update status unless manual override is set
+    const dealPatch = { status_actual_dates: updated };
+    if (!updated['override']) {
+      const newStatus = computeAutoStatus({
+        ...updated,
+        '01': contractMs?.received_date || updated['01'] || '',
+        '14': deal?.closing_date || '',
+      });
+      if (newStatus) dealPatch.status = newStatus;
+    }
+
+    await sb.from('lmt_deals').update(dealPatch).eq('id', deal.id);
     setSavingActuals(false);
+    if (onDealChange && dealPatch.status) onDealChange({ ...deal, ...dealPatch });
+  };
+
+  const setOverride = async (val) => {
+    const updated = { ...actuals, override: val || undefined };
+    if (!val) delete updated['override'];
+    setActuals(updated);
+    const dealPatch = { status_actual_dates: updated };
+    if (val) {
+      dealPatch.status = val;
+    } else {
+      const newStatus = computeAutoStatus({
+        ...updated,
+        '01': contractMs?.received_date || updated['01'] || '',
+        '14': deal?.closing_date || '',
+      });
+      if (newStatus) dealPatch.status = newStatus;
+    }
+    await sb.from('lmt_deals').update(dealPatch).eq('id', deal.id);
+    if (onDealChange) onDealChange({ ...deal, ...dealPatch });
   };
 
   // Calculate overall ahead/behind from all rows with both target + actual
   const deltas = DATE_CALC_STATUSES.map(s => {
     const target = dates[s.key];
-    const actual = actuals[s.key];
+    const actual = effectiveActuals[s.key];
     if (!target || !actual) return null;
     // Positive delta = actual AFTER target = behind; negative = ahead
     const tDate = new Date(target + 'T12:00:00');
@@ -2322,6 +2449,22 @@ function DealDatesTab({ deal, profile, onDealChange }) {
         </div>
         {editingDates && <button className="btn btn-ghost btn-sm" onClick={resetToTemplate}>↺ Template</button>}
         {editingDates && <button className="btn btn-ghost btn-sm" onClick={resetToSystem}>↺ System</button>}
+        <div style={{display:'flex',alignItems:'center',gap:6,marginLeft:'auto'}}>
+          <span style={{fontSize:11,color:'#6B7280',whiteSpace:'nowrap',fontWeight:600}}>Lead Status:</span>
+          <select
+            value={actuals['override']||''}
+            onChange={e=>setOverride(e.target.value)}
+            style={{fontSize:11,padding:'3px 6px',borderRadius:5,border:'1px solid #E5E7EB',background:actuals['override']?'#FEF3C7':'white',color:actuals['override']?'#92400E':'#374151',cursor:'pointer'}}>
+            <option value="">— Auto (from dates)</option>
+            {(customStatuses||[]).map(s=>(
+              <option key={s.label||s} value={s.label||s}>{s.label||s}</option>
+            ))}
+            <option value="16. Suspended">16. Suspended</option>
+          </select>
+          {actuals['override'] && (
+            <span style={{fontSize:10,background:'#FEF3C7',color:'#92400E',borderRadius:4,padding:'2px 6px',fontWeight:600}}>Override</span>
+          )}
+        </div>
       </div>
 
       <div style={{border:'1px solid #E5E7EB',borderRadius:10,overflow:'hidden',fontSize:12}}>
@@ -2337,19 +2480,45 @@ function DealDatesTab({ deal, profile, onDealChange }) {
           </thead>
           <tbody>
             {DATE_CALC_STATUSES.map((s, i) => {
-              const isClosing = s.key === '14';
-              const isFunding = s.key === '15';
-              const targetStr = dates[s.key];
-              const actualStr = actuals[s.key];
-              const dow       = targetStr ? fmtDayOfWeek(targetStr) : '';
-              const isToday   = targetStr === today();
-              const rowBg     = isClosing ? '#EFF6FF' : isFunding ? '#F0FDF4' : i%2===0?'white':'#FAFAFA';
+              const isClosing  = s.key === '14';
+              const isFunding  = s.key === '15';
+              const isContract = s.key === '01';
+              const targetStr  = dates[s.key];
+              const actualStr  = effectiveActuals[s.key];
+              const dow        = targetStr ? fmtDayOfWeek(targetStr) : '';
+              const isToday    = targetStr === today();
+              const rowBg      = isClosing ? '#EFF6FF' : isFunding ? '#F0FDF4' : i%2===0?'white':'#FAFAFA';
 
               // Delta calculation
               let delta = null;
               if (targetStr && actualStr) {
                 delta = Math.round((new Date(actualStr+'T12:00:00') - new Date(targetStr+'T12:00:00')) / 86400000);
               }
+
+              // Actual cell content
+              const actualCell = isClosing ? (
+                <div style={{display:'flex',alignItems:'center',gap:6}}>
+                  {actualStr
+                    ? <span style={{fontWeight:700,color:'#1D4ED8'}}>{fmtDate(actualStr)} <span style={{fontWeight:400,fontSize:10,color:'#9CA3AF'}}>{fmtDayOfWeek(actualStr)}</span></span>
+                    : <span style={{color:'#9CA3AF',fontSize:11,fontStyle:'italic'}}>Set in Loan Details</span>}
+                </div>
+              ) : (
+                <div style={{display:'flex',alignItems:'center',gap:4}}>
+                  <SmartDate
+                    value={actualStr||''}
+                    onChange={e=>{ if(validateReceived(e.target.value)||!e.target.value) setActual(s.key, e.target.value); }}
+                    disabled={false}
+                  />
+                  {actualStr
+                    ? <span style={{fontSize:10,color:'#9CA3AF'}}>{fmtDayOfWeek(actualStr)}</span>
+                    : <button onClick={()=>setActual(s.key, today())} title="Set to today"
+                        style={{flexShrink:0,padding:'1px 5px',borderRadius:99,border:'1px solid #BFDBFE',background:'#EFF6FF',color:'#2563EB',fontSize:9,fontWeight:700,cursor:'pointer',lineHeight:1.4}}>
+                        T
+                      </button>
+                  }
+                  {isContract && !actualStr && <span style={{fontSize:9,color:'#9CA3AF',fontStyle:'italic',whiteSpace:'nowrap'}}>← from Contract card</span>}
+                </div>
+              );
 
               return (
                 <tr key={s.key} style={{background:rowBg,borderBottom:'1px solid #F3F4F6'}}>
@@ -2374,14 +2543,7 @@ function DealDatesTab({ deal, profile, onDealChange }) {
                     ) : <span style={{color:'#D1D5DB'}}>—</span>}
                   </td>
                   <td style={{padding:'4px 8px'}}>
-                    <div style={{display:'flex',alignItems:'center',gap:4}}>
-                      <SmartDate
-                        value={actualStr||''}
-                        onChange={e=>{ if(validateReceived(e.target.value)||!e.target.value) setActual(s.key, e.target.value); }}
-                        disabled={false}
-                      />
-                      {actualStr && <span style={{fontSize:10,color:'#9CA3AF'}}>{fmtDayOfWeek(actualStr)}</span>}
-                    </div>
+                    {actualCell}
                     {savingActuals && <span style={{fontSize:9,color:'#9CA3AF'}}>saving…</span>}
                   </td>
                   <td style={{padding:'8px 10px',textAlign:'center'}}>
@@ -2397,6 +2559,26 @@ function DealDatesTab({ deal, profile, onDealChange }) {
                 </tr>
               );
             })}
+            {/* Suspended row */}
+            {(()=>{
+              const susDate = actuals['sus']||'';
+              return (
+                <tr style={{background:'#FFF7ED',borderTop:'2px solid #FED7AA'}}>
+                  <td style={{padding:'8px 14px',fontWeight:700,color:'#C2410C'}}>16. Suspended</td>
+                  <td style={{padding:'5px 10px',textAlign:'center'}}><span style={{fontSize:10,color:'#9CA3AF',fontStyle:'italic'}}>—</span></td>
+                  <td style={{padding:'8px 14px'}}><span style={{color:'#D1D5DB'}}>—</span></td>
+                  <td style={{padding:'4px 8px'}}>
+                    <div style={{display:'flex',alignItems:'center',gap:4}}>
+                      <SmartDate value={susDate} onChange={e=>setActual('sus',e.target.value)} disabled={false} />
+                      {susDate && <span style={{fontSize:10,color:'#9CA3AF'}}>{fmtDayOfWeek(susDate)}</span>}
+                    </div>
+                  </td>
+                  <td style={{padding:'8px 10px',textAlign:'center'}}>
+                    {susDate ? <span style={{fontSize:11,fontWeight:700,color:'#C2410C',background:'#FFEDD5',borderRadius:4,padding:'2px 7px'}}>Suspended</span> : <span style={{color:'#D1D5DB'}}>—</span>}
+                  </td>
+                </tr>
+              );
+            })()}
           </tbody>
         </table>
       </div>
@@ -2657,7 +2839,7 @@ function MilestoneTableView({ milestones, onSave }) {
   );
 }
 
-function MilestoneCard({ ms, presets, dealTurntimes, onChange }) {
+function MilestoneCard({ ms, presets, dealTurntimes, onChange, vendorInfo }) {
   const preset = presets.find(p => p.milestone_type === ms.milestone_type);
   // Use per-loan turntime override if available, else global preset
   const dealTT = dealTurntimes?.find(t => t.milestone_type === ms.milestone_type);
@@ -2706,6 +2888,9 @@ function MilestoneCard({ ms, presets, dealTurntimes, onChange }) {
     onChange({ ...ms, due_date: due || ms.due_date, due_date_locked: false });
   };
 
+  const [vendorPopup, setVendorPopup] = React.useState(false);
+  const hasVendor = vendorInfo && (vendorInfo.company || vendorInfo.contact || vendorInfo.email || vendorInfo.phone);
+
   const diff = daysDiff(ms.due_date);
   const isIcd = ms.milestone_type === 'icd';
   const icdDone = isIcd && !!ms.icd_signed_date;
@@ -2739,9 +2924,28 @@ function MilestoneCard({ ms, presets, dealTurntimes, onChange }) {
   return (
     <div className={cardClass}>
       <div className="milestone-title">
-        <div style={{flex:1}}>
-          <span style={{fontSize:11,fontWeight:700}}>{label}</span>
+        <div style={{flex:1,position:'relative'}}>
+          {hasVendor ? (
+            <span onClick={()=>setVendorPopup(v=>!v)}
+              style={{fontSize:11,fontWeight:700,cursor:'pointer',color:'#2563EB',textDecoration:'underline',textDecorationStyle:'dotted',textUnderlineOffset:2}}>
+              {label} ↗
+            </span>
+          ) : (
+            <span style={{fontSize:11,fontWeight:700}}>{label}</span>
+          )}
           {ms.borrower_ref && <span style={{fontSize:9,background:'#EDE9FE',color:'#6D28D9',borderRadius:3,padding:'1px 5px',marginLeft:5,fontWeight:600}}>{ms.borrower_ref==='primary'?'P':ms.borrower_ref.replace('co','C')}</span>}
+          {vendorPopup && hasVendor && (
+            <div style={{position:'absolute',top:'100%',left:0,zIndex:1300,background:'white',border:'1px solid #E5E7EB',borderRadius:10,boxShadow:'0 8px 24px rgba(0,0,0,0.15)',padding:'12px 16px',minWidth:220,marginTop:4}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+                <span style={{fontSize:11,fontWeight:700,color:'#1B2A4A',textTransform:'uppercase',letterSpacing:'0.04em'}}>{label} Contact</span>
+                <button onClick={()=>setVendorPopup(false)} style={{background:'none',border:'none',cursor:'pointer',color:'#9CA3AF',fontSize:16,padding:0,lineHeight:1}}>×</button>
+              </div>
+              {vendorInfo.company && <div style={{fontSize:13,fontWeight:600,color:'#1B2A4A',marginBottom:3}}>{vendorInfo.company}</div>}
+              {vendorInfo.contact && <div style={{fontSize:12,color:'#4B5563',marginBottom:3}}>👤 {vendorInfo.contact}</div>}
+              {vendorInfo.email   && <div style={{fontSize:12,marginBottom:3}}><a href={`mailto:${vendorInfo.email}`} style={{color:'#2563EB'}}>{vendorInfo.email}</a></div>}
+              {vendorInfo.phone   && <div style={{fontSize:12,color:'#4B5563'}}>📞 {vendorInfo.phone}</div>}
+            </div>
+          )}
         </div>
         {effectiveDone && <span style={{color:'#16A34A',fontSize:14}}>✓</span>}
         {!effectiveDone && ms.due_date && diff < 0 && <span className="tag tag-red" style={{fontSize:9}}>OVERDUE</span>}
@@ -2831,7 +3035,7 @@ function MilestoneCard({ ms, presets, dealTurntimes, onChange }) {
 // ─────────────────────────────────────────────
 // DEAL DETAIL PAGE (full-page version of the modal)
 // ─────────────────────────────────────────────
-function DealDetailPage({ deal, profiles, presets, templates, currentUser, initialTab, onBack, onEdit, onArchive, onDuplicate, onStatusChange, customStatuses, loProfile, lmtContacts, setLmtContacts }) {
+function DealDetailPage({ deal, profiles, presets, templates, currentUser, initialTab, onBack, onEdit, onArchive, onDuplicate, onStatusChange, customStatuses, loProfile, lmtContacts, setLmtContacts, onDealChange }) {
   // Re-use DealDetailModal but wrap it in a full-page layout
   return (
     <div style={{maxWidth:1100,margin:'0 auto'}}>
@@ -2850,6 +3054,7 @@ function DealDetailPage({ deal, profiles, presets, templates, currentUser, initi
         loProfile={loProfile}
         lmtContacts={lmtContacts}
         setLmtContacts={setLmtContacts}
+        onDealChange={onDealChange}
         pageMode={true}
       />
     </div>
@@ -2962,7 +3167,7 @@ function EmailComposer({ emailModal, onClose, loProfile }) {
 // ─────────────────────────────────────────────
 // DEAL DETAIL MODAL
 // ─────────────────────────────────────────────
-function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, onArchive, onDuplicate, currentUser, pageMode, initialTab, customStatuses, loProfile, lmtContacts, setLmtContacts }) {
+function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, onArchive, onDuplicate, currentUser, pageMode, initialTab, customStatuses, loProfile, lmtContacts, setLmtContacts, onDealChange }) {
   const [tab, setTab] = useState(initialTab || 'milestones');
   const [msView, setMsView] = useState('card');
 
@@ -2970,7 +3175,10 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
   const [infoForm, setInfoForm] = useState(null);
   const [infoSaving, setInfoSaving] = useState(false);
   const [infoCobs, setInfoCobs] = useState([]);
-  const [editingInfo, setEditingInfo] = useState(false);
+  const infoAutoSaveTimer = React.useRef(null);
+  const infoFormMounted = React.useRef(false);
+  const ctAutoSaveTimer = React.useRef(null);
+  const ctFormMounted = React.useRef(false);
 
   const initInfoForm = (d) => {
     let fn = d.primary_first_name || '';
@@ -3022,14 +3230,18 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
       }
     }
     setInfoSaving(false);
-    setEditingInfo(false);
-    if (data) { setDeals(prev=>prev.map(d=>d.id===deal.id?{...d,...data}:d)); }
+    if (data) {
+      setDeals(prev=>prev.map(d=>d.id===deal.id?{...d,...data}:d));
+      setInfoJustSaved(true);
+      setTimeout(() => setInfoJustSaved(false), 3000);
+    }
   };
 
   // ── Inline Contacts form state ─────────────────────────────
+  const [infoJustSaved, setInfoJustSaved] = useState(false);
   const [ctForm, setCtForm] = useState(null);
   const [ctSaving, setCtSaving] = useState(false);
-  const [editingContacts, setEditingContacts] = useState(false);
+  const [ctJustSaved, setCtJustSaved] = useState(false);
   const [dragVI, setDragVI] = useState(null);
   const [dragVO, setDragVO] = useState(null);
 
@@ -3042,19 +3254,25 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
     setCtSaving(true);
     await sb.from('lmt_deals').update(ctForm).eq('id',deal.id);
     setCtSaving(false);
-    setEditingContacts(false);
+    setCtJustSaved(true);
+    setTimeout(() => setCtJustSaved(false), 3000);
+    if (onDealChange) onDealChange({ ...deal, ...ctForm });
   };
 
-  const discardChanges = () => {
-    if (tab === 'info_edit') {
-      initInfoForm(deal);
-      sb.from('lmt_coborrowers').select('*').eq('deal_id',deal.id).order('sort_order').then(({data})=>{ if(data) setInfoCobs(data); });
-      setEditingInfo(false);
-    } else if (tab === 'contacts_edit') {
-      setCtForm({...deal});
-      setEditingContacts(false);
-    }
-  };
+  // Auto-save info form after 1.5s of inactivity
+  React.useEffect(() => {
+    if (!infoFormMounted.current) { infoFormMounted.current = true; return; }
+    if (infoAutoSaveTimer.current) clearTimeout(infoAutoSaveTimer.current);
+    infoAutoSaveTimer.current = setTimeout(saveInfo, 1500);
+  }, [infoForm, infoCobs]);
+
+  // Auto-save contacts form after 1.5s of inactivity
+  React.useEffect(() => {
+    if (!ctFormMounted.current) { ctFormMounted.current = true; return; }
+    if (ctAutoSaveTimer.current) clearTimeout(ctAutoSaveTimer.current);
+    ctAutoSaveTimer.current = setTimeout(saveCt, 1500);
+  }, [ctForm]);
+
   const [milestones, setMilestones] = useState([]);
   const [notes, setNotes] = useState([]);
   const [hltNotes, setHltNotes] = useState([]);
@@ -3304,9 +3522,9 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
             {/* Row 3: tabs — distinct background */}
             <div style={{background:'#1B2A4A',marginTop:10,padding:'0 16px',display:'flex',alignItems:'stretch',gap:0}}>
               {[
-                { key:'contacts_edit', label:'Contacts' },
-                { key:'info_edit',     label:'Loan Details' },
-                { key:'milestones',    label:`Orders${milestones.length?` (${milestones.length})`:''}` },
+                { key:'contacts_edit', label:'Contacts', saved: ctJustSaved },
+                { key:'info_edit',     label:'Loan Details', saved: infoJustSaved },
+                { key:'milestones',    label:`Orders${milestones.length?` (${milestones.length})`:''}`},
                 { key:'dates',         label:'Dates' },
                 { key:'hlt',           label:'Notes' },
               ].map(t=>(
@@ -3319,6 +3537,7 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
                     marginTop:tab===t.key?4:0,
                     whiteSpace:'nowrap'}}>
                   {t.label}
+                  {t.saved && <span style={{marginLeft:5,fontSize:11,color:'#16A34A',fontWeight:700}}>✓</span>}
                 </button>
               ))}
             </div>
@@ -3329,9 +3548,9 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
         {!pageMode && <div style={{padding:'0 24px 0'}}>
           <div style={{display:'flex',alignItems:'stretch',background:'#F1F5F9',borderRadius:10,padding:4,margin:'12px 0 16px',gap:2}}>
             {[
-              { key:'contacts_edit', label:'Contacts' },
-              { key:'info_edit',     label:'Loan Details' },
-              { key:'milestones',    label:`Orders${milestones.length?` (${milestones.length})`:''}` },
+              { key:'contacts_edit', label:'Contacts', saved: ctJustSaved },
+              { key:'info_edit',     label:'Loan Details', saved: infoJustSaved },
+              { key:'milestones',    label:`Orders${milestones.length?` (${milestones.length})`:''}`},
               { key:'dates',         label:'Dates' },
               { key:'hlt',           label:'Notes' },
             ].map(t=>(
@@ -3344,6 +3563,7 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
                   borderBottom:tab===t.key?'2px solid #1B2A4A':'2px solid transparent',
                   whiteSpace:'nowrap'}}>
                 {t.label}
+                {t.saved && <span style={{marginLeft:5,fontSize:11,color:'#16A34A',fontWeight:700}}>✓</span>}
               </button>
             ))}
           </div>
@@ -3376,7 +3596,14 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
                     <div className="milestone-grid">
                       {[...milestones].sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)).map(ms => (
                         <div key={ms.id} style={{position:'relative'}}>
-                          <MilestoneCard ms={ms} presets={presets} dealTurntimes={dealTurntimes} onChange={saveMilestone} />
+                          <MilestoneCard ms={ms} presets={presets} dealTurntimes={dealTurntimes} onChange={saveMilestone}
+                            vendorInfo={
+                              ms.milestone_type==='appraisal' ? {company:deal.appraiser,contact:deal.appraiser_contact_name,email:deal.appraiser_email,phone:deal.appraiser_phone} :
+                              ms.milestone_type==='title'     ? {company:deal.title_company,contact:deal.title_contact_name,email:deal.title_company_email,phone:deal.title_company_phone} :
+                              ms.milestone_type==='hoi'       ? {company:deal.hoi_company,contact:deal.hoi_contact_name,email:deal.hoi_company_email,phone:deal.hoi_company_phone} :
+                              null
+                            }
+                          />
                           {templates && templates.length > 0 && (
                             <button onClick={()=>setEmailModal({ ms, deal, templates })}
                               style={{position:'absolute',top:10,right:10,background:'#EFF6FF',border:'1px solid #BFDBFE',borderRadius:5,cursor:'pointer',fontSize:11,color:'#2563EB',padding:'2px 7px',fontWeight:600}}>
@@ -3422,98 +3649,8 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
             </div>
           )}
 
-          {/* MILESTONE SETUP TAB */}
           {/* ── INFO TAB (inline edit) ── */}
-          {tab === 'info_edit' && infoForm && !editingInfo && (
-            <div style={{maxWidth:900}} onDoubleClick={()=>setEditingInfo(true)}>
-              {(()=>{
-                const ri = {background:'#F8FAFC',color:'#6B7280',pointerEvents:'none'};
-                const fmtAmt = v => v ? Number(String(v).replace(/,/g,'')).toLocaleString() : '';
-                return (
-                  <React.Fragment>
-                    {/* Status + Loan # */}
-                    <div className="form-grid" style={{marginBottom:14}}>
-                      <div className="form-group">
-                        <label>Status</label>
-                        <select disabled value={infoForm.status||''} style={{...ri,opacity:1}}>{(customStatuses||DEFAULT_STATUSES).map(s=><option key={s.label}>{s.label}</option>)}</select>
-                      </div>
-                      <div className="form-group">
-                        <label>Loan #</label>
-                        <input readOnly value={infoForm.file_number||''} style={ri} />
-                      </div>
-                    </div>
-
-                    {/* Borrowers */}
-                    <div className="form-section-title">Borrowers</div>
-                    <div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) minmax(0,1fr)',gap:16,marginBottom:16}}>
-                      <div style={{background:'#F8FAFC',border:'1px solid #E5E7EB',borderRadius:8,padding:'12px 14px'}}>
-                        <div style={{fontSize:11,fontWeight:700,color:'#6B7280',textTransform:'uppercase',letterSpacing:'0.4px',marginBottom:10}}>Primary Borrower</div>
-                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
-                          <div className="form-group" style={{marginBottom:0}}><label>First</label><input readOnly value={infoForm.primary_first_name||''} style={ri} /></div>
-                          <div className="form-group" style={{marginBottom:0}}><label>Last</label><input readOnly value={infoForm.primary_last_name||''} style={ri} /></div>
-                        </div>
-                        <div className="form-group" style={{marginBottom:8}}><label>Nickname</label><input readOnly value={infoForm.primary_nickname||''} style={ri} /></div>
-                        <div className="form-group" style={{marginBottom:8}}><label>Email</label><input readOnly value={infoForm.primary_borrower_email||''} style={ri} /></div>
-                        <div className="form-group"><label>Phone</label><input readOnly value={infoForm.primary_borrower_phone||''} style={ri} /></div>
-                      </div>
-                      <div style={{background:'#F8FAFC',border:'1px solid #E5E7EB',borderRadius:8,padding:'12px 14px'}}>
-                        <div style={{fontSize:11,fontWeight:700,color:'#6B7280',textTransform:'uppercase',letterSpacing:'0.4px',marginBottom:10}}>Co-Borrowers</div>
-                        {infoCobs.length===0 && <div style={{color:'#9CA3AF',fontSize:12,textAlign:'center',padding:'16px 0'}}>No co-borrowers</div>}
-                        {infoCobs.map((cb,i)=>(
-                          <div key={i} style={{marginBottom:10,paddingBottom:10,borderBottom:i<infoCobs.length-1?'1px solid #E5E7EB':'none'}}>
-                            {infoCobs.length>1&&<div style={{fontSize:10,color:'#9CA3AF',marginBottom:4}}>#{i+1}</div>}
-                            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
-                              <div className="form-group" style={{marginBottom:0}}><label>First</label><input readOnly value={cb.first_name||''} style={ri} /></div>
-                              <div className="form-group" style={{marginBottom:0}}><label>Last</label><input readOnly value={cb.last_name||''} style={ri} /></div>
-                            </div>
-                            <div className="form-group" style={{marginBottom:8}}><label>Nickname</label><input readOnly value={cb.nickname||''} style={ri} /></div>
-                            <div className="form-group" style={{marginBottom:8}}><label>Email</label><input readOnly value={cb.email||''} style={ri} /></div>
-                            <div className="form-group" style={{marginBottom:0}}><label>Phone</label><input readOnly value={cb.phone||''} style={ri} /></div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Property */}
-                    <div className="form-section-title">Property</div>
-                    <div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) minmax(0,1fr)',gap:16,marginBottom:16,alignItems:'start'}}>
-                      <div style={{display:'flex',flexDirection:'column',gap:8}}>
-                        <div className="form-group"><label>Address</label><input readOnly value={infoForm.property_address||''} style={ri} /></div>
-                        <div className="form-group" style={{marginBottom:8}}><label>City</label><input readOnly value={infoForm.city||''} style={ri} /></div>
-                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-                          <div className="form-group" style={{marginBottom:0}}><label>State</label><input readOnly value={infoForm.state||''} style={ri} /></div>
-                          <div className="form-group" style={{marginBottom:0}}><label>Zip</label><input readOnly value={infoForm.zip||''} style={ri} /></div>
-                        </div>
-                      </div>
-                      <div style={{display:'flex',flexDirection:'column',gap:10}}>
-                        <div className="form-group"><label>Transaction Type</label><select disabled value={infoForm.trans_type||'purchase'} style={{...ri,opacity:1}}><option value="purchase">Purchase</option><option value="refinance">Refinance</option><option value="heloc">HELOC</option><option value="other">Other</option></select></div>
-                        <div className="form-group"><label>Occupancy</label><select disabled value={infoForm.occupancy||'primary'} style={{...ri,opacity:1}}><option value="primary">Primary Residence</option><option value="secondary">Secondary</option><option value="investment">Investment</option></select></div>
-                        <div className="form-group"><label>Property Type</label><select disabled value={infoForm.prop_type||'SFR'} style={{...ri,opacity:1}}>{['SFR','Condo','Townhome','Multi-Family','Manufactured','Other'].map(t=><option key={t}>{t}</option>)}</select></div>
-                      </div>
-                    </div>
-
-                    {/* Loan Details */}
-                    <div className="form-section-title">Loan Details</div>
-                    <div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) minmax(0,1fr)',gap:16,marginBottom:16}}>
-                      <div style={{display:'flex',flexDirection:'column',gap:10}}>
-                        <div className="form-group"><label>Loan Program</label><select disabled value={infoForm.loan_program||''} style={{...ri,opacity:1}}><option value=""></option>{['Conv','FHA','VA','USDA','HELOC','Jumbo','Non-QM','Other'].map(p=><option key={p}>{p}</option>)}</select></div>
-                        <div className="form-group"><label>Loan Amount</label><input readOnly value={fmtAmt(infoForm.loan_amount)} style={ri} /></div>
-                        <div className="form-group"><label>Interest Rate (%)</label><input readOnly value={infoForm.rate||''} style={ri} /></div>
-                      </div>
-                      <div style={{display:'flex',flexDirection:'column',gap:10}}>
-                        <div className="form-group"><label>Closing</label><input readOnly value={infoForm.closing_date||''} type="date" style={ri} /></div>
-                        <div className="form-group"><label>Funding</label><input readOnly value={infoForm.funding_date||''} type="date" style={ri} /></div>
-                        <div className="form-group"><label>Lock Expiration</label><input readOnly value={infoForm.lock_expiration_date||''} type="date" style={ri} /></div>
-                      </div>
-                    </div>
-                    <div style={{fontSize:11,color:'#C4C4C4',marginTop:4}}>Double-click to edit</div>
-                  </React.Fragment>
-                );
-              })()}
-            </div>
-          )}
-
-          {tab === 'info_edit' && infoForm && editingInfo && (
+          {tab === 'info_edit' && infoForm && (
             <div style={{maxWidth:900}}>
               {/* Status + Loan # */}
               <div className="form-grid" style={{marginBottom:14}}>
@@ -3610,7 +3747,7 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
                 </div>
                 <div style={{display:'flex',flexDirection:'column',gap:10}}>
                   <div className="form-group"><label>Closing</label>
-                    <input type="date" value={infoForm.closing_date||''} onChange={e=>{
+                    <input type="date" className={infoForm.closing_date ? '' : 'date-empty'} value={infoForm.closing_date||''} onChange={e=>{
                       const cd=e.target.value;
                       const fd=calcFundingDate(cd,infoForm.trans_type||'purchase',infoForm.occupancy||'primary');
                       setInfoForm(p=>({...p,closing_date:cd,funding_date:fd}));
@@ -3624,140 +3761,80 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
                     }} />
                   </div>
                   <div className="form-group"><label>Funding</label>
-                    <input type="date" value={infoForm.funding_date||''} onChange={e=>iset('funding_date',e.target.value)} />
+                    <input type="date" className={infoForm.funding_date ? '' : 'date-empty'} value={infoForm.funding_date||''} onChange={e=>iset('funding_date',e.target.value)} />
                   </div>
                   <div className="form-group"><label>Lock Expiration</label>
-                    <input type="date" value={infoForm.lock_expiration_date||''} onChange={e=>iset('lock_expiration_date',e.target.value)} />
+                    <input type="date" className={infoForm.lock_expiration_date ? '' : 'date-empty'} value={infoForm.lock_expiration_date||''} onChange={e=>iset('lock_expiration_date',e.target.value)} />
                   </div>
                 </div>
               </div>
 
-              <div style={{height:80}} />{/* spacer for floating action button */}
             </div>
           )}
 
           {/* ── CONTACTS TAB (inline edit — combines team + vendors) ── */}
-          {tab === 'contacts_edit' && ctForm && !editingContacts && (
-            <div style={{maxWidth:900}} onDoubleClick={()=>setEditingContacts(true)}>
-              {(()=>{
-                const ri = {background:'#F8FAFC',color:'#6B7280',pointerEvents:'none'};
-                const pName = id => { const p=profiles.find(x=>x.id===id); return p?.display_name||p?.email||''; };
-                return (
-                  <React.Fragment>
-                    {/* Team + Agents combined */}
-                    <div className="form-section-title" style={{marginTop:0}}>Team</div>
-                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20,marginBottom:16}}>
-                      {/* Left: LO team */}
-                      <div style={{display:'flex',flexDirection:'column',gap:10}}>
-                        {[{label:'Loan Officer',val:pName(ctForm.assigned_lo_id)},{label:'LOA',val:pName(ctForm.assigned_loa_id)},{label:'Processor',val:pName(ctForm.assigned_processor_id)}].map(f=>(
-                          <div key={f.label} className="form-group" style={{marginBottom:0}}>
-                            <label>{f.label}</label>
-                            <input readOnly value={f.val} style={ri} />
-                          </div>
-                        ))}
-                      </div>
-                      {/* Right: Agents */}
-                      <div style={{display:'flex',flexDirection:'column',gap:10}}>
-                        <div className="form-group" style={{marginBottom:0}}>
-                          <label>Buyer's Agent</label>
-                          <input readOnly value={ctForm.buyers_agent||''} style={ri} />
-                          {ctForm.buyers_agent_email&&<div style={{fontSize:11,color:'#9CA3AF',marginTop:3}}>✉️ {ctForm.buyers_agent_email}</div>}
-                        </div>
-                        <div className="form-group" style={{marginBottom:0}}>
-                          <label>Listing Agent</label>
-                          <input readOnly value={ctForm.sellers_agent||''} style={ri} />
-                          {ctForm.sellers_agent_email&&<div style={{fontSize:11,color:'#9CA3AF',marginTop:3}}>✉️ {ctForm.sellers_agent_email}</div>}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Vendors */}
-                    <div className="form-section-title">Vendors</div>
-                    {[
-                      {label:'Title Company',nameKey:'title_company',contactKey:'title_contact_name',emailKey:'title_company_email',phoneKey:'title_company_phone',alwaysShow:true},
-                      {label:'Appraiser',nameKey:'appraiser',contactKey:'appraiser_contact_name',emailKey:'appraiser_email',phoneKey:'appraiser_phone',alwaysShow:false},
-                      {label:'HOI Company',nameKey:'hoi_company',contactKey:'hoi_contact_name',emailKey:'hoi_company_email',phoneKey:'hoi_company_phone',alwaysShow:true},
-                    ].filter(v=>v.alwaysShow||(ctForm[v.nameKey]||ctForm[v.emailKey]||ctForm[v.contactKey])).map(v=>(
-                      <div key={v.nameKey} style={{marginBottom:10,borderRadius:8,border:'1px solid #E2E8F0',overflow:'hidden'}}>
-                        <div style={{background:'#1B2A4A',padding:'8px 14px'}}>
-                          <span style={{fontSize:12,fontWeight:700,color:'white',letterSpacing:'0.04em'}}>{v.label}</span>
-                        </div>
-                        <div style={{padding:'12px 14px',background:'white',display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-                          <div style={{display:'flex',flexDirection:'column',gap:8}}>
-                            <div className="form-group" style={{marginBottom:0}}><label>Company</label><input readOnly value={ctForm[v.nameKey]||''} style={ri} /></div>
-                            <div className="form-group" style={{marginBottom:0}}><label>Contact</label><input readOnly value={ctForm[v.contactKey]||''} style={ri} /></div>
-                          </div>
-                          <div style={{display:'flex',flexDirection:'column',gap:8}}>
-                            <div className="form-group" style={{marginBottom:0}}><label>Email</label><input readOnly value={ctForm[v.emailKey]||''} style={ri} /></div>
-                            {v.phoneKey&&<div className="form-group" style={{marginBottom:0}}><label>Phone</label><input readOnly value={ctForm[v.phoneKey]||''} style={ri} /></div>}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    {(ctForm.additional_vendors||[]).map((v,i)=>(
-                      <div key={i} style={{marginBottom:10,borderRadius:8,border:'1px solid #E2E8F0',overflow:'hidden'}}>
-                        <div style={{background:'#374151',padding:'8px 14px'}}>
-                          <span style={{fontSize:12,fontWeight:700,color:'white',letterSpacing:'0.04em'}}>{v.label||'Additional Party'}</span>
-                        </div>
-                        <div style={{padding:'12px 14px',background:'white',display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-                          <div className="form-group" style={{gridColumn:'1/-1',marginBottom:4}}><label>Company</label><input readOnly value={v.company||''} style={ri} /></div>
-                          <div className="form-group" style={{marginBottom:0}}><label>Contact</label><input readOnly value={v.contact||''} style={ri} /></div>
-                          <div className="form-group" style={{marginBottom:0}}><label>Email</label><input readOnly value={v.email||''} style={ri} /></div>
-                          <div className="form-group" style={{marginBottom:0}}><label>Phone</label><input readOnly value={v.phone||''} style={ri} /></div>
-                        </div>
-                      </div>
-                    ))}
-                    <div style={{marginTop:12,display:'flex',alignItems:'center',gap:12}}>
-                      <button onClick={e=>{e.stopPropagation();setEditingContacts(true);}}
-                        style={{display:'flex',alignItems:'center',gap:6,padding:'7px 14px',border:'1px dashed #CBD5E1',borderRadius:7,background:'white',cursor:'pointer',fontSize:13,color:'#64748B',fontWeight:500}}>
-                        + Add Vendor
-                      </button>
-                      <span style={{fontSize:11,color:'#C4C4C4'}}>Double-click to edit</span>
-                    </div>
-                  </React.Fragment>
-                );
-              })()}
-            </div>
-          )}
-
-          {tab === 'contacts_edit' && ctForm && editingContacts && (
+          {tab === 'contacts_edit' && ctForm && (
             <div style={{maxWidth:900}}>
               {/* Team + Agents combined */}
               <div className="form-section-title" style={{marginTop:0}}>Team</div>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20,marginBottom:16}}>
                 {/* Left: LO team */}
                 <div style={{display:'flex',flexDirection:'column',gap:10}}>
-                  {[
-                    { label:'Loan Officer', key:'assigned_lo_id' },
-                    { label:'LOA',          key:'assigned_loa_id' },
-                    { label:'Processor',    key:'assigned_processor_id' },
-                  ].map(f=>(
-                    <div key={f.key} className="form-group" style={{marginBottom:0}}>
-                      <label>{f.label}</label>
-                      <select value={ctForm[f.key]||''} onChange={e=>ctset(f.key,e.target.value||null)}>
-                        <option value="">— None —</option>
-                        {profiles.filter(p=>['admin','internal','branch_admin'].includes(p.role)).map(p=>(
-                          <option key={p.id} value={p.id}>{p.display_name||p.email}</option>
-                        ))}
-                      </select>
-                    </div>
-                  ))}
+                  {(()=>{
+                    const allInternal = profiles.filter(p=>['admin','internal','branch_admin'].includes(p.role));
+                    const allLoas = allInternal.filter(p => p.lmt_role === 'loa');
+                    const allProcs = allInternal.filter(p => p.lmt_role === 'processor' || p.lmt_role === 'setup');
+                    // Only show team members configured in the LO's profile.
+                    // If no team configured, show only the currently-assigned person (preserves existing data without exposing everyone).
+                    const assignedLoa = ctForm.assigned_loa_id ? allInternal.filter(p=>p.id===ctForm.assigned_loa_id) : [];
+                    const assignedProc = ctForm.assigned_processor_id ? allInternal.filter(p=>p.id===ctForm.assigned_processor_id) : [];
+                    const teamLoas = (loProfile?.team_loas?.length > 0)
+                      ? allInternal.filter(p => (loProfile.team_loas||[]).includes(p.id) || p.id === ctForm.assigned_loa_id)
+                      : assignedLoa;
+                    const teamProcs = (loProfile?.team_processors?.length > 0)
+                      ? allInternal.filter(p => (loProfile.team_processors||[]).includes(p.id) || p.id === ctForm.assigned_processor_id)
+                      : assignedProc;
+                    const pickToProfile = (c, key) => {
+                      const match = allInternal.find(p => p.email && c.email && p.email.toLowerCase() === c.email.toLowerCase());
+                      if (match) ctset(key, match.id);
+                    };
+                    const isAdmin = currentUser && ['admin','branch_admin'].includes(currentUser.role);
+                    const loOptions = allInternal.filter(p => p.lmt_role === 'lo');
+                    const assignedLoName = allInternal.find(p => p.id === ctForm.assigned_lo_id)?.display_name || ctForm.assigned_lo_id || '—';
+                    return (
+                      <React.Fragment>
+                        <div className="form-group" style={{marginBottom:0}}>
+                          <label>Loan Officer</label>
+                          {isAdmin ? (
+                            <select value={ctForm.assigned_lo_id||''} onChange={e=>ctset('assigned_lo_id',e.target.value||null)}>
+                              <option value="">— None —</option>
+                              {loOptions.map(p=><option key={p.id} value={p.id}>{p.display_name||p.email}</option>)}
+                            </select>
+                          ) : (
+                            <input value={assignedLoName} disabled style={{background:'#F9FAFB',color:'#6B7280'}} />
+                          )}
+                        </div>
+                        <div className="form-group" style={{marginBottom:0}}>
+                          <label>LOA</label>
+                          <ProfilePicker valueId={ctForm.assigned_loa_id||null} profiles={teamLoas} onChange={id=>ctset('assigned_loa_id',id)} placeholder="Search LOA…" />
+                        </div>
+                        <div className="form-group" style={{marginBottom:0}}>
+                          <label>Processor</label>
+                          <ProfilePicker valueId={ctForm.assigned_processor_id||null} profiles={teamProcs} onChange={id=>ctset('assigned_processor_id',id)} placeholder="Search Processor…" />
+                        </div>
+                      </React.Fragment>
+                    );
+                  })()}
                 </div>
                 {/* Right: Agents */}
                 <div style={{display:'flex',flexDirection:'column',gap:10}}>
                   <div className="form-group" style={{marginBottom:0}}>
-                    <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:4}}>
-                      <label style={{marginBottom:0}}>Buyer's Agent</label>
-                      <ContactPickerButton lmtContacts={lmtContacts||[]} categories={['Realtor']} onPick={c=>setCtForm(p=>({...p,buyers_agent:[c.first_name,c.last_name].filter(Boolean).join(' ')||c.company,buyers_agent_email:c.email||p.buyers_agent_email||'',buyers_agent_phone:c.phone||c.cell_phone||p.buyers_agent_phone||''}))} />
-                    </div>
+                    <label>Buyer's Agent</label>
                     <AgentPicker label="Buyer's Agent" value={ctForm.buyers_agent||''} onChange={a=>setCtForm(p=>({...p,buyers_agent:a.name,buyers_agent_email:a.email||p.buyers_agent_email||'',buyers_agent_phone:a.phone||p.buyers_agent_phone||''}))} />
                     {ctForm.buyers_agent_email&&<div style={{fontSize:11,color:'#6B7280',marginTop:3}}>✉️ {ctForm.buyers_agent_email}</div>}
                   </div>
                   <div className="form-group" style={{marginBottom:0}}>
-                    <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:4}}>
-                      <label style={{marginBottom:0}}>Listing Agent</label>
-                      <ContactPickerButton lmtContacts={lmtContacts||[]} categories={['Realtor']} onPick={c=>setCtForm(p=>({...p,sellers_agent:[c.first_name,c.last_name].filter(Boolean).join(' ')||c.company,sellers_agent_email:c.email||p.sellers_agent_email||'',sellers_agent_phone:c.phone||c.cell_phone||p.sellers_agent_phone||''}))} />
-                    </div>
+                    <label>Listing Agent</label>
                     <AgentPicker label="Listing Agent" value={ctForm.sellers_agent||''} onChange={a=>setCtForm(p=>({...p,sellers_agent:a.name,sellers_agent_email:a.email||p.sellers_agent_email||'',sellers_agent_phone:a.phone||p.sellers_agent_phone||''}))} />
                     {ctForm.sellers_agent_email&&<div style={{fontSize:11,color:'#6B7280',marginTop:3}}>✉️ {ctForm.sellers_agent_email}</div>}
                   </div>
@@ -3788,16 +3865,23 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
                       <div style={{display:'flex',flexDirection:'column',gap:8}}>
                         <div className="form-group" style={{marginBottom:0}}>
                           <label>Company</label>
-                          <div style={{display:'flex',gap:6,alignItems:'flex-start'}}>
-                            <div style={{flex:1}}><AgentPicker label={v.label} value={ctForm[v.nameKey]||''} onChange={a=>setCtForm(p=>({...p,[v.nameKey]:a.name,[v.emailKey]:a.email||p[v.emailKey]||'',...(v.phoneKey?{[v.phoneKey]:a.phone||p[v.phoneKey]||''}:{})}))} /></div>
-                            <ContactPickerButton lmtContacts={lmtContacts||[]} categories={[v.label==='Appraiser'?'Appraisal':v.label==='HOI Company'?'HOI':v.label==='Title Company'?'Title':v.label]} onPick={c=>setCtForm(p=>({...p,[v.nameKey]:c.company||[c.first_name,c.last_name].filter(Boolean).join(' '),[v.emailKey]:c.email||p[v.emailKey]||'',...(v.phoneKey?{[v.phoneKey]:c.phone||c.cell_phone||p[v.phoneKey]||''}:{})}))} />
-                          </div>
+                          <AgentPicker label={v.label} value={ctForm[v.nameKey]||''} onChange={a=>setCtForm(p=>({...p,[v.nameKey]:a.name,[v.emailKey]:a.email||p[v.emailKey]||'',...(v.phoneKey?{[v.phoneKey]:a.phone||p[v.phoneKey]||''}:{})}))} />
                         </div>
-                        <div className="form-group" style={{marginBottom:0}}><label>Contact</label><input value={ctForm[v.contactKey]||''} onChange={e=>ctset(v.contactKey,e.target.value)} /></div>
+                        <div className="form-group" style={{marginBottom:0}}><label>Contact</label>
+                          <AgentPicker label="Contact" value={ctForm[v.contactKey]||''}
+                            saveCategory={v.label==='Title Company'?'Title':v.label==='Appraiser'?'Appraisal':v.label==='HOI Company'?'HOI':'Other'}
+                            onChange={a=>setCtForm(p=>({...p,[v.contactKey]:a.name,[v.emailKey]:a.email||p[v.emailKey]||'',...(v.phoneKey?{[v.phoneKey]:a.phone||p[v.phoneKey]||''}:{})}))} />
+                        </div>
                       </div>
                       <div style={{display:'flex',flexDirection:'column',gap:8}}>
-                        <div className="form-group" style={{marginBottom:0}}><label>Email</label><input type="email" value={ctForm[v.emailKey]||''} onChange={e=>ctset(v.emailKey,e.target.value)} /></div>
-                        {v.phoneKey&&<div className="form-group" style={{marginBottom:0}}><label>Phone</label><input value={ctForm[v.phoneKey]||''} onChange={e=>ctset(v.phoneKey,e.target.value)} /></div>}
+                        <div className="form-group" style={{marginBottom:0}}><label>Email</label>
+                          <input value={ctForm[v.emailKey]||''} onChange={e=>ctset(v.emailKey,e.target.value)}
+                            style={ctForm[v.emailKey]&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ctForm[v.emailKey])?{border:'1px solid #EF4444'}:{}} />
+                          {ctForm[v.emailKey]&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ctForm[v.emailKey])&&<div style={{fontSize:11,color:'#EF4444',marginTop:2}}>Enter a valid email</div>}
+                        </div>
+                        {v.phoneKey&&<div className="form-group" style={{marginBottom:0}}><label>Phone</label>
+                          <input value={ctForm[v.phoneKey]||''} onChange={e=>{const d=e.target.value.replace(/\D/g,'').slice(0,10);const f=d.length<4?d:d.length<7?`(${d.slice(0,3)}) ${d.slice(3)}`:`(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`;ctset(v.phoneKey,f);}} />
+                        </div>}
                       </div>
                     </div>
                   </div>
@@ -3824,15 +3908,18 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
                         <input value={v.company||''} onChange={e=>ctset('additional_vendors',(ctForm.additional_vendors||[]).map((x,idx)=>idx===i?{...x,company:e.target.value}:x))} />
                       </div>
                       <div className="form-group" style={{marginBottom:0}}><label>Contact</label>
-                        <input value={v.contact||''} onChange={e=>ctset('additional_vendors',(ctForm.additional_vendors||[]).map((x,idx)=>idx===i?{...x,contact:e.target.value}:x))} />
+                        <AgentPicker label="Contact" value={v.contact||''} saveCategory="Other"
+                          onChange={a=>ctset('additional_vendors',(ctForm.additional_vendors||[]).map((x,idx)=>idx===i?{...x,contact:a.name,email:a.email||x.email||''}:x))} />
                       </div>
                     </div>
                     <div style={{display:'flex',flexDirection:'column',gap:8}}>
                       <div className="form-group" style={{marginBottom:0}}><label>Email</label>
-                        <input type="email" value={v.email||''} onChange={e=>ctset('additional_vendors',(ctForm.additional_vendors||[]).map((x,idx)=>idx===i?{...x,email:e.target.value}:x))} />
+                        <input value={v.email||''} onChange={e=>ctset('additional_vendors',(ctForm.additional_vendors||[]).map((x,idx)=>idx===i?{...x,email:e.target.value}:x))}
+                          style={v.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email)?{border:'1px solid #EF4444'}:{}} />
+                        {v.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email)&&<div style={{fontSize:11,color:'#EF4444',marginTop:2}}>Enter a valid email</div>}
                       </div>
                       <div className="form-group" style={{marginBottom:0}}><label>Phone</label>
-                        <input value={v.phone||''} onChange={e=>ctset('additional_vendors',(ctForm.additional_vendors||[]).map((x,idx)=>idx===i?{...x,phone:e.target.value}:x))} />
+                        <input value={v.phone||''} onChange={e=>{const d=e.target.value.replace(/\D/g,'').slice(0,10);const f=d.length<4?d:d.length<7?`(${d.slice(0,3)}) ${d.slice(3)}`:`(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`;ctset('additional_vendors',(ctForm.additional_vendors||[]).map((x,idx)=>idx===i?{...x,phone:f}:x));}} />
                       </div>
                     </div>
                   </div>
@@ -3851,7 +3938,10 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
               <DealDatesTab
                 deal={deal}
                 profile={profiles.find(p=>p.id===deal.assigned_lo_id)}
-                onDealChange={()=>{}}
+                onDealChange={onDealChange}
+                milestones={milestones}
+                saveMilestone={saveMilestone}
+                customStatuses={customStatuses}
               />
 
               {/* ── LOG SECTION ── */}
@@ -4217,40 +4307,22 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
 
         </div>
 
-        {/* ── FLOATING ACTION BUTTON (bottom-right, editable tabs only) ── */}
-        {(tab==='info_edit'||tab==='contacts_edit') && (()=>{
-          const isEditing = (tab==='info_edit'&&editingInfo)||(tab==='contacts_edit'&&editingContacts);
-          const saving = infoSaving||ctSaving;
-          if (!isEditing) return (
-            <button
-              onClick={()=>tab==='info_edit'?setEditingInfo(true):setEditingContacts(true)}
-              style={{position:'fixed',bottom:28,right:32,zIndex:2000,
-                display:'flex',alignItems:'center',gap:8,
-                padding:'11px 24px',borderRadius:50,border:'2px solid #1B2A4A',
-                background:'white',color:'#1B2A4A',fontWeight:700,fontSize:14,
-                cursor:'pointer',boxShadow:'0 4px 20px rgba(0,0,0,0.13)',
-                transition:'all 0.15s'}}>
-              ✏️ Edit
-            </button>
-          );
-          return (
-            <div style={{position:'fixed',bottom:28,right:32,zIndex:2000,display:'flex',gap:10,alignItems:'center'}}>
-              <button onClick={discardChanges}
-                style={{padding:'11px 22px',borderRadius:50,border:'1px solid #E2E8F0',
-                  background:'white',color:'#374151',fontWeight:600,fontSize:14,
-                  cursor:'pointer',boxShadow:'0 4px 16px rgba(0,0,0,0.10)'}}>
-                Discard
-              </button>
-              <button onClick={tab==='info_edit'?saveInfo:saveCt} disabled={saving}
-                style={{padding:'11px 28px',borderRadius:50,border:'none',
-                  background:saving?'#6B7280':'#1B2A4A',color:'white',fontWeight:700,fontSize:14,
-                  cursor:saving?'default':'pointer',boxShadow:'0 4px 20px rgba(27,42,74,0.35)',
-                  transition:'all 0.15s'}}>
-                {saving?'Saving…':'Save'}
-              </button>
-            </div>
-          );
-        })()}
+        {/* ── AUTO-SAVE INDICATOR ── */}
+        {(infoSaving || ctSaving) && (
+          <div style={{position:'fixed',bottom:28,right:32,zIndex:2000,
+            padding:'9px 20px',borderRadius:50,background:'#1B2A4A',color:'white',
+            fontSize:13,fontWeight:600,boxShadow:'0 4px 16px rgba(0,0,0,0.18)',opacity:0.92}}>
+            Saving…
+          </div>
+        )}
+        {!infoSaving && !ctSaving && (ctJustSaved || infoJustSaved) && (
+          <div style={{position:'fixed',bottom:28,right:32,zIndex:2000,
+            padding:'9px 20px',borderRadius:50,background:'#16A34A',color:'white',
+            fontSize:13,fontWeight:600,boxShadow:'0 4px 16px rgba(0,0,0,0.18)',opacity:0.95,
+            display:'flex',alignItems:'center',gap:6}}>
+            ✓ Saved
+          </div>
+        )}
     </div>
   );
 
@@ -4285,8 +4357,8 @@ function ContactPickerButton({ lmtContacts, categories, onPick }) {
     return [c.first_name,c.last_name,c.company,c.email].some(v=>v?.toLowerCase().includes(s));
   }).slice(0,8);
   if (!open) return (
-    <button onClick={()=>setOpen(true)} style={{padding:'3px 8px',borderRadius:4,border:'1px solid #CBD5E1',background:'white',fontSize:11,cursor:'pointer',color:'#374151',whiteSpace:'nowrap',flexShrink:0}}>
-      📋 People
+    <button onClick={()=>setOpen(true)} style={{padding:'3px 8px',borderRadius:4,border:'1px solid #2563EB',background:'#EFF6FF',fontSize:11,cursor:'pointer',color:'#2563EB',whiteSpace:'nowrap',flexShrink:0,fontWeight:600}}>
+      + Contact
     </button>
   );
   return (
@@ -4678,33 +4750,107 @@ function TeamRow({ person, idx, onChange, onRemove }) {
   );
 }
 
-function ProfilePanel({ profile, onProfileSave }) {
+function TeamMemberSearch({ candidates, selected, onAdd, placeholder }) {
+  const [query, setQuery] = React.useState('');
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+  const available = candidates.filter(p => !selected.includes(p.id) &&
+    (!query || (p.display_name||p.email||'').toLowerCase().includes(query.toLowerCase())));
+  return (
+    <div ref={ref} style={{position:'relative',maxWidth:300}}>
+      <input value={query} onChange={e=>{setQuery(e.target.value);setOpen(true);}}
+        onFocus={()=>setOpen(true)}
+        onBlur={()=>setTimeout(()=>setOpen(false),150)}
+        placeholder={placeholder||'Search to add…'}
+        style={{width:'100%',padding:'6px 10px',border:'1px solid #E5E7EB',borderRadius:6,fontSize:13}} />
+      {open && (
+        <div style={{position:'absolute',top:'100%',left:0,right:0,zIndex:1200,background:'white',border:'1px solid #E5E7EB',borderRadius:8,boxShadow:'0 4px 16px rgba(0,0,0,0.12)',marginTop:2,maxHeight:180,overflowY:'auto'}}>
+          {available.length === 0
+            ? <div style={{padding:'8px 12px',fontSize:12,color:'#9CA3AF'}}>No matches</div>
+            : available.map(p => (
+              <div key={p.id} onMouseDown={e=>{e.preventDefault();onAdd(p.id);setQuery('');setOpen(false);}}
+                style={{padding:'8px 12px',fontSize:13,cursor:'pointer',borderBottom:'1px solid #F3F4F6'}}
+                onMouseEnter={e=>e.currentTarget.style.background='#F8FAFC'}
+                onMouseLeave={e=>e.currentTarget.style.background='white'}>
+                {p.display_name||p.email}
+                {p.lmt_role && <span style={{fontSize:10,color:'#9CA3AF',marginLeft:6}}>{p.lmt_role}</span>}
+              </div>
+            ))
+          }
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ProfilePanel({ profile, profiles, onProfileSave }) {
   const [form, setForm] = useState({
     display_name: profile?.display_name || '',
     branch:       profile?.branch       || '',
     cell_phone:   profile?.cell_phone   || profile?.phone || '',
     email:        profile?.email        || '',
   });
-  const [loas, setLoas]           = useState(() => { try { return profile?.team_loas || []; } catch(e) { return []; } });
-  const [processors, setProcs]    = useState(() => { try { return profile?.team_processors || []; } catch(e) { return []; } });
-  const [saving, setSaving]       = useState(false);
+
+  // Normalize stored team data — support both old [{name,email}] objects and new [id] strings
+  const normalizeIds = (raw, allProfiles) => {
+    if (!raw || !Array.isArray(raw)) return [];
+    return raw.map(item => {
+      if (typeof item === 'string') return item; // already an ID
+      // legacy object — try to match by email
+      if (item && item.email) {
+        const match = allProfiles.find(p => p.email && p.email.toLowerCase() === item.email.toLowerCase());
+        if (match) return match.id;
+      }
+      return null;
+    }).filter(Boolean);
+  };
+
+  const allInternal = (profiles || []).filter(p => ['admin','internal','branch_admin'].includes(p.role));
+  const [loas, setLoas]         = useState(() => normalizeIds(profile?.team_loas, allInternal));
+  const [processors, setProcs]  = useState(() => normalizeIds(profile?.team_processors, allInternal));
+  const [saving, setSaving]     = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
+  const autoSaveTimer = React.useRef(null);
+  const mounted = React.useRef(false);
 
   const fset = (k, v) => setForm(p => ({...p, [k]: v}));
 
-  const addLoa  = () => setLoas(p  => [...p,  { name:'', email:'', phone:'' }]);
-  const addProc = () => setProcs(p => [...p,  { name:'', email:'', phone:'' }]);
-  const rmLoa   = (i) => setLoas(p  => p.filter((_,idx) => idx !== i));
-  const rmProc  = (i) => setProcs(p => p.filter((_,idx) => idx !== i));
-  const setLoa  = (i, k, v) => setLoas(p  => p.map((x, idx) => idx===i ? {...x,[k]:v} : x));
-  const setProc = (i, k, v) => setProcs(p => p.map((x, idx) => idx===i ? {...x,[k]:v} : x));
+  const loaCandidates  = allInternal.filter(p => p.lmt_role === 'loa');
+  const procCandidates = allInternal.filter(p => p.lmt_role === 'processor' || p.lmt_role === 'setup');
 
-  const save = async () => {
+  const save = async (payload) => {
     setSaving(true);
-    const payload = { ...form, team_loas: loas, team_processors: processors };
     const { error } = await sb.from('profiles').update(payload).eq('id', (await sb.auth.getUser()).data.user?.id);
     setSaving(false);
-    if (!error) { onProfileSave(payload); alert('Profile saved!'); }
-    else alert('Error: ' + error.message);
+    if (!error) {
+      onProfileSave(payload);
+      setJustSaved(true);
+      setTimeout(() => setJustSaved(false), 3000);
+    }
+  };
+
+  // Auto-save after 1.5s of inactivity
+  React.useEffect(() => {
+    if (!mounted.current) { mounted.current = true; return; }
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    const payload = { ...form, team_loas: loas, team_processors: processors };
+    autoSaveTimer.current = setTimeout(() => save(payload), 1500);
+  }, [form, loas, processors]);
+
+  const memberTag = (id, onRemove) => {
+    const p = allInternal.find(x => x.id === id);
+    return (
+      <div key={id} style={{display:'flex',alignItems:'center',gap:6,background:'#F1F5F9',borderRadius:6,padding:'5px 10px',fontSize:13}}>
+        <span style={{fontWeight:600}}>{p ? (p.display_name||p.email) : id}</span>
+        <button onMouseDown={e=>{e.preventDefault();onRemove(id);}}
+          style={{background:'none',border:'none',cursor:'pointer',color:'#9CA3AF',fontSize:15,padding:0,lineHeight:1}}>×</button>
+      </div>
+    );
   };
 
   return (
@@ -4732,57 +4878,46 @@ function ProfilePanel({ profile, onProfileSave }) {
       </div>
 
       {/* MY LOAs */}
-      <div className="settings-section">
+      <div className="settings-section overflow-visible">
         <div className="settings-section-header">My LOAs</div>
         <div className="settings-section-body">
           <p style={{fontSize:13,color:'#6B7280',marginBottom:12}}>
             These will appear as options when assigning an LOA to a deal.
           </p>
           {loas.length > 0 && (
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 28px',gap:8,marginBottom:6,padding:'0 2px'}}>
-              {['Name','Email','Phone',''].map(h=>(
-                <div key={h} style={{fontSize:10,fontWeight:700,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:'0.4px'}}>{h}</div>
-              ))}
+            <div style={{display:'flex',flexWrap:'wrap',gap:8,marginBottom:12}}>
+              {loas.map(id => memberTag(id, id => setLoas(p => p.filter(x => x !== id))))}
             </div>
           )}
-          {loas.map((loa, i) => (
-            <TeamRow key={i} person={loa} idx={i} onChange={setLoa} onRemove={rmLoa} />
-          ))}
-          {loas.length === 0 && (
-            <div style={{color:'#9CA3AF',fontSize:13,padding:'8px 0 12px'}}>No LOAs added yet.</div>
-          )}
-          <button className="btn btn-ghost btn-sm" onClick={addLoa}>+ Add LOA</button>
+          {loas.length === 0 && <div style={{color:'#9CA3AF',fontSize:13,marginBottom:12}}>No LOAs added yet.</div>}
+          <TeamMemberSearch candidates={loaCandidates} selected={loas} onAdd={id=>setLoas(p=>[...p,id])} placeholder="Search LOA to add…" />
         </div>
       </div>
 
       {/* MY PROCESSORS */}
-      <div className="settings-section">
+      <div className="settings-section overflow-visible">
         <div className="settings-section-header">My Processors</div>
         <div className="settings-section-body">
           <p style={{fontSize:13,color:'#6B7280',marginBottom:12}}>
             These will appear as options when assigning a Processor to a deal.
           </p>
           {processors.length > 0 && (
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 28px',gap:8,marginBottom:6,padding:'0 2px'}}>
-              {['Name','Email','Phone',''].map(h=>(
-                <div key={h} style={{fontSize:10,fontWeight:700,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:'0.4px'}}>{h}</div>
-              ))}
+            <div style={{display:'flex',flexWrap:'wrap',gap:8,marginBottom:12}}>
+              {processors.map(id => memberTag(id, id => setProcs(p => p.filter(x => x !== id))))}
             </div>
           )}
-          {processors.map((proc, i) => (
-            <TeamRow key={i} person={proc} idx={i} onChange={setProc} onRemove={rmProc} />
-          ))}
-          {processors.length === 0 && (
-            <div style={{color:'#9CA3AF',fontSize:13,padding:'8px 0 12px'}}>No processors added yet.</div>
-          )}
-          <button className="btn btn-ghost btn-sm" onClick={addProc}>+ Add Processor</button>
+          {processors.length === 0 && <div style={{color:'#9CA3AF',fontSize:13,marginBottom:12}}>No processors added yet.</div>}
+          <TeamMemberSearch candidates={procCandidates} selected={processors} onAdd={id=>setProcs(p=>[...p,id])} placeholder="Search processor to add…" />
         </div>
       </div>
 
-      <div style={{padding:'0 0 32px'}}>
-        <button className="btn btn-navy" onClick={save} disabled={saving}>
+      <div style={{padding:'0 0 32px',display:'flex',alignItems:'center',gap:12}}>
+        <button className="btn btn-navy" onClick={()=>save({...form,team_loas:loas,team_processors:processors})} disabled={saving}>
           {saving ? 'Saving…' : 'Save Profile'}
         </button>
+        {justSaved && !saving && (
+          <span style={{fontSize:13,color:'#16A34A',fontWeight:600,display:'flex',alignItems:'center',gap:4}}>✓ Saved</span>
+        )}
       </div>
     </div>
   );
@@ -5273,7 +5408,7 @@ function PipelineTable({ deals, profiles, statuses, msAlerts, msProgress, coborr
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
   const ALL_COLS     = ['status','borrower','actions','scenario','file_num','days_status','address','type','program','amount','icd_due','icd_signed','close_date','funding_date','lock_exp','note','branch','lo','loa','processor'];
   const REQUIRED_COLS = new Set(['status','borrower','file_num']); // can reorder but not hide
-  const COL_LABELS   = {status:'Status',borrower:'Borrower',actions:'Tasks',days_status:'Days',icd_due:'ICD Due',icd_signed:'ICD Signed',address:'Address',close_date:'Closing',funding_date:'Funding',lock_exp:'Lock Exp',lo:'LO',loa:'LOA',processor:'Processor',branch:'Branch',amount:'Amount',program:'Program',type:'P/R',file_num:'Loan #',scenario:'Scenario',note:'Quick Note'};
+  const COL_LABELS   = {status:'Status',borrower:'Borrower',actions:'Tasks',days_status:'Dates',icd_due:'ICD Due',icd_signed:'ICD Signed',address:'Address',close_date:'Closing',funding_date:'Funding',lock_exp:'Lock Exp',lo:'LO',loa:'LOA',processor:'Processor',branch:'Branch',amount:'Amount',program:'Program',type:'P/R',file_num:'Loan #',scenario:'Scenario',note:'Quick Note'};
   const currentCols  = visibleCols || ALL_COLS;
 
   const [colOrder, setColOrder] = useState(() => {
@@ -5562,7 +5697,7 @@ function PipelineTable({ deals, profiles, statuses, msAlerts, msProgress, coborr
                           onKeyDown={e=>{if(e.key==='Enter'||e.key==='Escape')saveCell(d.id,{primary_borrower_name:editCell.val});}}
                           style={ciStyle} />
                       : <a className="borrower-name" href={`#deal/${d.id}`} style={{color:'#2563EB',textDecoration:'underline',cursor:'pointer',fontWeight:600}}
-                          onClick={e=>{e.preventDefault();onOpenDeal&&onOpenDeal(d);}}
+                          onClick={e=>{e.preventDefault();onOpenDeal&&onOpenDeal(d,'contacts_edit');}}
                           onDoubleClick={e=>{e.preventDefault();setEditCell({id:d.id,col:'borrower',val:d.primary_borrower_name||''});}}>
                           {d.primary_borrower_name||'—'}
                         </a>}
@@ -5570,7 +5705,7 @@ function PipelineTable({ deals, profiles, statuses, msAlerts, msProgress, coborr
                 )
               },
               days_status: {
-                header: ()=><ResizeTh col="days_status">Days</ResizeTh>,
+                header: ()=><ResizeTh col="days_status">Dates</ResizeTh>,
                 cell: (d,_a,_b,_c,_d,_e,_f,_g,_h,_i,_j,_k,_l,_m,onOpenDeal)=>{
                   const actuals = d.status_actual_dates || {};
                   const key = (d.status?.match(/^(\d{2})\./) || [])[1];
@@ -5608,12 +5743,14 @@ function PipelineTable({ deals, profiles, statuses, msAlerts, msProgress, coborr
                   if (!overdue && !dueToday) return <td key="actions" style={{textAlign:'center'}}><span style={{color:'#D1D5DB',fontSize:12}}>—</span></td>;
                   return (
                     <td key="actions" style={{textAlign:'center'}}>
-                      {overdue > 0 && <span title={`${overdue} overdue milestone${overdue>1?'s':''}`}
-                        style={{display:'inline-flex',alignItems:'center',justifyContent:'center',background:'#DC2626',color:'white',borderRadius:'50%',width:22,height:22,fontSize:11,fontWeight:700,marginRight:dueToday?4:0}}>
+                      {overdue > 0 && <span title={`${overdue} overdue milestone${overdue>1?'s':''} — click to view`}
+                        onClick={e=>{e.stopPropagation();onOpenDeal&&onOpenDeal(d,'milestones');}}
+                        style={{display:'inline-flex',alignItems:'center',justifyContent:'center',background:'#DC2626',color:'white',borderRadius:'50%',width:22,height:22,fontSize:11,fontWeight:700,marginRight:dueToday?4:0,cursor:'pointer'}}>
                         {overdue}
                       </span>}
-                      {dueToday > 0 && <span title={`${dueToday} milestone${dueToday>1?'s':''} due today`}
-                        style={{display:'inline-flex',alignItems:'center',justifyContent:'center',background:'#D97706',color:'white',borderRadius:'50%',width:22,height:22,fontSize:11,fontWeight:700}}>
+                      {dueToday > 0 && <span title={`${dueToday} milestone${dueToday>1?'s':''} due today — click to view`}
+                        onClick={e=>{e.stopPropagation();onOpenDeal&&onOpenDeal(d,'milestones');}}
+                        style={{display:'inline-flex',alignItems:'center',justifyContent:'center',background:'#D97706',color:'white',borderRadius:'50%',width:22,height:22,fontSize:11,fontWeight:700,cursor:'pointer'}}>
                         {dueToday}
                       </span>}
                     </td>
@@ -5732,7 +5869,9 @@ function PipelineTable({ deals, profiles, statuses, msAlerts, msProgress, coborr
                                       onBlur={()=>saveCell(d.id,{loan_amount:editCell.val?parseFloat(editCell.val):null})}
                                       onKeyDown={e=>{if(e.key==='Enter'||e.key==='Escape')saveCell(d.id,{loan_amount:editCell.val?parseFloat(editCell.val):null});}}
                                       style={ciStyle} />
-                                  : <span style={cdStyle} onClick={()=>setEditCell({id:d.id,col:'amount',val:d.loan_amount||''})}>
+                                  : <span style={{...cdStyle,cursor:'pointer'}}
+                                      onClick={()=>onOpenDeal&&onOpenDeal(d,'info_edit')}
+                                      onDoubleClick={e=>{e.stopPropagation();setEditCell({id:d.id,col:'amount',val:d.loan_amount||''}); }} title="Click to open Loan Details">
                                       {d.loan_amount?fmtCurrency(d.loan_amount):<span style={{color:'#9CA3AF'}}>—</span>}
                                     </span>}
                               </td> },
@@ -5744,7 +5883,9 @@ function PipelineTable({ deals, profiles, statuses, msAlerts, msProgress, coborr
                                       <option value="">—</option>
                                       {['Conv','FHA','VA','USDA','HELOC','Jumbo','Non-QM','Other'].map(p=><option key={p}>{p}</option>)}
                                     </select>
-                                  : <span style={cdStyle} onClick={()=>setEditCell({id:d.id,col:'program',val:d.loan_program||''})}>
+                                  : <span style={{...cdStyle,cursor:'pointer'}}
+                                      onClick={()=>onOpenDeal&&onOpenDeal(d,'info_edit')}
+                                      onDoubleClick={e=>{e.stopPropagation();setEditCell({id:d.id,col:'program',val:d.loan_program||''});}} title="Click to open Loan Details">
                                       {d.loan_program||<span style={{color:'#9CA3AF'}}>—</span>}
                                     </span>}
                               </td> },
@@ -5755,7 +5896,9 @@ function PipelineTable({ deals, profiles, statuses, msAlerts, msProgress, coborr
                                       style={ciStyle}>
                                       <option value="purchase">Purchase</option><option value="refinance">Refinance</option><option value="heloc">HELOC</option><option value="other">Other</option>
                                     </select>
-                                  : <span className="tag tag-blue" style={{cursor:'pointer'}} onClick={()=>setEditCell({id:d.id,col:'type',val:d.trans_type||'purchase'})}>
+                                  : <span className="tag tag-blue" style={{cursor:'pointer'}}
+                                      onClick={()=>onOpenDeal&&onOpenDeal(d,'info_edit')}
+                                      onDoubleClick={e=>{e.stopPropagation();setEditCell({id:d.id,col:'type',val:d.trans_type||'purchase'});}} title="Click to open Loan Details">
                                       {d.trans_type==='refinance'?'Refi':'Pur'}
                                     </span>}
                               </td> },
@@ -6161,11 +6304,11 @@ function TodayScreen({ deals, profiles, msAlerts, coborrowerMap, statuses, onOpe
   const closingToday = closingThisWeek.filter(d => daysDiff(d.closing_date) === 0);
 
   // Milestones overdue
-  const overdueDeals = deals.filter(d => msAlerts[d.id]?.overdue > 0)
+  const overdueDeals = deals.filter(d => !d.archived && msAlerts[d.id]?.overdue > 0)
     .sort((a,b) => (msAlerts[b.id]?.overdue||0) - (msAlerts[a.id]?.overdue||0));
 
   // Milestones due today
-  const dueTodayDeals = deals.filter(d => msAlerts[d.id]?.dueToday > 0 && !msAlerts[d.id]?.overdue);
+  const dueTodayDeals = deals.filter(d => !d.archived && msAlerts[d.id]?.dueToday > 0);
 
   // Locks expiring this week
   const locksExpiring = deals.filter(d => {
@@ -6649,21 +6792,18 @@ function filterDealsByProfile(deals, profile) {
   if (!profile) return deals;
   if (profile.role === 'admin') return deals;
   const uid = profile.id;
-  const name = (profile.display_name || '').trim();
-  // Fallback: older deals may have name in text field but no UUID assigned
-  const loMatch  = d => d.assigned_lo_id === uid        || (!d.assigned_lo_id        && name && d.lo        === name);
-  const loaMatch = d => d.assigned_loa_id === uid       || (!d.assigned_loa_id       && name && d.loa       === name);
-  const procMatch= d => d.assigned_processor_id === uid || (!d.assigned_processor_id && name && d.processor === name);
+  const loMatch   = d => d.assigned_lo_id        === uid;
+  const loaMatch  = d => d.assigned_loa_id       === uid;
+  const procMatch = d => d.assigned_processor_id === uid;
   if (profile.role === 'branch_admin') {
-    return deals.filter(d =>
-      loMatch(d) || (profile.branch && d.branch === profile.branch)
-    );
+    return deals.filter(d => loMatch(d) || (profile.branch && d.branch === profile.branch));
   }
   const lmtRole = profile.lmt_role || 'lo';
-  if (lmtRole === 'lo')                              return deals.filter(loMatch);
-  if (lmtRole === 'loa')                             return deals.filter(loaMatch);
-  if (lmtRole === 'processor' || lmtRole === 'setup') return deals.filter(procMatch);
-  return deals.filter(loMatch);
+  const result = lmtRole === 'lo' ? deals.filter(loMatch)
+    : lmtRole === 'loa' ? deals.filter(loaMatch)
+    : (lmtRole === 'processor' || lmtRole === 'setup') ? deals.filter(procMatch)
+    : deals.filter(loMatch);
+  return result;
 }
 
 // ROOT APP
@@ -6731,6 +6871,7 @@ function App() {
   const goToScreen = (s) => {
     setScreen(s);
     history.pushState({}, '', `#${s}`);
+    if (s === 'today') refreshMsAlerts();
   };
   const createNewDeal = () => {
     const firstStatus = (customStatuses && customStatuses.length > 0) ? customStatuses[0].label : '01. Contract / Go';
@@ -6857,34 +6998,28 @@ function App() {
     return () => document.removeEventListener('keydown', handler);
   }, [detailDeal, dealModal]);
 
-  // ── Load profile ──
-  useEffect(() => {
-    if (!user) return;
-    sb.from('profiles').select('*').eq('id', user.id).single().then(({ data }) => {
-      if (data) setProfile(data);
-    });
-  }, [user]);
-
-  // ── Load data ──
+  // ── Load data (profile included so it's ready before table renders) ──
   useEffect(() => {
     if (!user) return;
     setLoading(true);
     // Safety valve: never spin longer than 15s
     const loadTimer = setTimeout(() => { console.warn('LMT load timeout — forcing loading=false'); setLoading(false); }, 15000);
-    const safe = (q) => Promise.resolve(q).catch((e) => { console.error('LMT safe() caught:', e); return { data: [] }; });
+    const safe = (q) => Promise.resolve(q).catch((e) => { console.error('LMT safe() caught:', e); return { data: null }; });
 
     Promise.all([
       safe(sb.from('lmt_deals').select('*').order('created_at', { ascending: false })),
-      safe(sb.from('profiles').select('id,display_name,email,role,lmt_role,branch').in('role', ['admin','internal','branch_admin'])),
+      safe(sb.from('profiles').select('id,display_name,email,role,lmt_role,branch,team_loas,team_processors').in('role', ['admin','internal','branch_admin'])),
       safe(sb.from('lmt_milestone_presets').select('*').eq('user_id', user.id)),
       safe(sb.from('lmt_email_templates').select('*').eq('user_id', user.id)),
-      safe(sb.from('lmt_milestones').select('deal_id,milestone_type,due_date,icd_signed_date,is_done,is_na')),
+      safe(sb.from('lmt_milestones').select('deal_id,milestone_type,due_date,followup_date,icd_signed_date,is_done,is_na')),
       safe(sb.from('lmt_coborrowers').select('deal_id,name').order('sort_order')),
       safe(sb.from('branches').select('id,name')),
       safe(sb.from('lmt_contacts').select('*').order('last_name')),
+      safe(sb.from('profiles').select('*').eq('id', user.id).single()),
     ]).then(function(results) {
       var d=results[0], p=results[1], pr=results[2], t=results[3], ms=results[4], cobs=results[5], br=results[6];
       if (results[7]?.data) setLmtContacts(results[7].data);
+      if (results[8]?.data) setProfile(results[8].data);
       setBranches(br.data || []);
       setDeals(d.data || []);
       setProfiles(p.data || []);
@@ -6899,12 +7034,19 @@ function App() {
       (ms.data || []).forEach(function(m) {
         if (!progress[m.deal_id]) progress[m.deal_id] = { done: 0, total: 0 };
         if (!m.is_na) { progress[m.deal_id].total++; if (m.is_done) progress[m.deal_id].done++; }
-        if (m.is_done || m.is_na || !m.due_date) return;
-        var diff = daysDiff(m.due_date);
+        if (m.is_done || m.is_na) return;
         if (!alerts[m.deal_id]) alerts[m.deal_id] = { overdue: 0, dueToday: 0 };
         var alertBefore = presetAlertMap[m.milestone_type] || 1;
-        if (diff < 0) alerts[m.deal_id].overdue++;
-        else if (diff >= 0 && diff <= alertBefore) alerts[m.deal_id].dueToday++;
+        if (m.due_date) {
+          var diff = daysDiff(m.due_date);
+          if (diff < 0) alerts[m.deal_id].overdue++;
+          else if (diff >= 0 && diff <= alertBefore) alerts[m.deal_id].dueToday++;
+        }
+        if (m.followup_date) {
+          var fuDiff = daysDiff(m.followup_date);
+          if (fuDiff < 0) alerts[m.deal_id].overdue++;
+          else if (fuDiff >= 0 && fuDiff <= alertBefore) alerts[m.deal_id].dueToday++;
+        }
       });
       setMsAlerts(alerts);
       setMsProgress(progress);
@@ -7055,7 +7197,11 @@ function App() {
   // ── Save deal ──
   const saveDeal = async (payload) => {
     if (dealModal === 'new') {
-      const { data } = await sb.from('lmt_deals').insert(payload).select().single();
+      // Safety net: always stamp assigned_lo_id for internal/LO users
+      if (!payload.assigned_lo_id && profile && ['admin','internal','branch_admin'].includes(profile.role)) {
+        payload = { ...payload, assigned_lo_id: profile.id };
+      }
+      const { data, error } = await sb.from('lmt_deals').insert(payload).select().single();
       if (data) { setDeals(prev => [data, ...prev]); setDealModal(null); return data; }
     } else {
       const { data } = await sb.from('lmt_deals').update(payload).eq('id', dealModal.id).select().single();
@@ -7094,7 +7240,7 @@ function App() {
 
   const refreshMsAlerts = async () => {
     const [{ data }, { data: presetsData }] = await Promise.all([
-      sb.from('lmt_milestones').select('deal_id,milestone_type,due_date,is_done,is_na'),
+      sb.from('lmt_milestones').select('deal_id,milestone_type,due_date,followup_date,is_done,is_na'),
       sb.from('lmt_milestone_presets').select('milestone_type,alert_days_before').eq('user_id', user?.id),
     ]);
     if (!data) return;
@@ -7104,12 +7250,19 @@ function App() {
     data.forEach(m => {
       if (!progress[m.deal_id]) progress[m.deal_id] = { done: 0, total: 0 };
       if (!m.is_na) { progress[m.deal_id].total++; if (m.is_done) progress[m.deal_id].done++; }
-      if (m.is_done || m.is_na || !m.due_date) return;
-      const diff = daysDiff(m.due_date);
+      if (m.is_done || m.is_na) return;
       if (!alerts[m.deal_id]) alerts[m.deal_id] = { overdue: 0, dueToday: 0 };
       const alertBefore = alertMap[m.milestone_type] || 1;
-      if (diff < 0) alerts[m.deal_id].overdue++;
-      else if (diff >= 0 && diff <= alertBefore) alerts[m.deal_id].dueToday++;
+      if (m.due_date) {
+        const diff = daysDiff(m.due_date);
+        if (diff < 0) alerts[m.deal_id].overdue++;
+        else if (diff >= 0 && diff <= alertBefore) alerts[m.deal_id].dueToday++;
+      }
+      if (m.followup_date) {
+        const fuDiff = daysDiff(m.followup_date);
+        if (fuDiff < 0) alerts[m.deal_id].overdue++;
+        else if (fuDiff >= 0 && fuDiff <= alertBefore) alerts[m.deal_id].dueToday++;
+      }
     });
     setMsAlerts(alerts);
     setMsProgress(progress);
@@ -7172,7 +7325,7 @@ function App() {
               { key:'people',   label:'People' },
             ].map(t => {
               const urgentCount = t.key === 'today'
-                ? deals.filter(d => d.archived!==true && (msAlerts[d.id]?.overdue > 0 || msAlerts[d.id]?.dueToday > 0)).length
+                ? filterDealsByProfile(deals, profile).filter(d => !d.archived).reduce((sum, d) => sum + (msAlerts[d.id]?.overdue||0) + (msAlerts[d.id]?.dueToday||0), 0)
                 : 0;
               return (
                 <button key={t.key} className={`nav-header-tab${screen===t.key?' active':''}`} onClick={()=>goToScreen(t.key)}>
@@ -7263,7 +7416,8 @@ function App() {
         ) : screen === 'profile' ? (
           <ProfilePanel
             profile={profile}
-            onProfileSave={(p) => setProfile(prev => ({...prev, ...p}))}
+            profiles={profiles}
+            onProfileSave={(p) => { setProfile(prev => ({...prev, ...p})); setProfiles(prev => prev.map(pr => pr.id === profile?.id ? {...pr, ...p} : pr)); }}
           />
         ) : screen === 'settings' ? (
           <SettingsPanel
@@ -7302,9 +7456,13 @@ function App() {
             onDuplicate={()=>duplicateDeal(detailDeal)}
             onStatusChange={changeStatus}
             customStatuses={customStatuses}
-            loProfile={profile}
+            loProfile={profiles.find(p=>p.id===detailDeal?.assigned_lo_id) || profile}
             lmtContacts={lmtContacts}
             setLmtContacts={setLmtContacts}
+            onDealChange={(updated) => {
+              setDetailDeal(updated);
+              setDeals(prev => prev.map(d => d.id === updated.id ? updated : d));
+            }}
           />
         ) : screen === 'reports' ? (
           <ReportsScreen deals={deals} profiles={profiles} msAlerts={msAlerts} customStatuses={customStatuses} profile={profile} />
@@ -7334,7 +7492,7 @@ function App() {
             <div className="lmt-toolbar">
               <div className="view-tabs">
                 <button className={`view-tab${viewFilter==='active'?' active':''}`} onClick={()=>setViewFilter('active')}>
-                  Active ({deals.filter(d=>d.archived!==true && d.status!=='15. Funded').length})
+                  Active ({filterDealsByProfile(deals,profile).filter(d=>d.archived!==true && d.status!=='15. Funded').length})
                 </button>
                 <button className={`view-tab${viewFilter==='funded'?' active':''}`} onClick={()=>setViewFilter('funded')}
                   style={{borderColor: viewFilter==='funded' ? '#1B2A4A' : '#E5E7EB'}}>
@@ -7417,7 +7575,7 @@ function App() {
                 onUnarchive={unarchiveDeal}
                 onCloneDeal={duplicateDeal}
                 onArchiveDeal={archiveDeal}
-                onDeleteDeal={async (deal)=>{ await sb.from('lmt_deals').delete().eq('id',deal.id); setDeals(prev=>prev.filter(d=>d.id!==deal.id)); }}
+                onDeleteDeal={async (deal)=>{ const {data,error} = await sb.from('lmt_deals').delete().eq('id',deal.id).select('id'); if (error) { alert('Delete failed: ' + (error.message||'Permission denied')); } else if (data?.length > 0) { setDeals(prev=>prev.filter(d=>d.id!==deal.id)); } else { alert('Delete was blocked by a database policy. Ask your admin to delete from Supabase directly, or check the lmt_deals RLS policies.'); } }}
                 onScenarioLink={(deal)=>setScenarioLinkDeal(deal)}
                 onOpenDealDates={(deal)=>openDeal(deal,'dates')}
                 icdDataMap={icdDataMap}
