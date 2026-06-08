@@ -69,6 +69,7 @@ function LeadStatusSelect({ value, onChange, style }) {
   ];
   return (
     <select value={value} onChange={onChange} style={style}>
+      <option value="">— Clear —</option>
       {groups.map(function(g) {
         const opts = LEAD_STATUSES.filter(function(s) { return s.group === g.key; });
         if (opts.length === 0) return null;
@@ -993,7 +994,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
     if (isCloudUser) {
       const { error } = await supabase
         .from("scenarios")
-        .update({ lead_status: newStatus })
+        .update({ lead_status: newStatus || null })
         .eq("id", scenario.id);
       if (error) { alert("Could not update lead status: " + error.message); return; }
       writeAuditLog(
@@ -1905,7 +1906,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                     display: "block", width: "100%", textAlign: "left", padding: "12px 16px",
                     background: "none", border: "none", borderBottom: "1px solid #F0F4F8",
                     fontSize: 13, fontWeight: 600, color: "#0C4160", cursor: "pointer",
-                  }}>📋 My Info</button>
+                  }}>👤 My Profile</button>
                 )}
                 {onLoginSettings && (
                   <button onClick={function() { setProfileMenuOpen(false); onLoginSettings(); }} style={{
@@ -2989,6 +2990,46 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                                       items.push(menuItem("🔗  Share with Partner", function() {
                                         setShareModalScenario(scenario);
                                         setSharePartnerId(""); setSharePermission("view"); setShareNote("");
+                                      }));
+                                    if (isCloudUser && user.isInternal)
+                                      items.push(menuItem("📤  Send to LMT Pipeline", async function() {
+                                        const calcData = scenario.calculatorData || {};
+                                        const contact = contactsMap[scenario.contact_id] || null;
+                                        // Map loan program key to LMT label
+                                        const progMap = { conventional:"Conv", fha:"FHA", va:"VA", usda:"USDA", jumbo:"Jumbo", heloc:"HELOC" };
+                                        const rawProg = calcData["pc_prog"] || "";
+                                        const loanProgram = progMap[rawProg] || rawProg || "";
+                                        const transType = (scenario.loan_purpose || "purchase").startsWith("refi") ? "refinance" : "purchase";
+                                        const payload = {
+                                          primary_borrower_name:  scenario.clientName || "",
+                                          primary_contact_id:     scenario.contact_id || null,
+                                          primary_borrower_email: contact ? (contact.email || "") : "",
+                                          primary_borrower_phone: contact ? (contact.phone || "") : "",
+                                          property_address:       scenario.property_address || contact?.address || "",
+                                          city:                   contact ? (contact.city  || "") : "",
+                                          state:                  contact ? (contact.state || "") : "",
+                                          zip:                    contact ? (contact.zip   || "") : "",
+                                          loan_amount:            parseFloat(calcData["pc_la"])   || null,
+                                          rate:                   parseFloat(calcData["pc_rate"]) || null,
+                                          loan_term:              parseInt(calcData["pc_term"])   || 30,
+                                          loan_program:           loanProgram,
+                                          trans_type:             transType,
+                                          closing_date:           scenario.target_close_date || null,
+                                          assigned_lo_id:         contact?.assigned_lo_id || null,
+                                          quick_note:             scenario.notes || "",
+                                          hlt_scenario_name:      scenario.clientName || "",
+                                          occupancy: (() => {
+                                            const occ = calcData["occupancy"] || calcData["pc_occupancy"] || "primary";
+                                            if (occ === "investor" || occ === "investment") return "investment";
+                                            if (occ === "secondary") return "secondary";
+                                            return "primary";
+                                          })(),
+                                          status:                 "01. Contract / Go",
+                                        };
+                                        const supabase = window._supabaseClient;
+                                        const { data, error } = await supabase.from("lmt_deals").insert(payload).select().single();
+                                        if (error) { alert("Could not send to LMT: " + error.message); return; }
+                                        alert("✅ Deal sent to LMT Pipeline!\n\nBorrower: " + payload.primary_borrower_name + "\nOpen Loan Manager to see it.");
                                       }));
                                     if (user.isInternal) {
                                       if (items.length > 0)

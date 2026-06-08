@@ -552,7 +552,7 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
         }, "Home Loan Toolkit"),
         React.createElement("p", {
           style: { fontSize: 11, color: "#6B7D8A", textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 600, fontFamily: font, margin: 0 }
-        }, "MORTGAGE MARK \u00B7 CMG HOME LOANS")
+        }, "Your toolkit for success")
       ),
 
       // Live session invite banner
@@ -861,7 +861,7 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
       ),
       React.createElement("div", {
         style: { textAlign: "center", marginTop: 6, fontSize: 11, color: "#94A3B0", fontFamily: font }
-      }, "\u00A9 " + new Date().getFullYear() + " Mortgage Mark \u00B7 NMLS #729612"),
+      }, "\u00A9 2026 DewMark"),
       React.createElement("div", {
         style: { textAlign: "center", marginTop: 6, fontSize: 10, color: "#C0CDD6", fontFamily: font, letterSpacing: "0.05em" }
       }, "v20260325-1")

@@ -55,17 +55,26 @@ const HDR_STYLE = {
 };
 
 // â"€â"€ Edit Profile full-screen form â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }) {
+// Phone number formatter: returns (XXX) XXX-XXXX as user types
+function formatPhoneInput(raw) {
+  var digits = (raw || "").replace(/\D/g, "").slice(0, 10);
+  if (digits.length < 4)  return digits;
+  if (digits.length < 7)  return "(" + digits.slice(0, 3) + ") " + digits.slice(3);
+  return "(" + digits.slice(0, 3) + ") " + digits.slice(3, 6) + "-" + digits.slice(6);
+}
+
+function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches, viewerRole, isSelf }) {
   const [form, setForm] = useState({
-    display_name:  profile.display_name  || "",
-    email_display: profile.email_display || "",
-    title:         profile.title         || "",
-    company:       profile.company       || "",
-    nmls:          profile.nmls          || "",
+    display_name:    profile.display_name    || "",
+    email_display:   profile.email_display   || "",
+    title:           profile.title           || "",
+    company:         profile.company         || "",
+    nmls:            profile.nmls            || "",
+    is_branch_manager: !!(profile.is_branch_manager),
     branch_nmls:   profile.branch_nmls   || "",
     company_nmls:  profile.company_nmls  || "",
-    phone:         profile.phone         || "",
-    cell_phone:    profile.cell_phone    || "",
+    phone:         formatPhoneInput(profile.phone      || ""),
+    cell_phone:    formatPhoneInput(profile.cell_phone || ""),
     brokerage:     profile.brokerage     || "",
     website:       profile.website       || "",
     address:       profile.address       || "",
@@ -85,7 +94,10 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }
 
   async function handleSave() {
     if (!supabase) return;
+    if (!profile || !profile.id) { setError("Profile ID is missing — please close and reopen My Profile."); return; }
     setSaving(true); setError("");
+    // UUID helper: returns null if value is falsy OR the literal string "undefined"
+    function safeUUID(v) { return (v && v !== "undefined") ? v : null; }
     const payload = {
       display_name:  form.display_name  || null,
       email_display: form.email_display || null,
@@ -102,9 +114,13 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }
       city:          form.city          || null,
       state:         form.state         || null,
       zip:           form.zip           || null,
-      team_lead_id:  form.team_lead_id  || null,
-      branch_id:     form.branch_id     || null,
+      team_lead_id:  safeUUID(form.team_lead_id),
+      branch_id:     safeUUID(form.branch_id),
     };
+    // Only admins can set is_branch_manager
+    if (viewerRole === "admin" || viewerRole === "super_admin") {
+      payload.is_branch_manager = !!form.is_branch_manager;
+    }
     const { error: saveErr } = await supabase.from("profiles").update(payload).eq("id", profile.id);
     setSaving(false);
     if (saveErr) {
@@ -207,6 +223,27 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }
             </div>
           </div>}
 
+          {/* Branch Manager designation — admin only, not shown on own profile */}
+          {(viewerRole === "admin" || viewerRole === "super_admin") && !isSelf && isLORole && (
+            <div style={{ marginBottom: 18, padding: "12px 16px", background: "#F0F4F8", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#0C4160", fontFamily: UP_FONT }}>Branch Manager</div>
+                <div style={{ fontSize: 11, color: "#6B7D8A", marginTop: 2, fontFamily: UP_FONT }}>Can manage their team: add members, set templates, edit permissions</div>
+              </div>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={!!form.is_branch_manager}
+                  onChange={function(e) { setField("is_branch_manager", e.target.checked); }}
+                  style={{ width: 16, height: 16, cursor: "pointer" }}
+                />
+                <span style={{ fontSize: 12, fontWeight: 600, color: form.is_branch_manager ? "#1B8A5A" : "#6B7D8A", fontFamily: UP_FONT }}>
+                  {form.is_branch_manager ? "Yes" : "No"}
+                </span>
+              </label>
+            </div>
+          )}
+
           {/* Editable fields */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 20px", marginBottom: 20 }}>
             {FIELDS.map(function(f) {
@@ -217,7 +254,12 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }
                     style={INPUT_ST}
                     value={form[f.key]}
                     placeholder={f.placeholder}
-                    onChange={function(e) { setField(f.key, e.target.value); }}
+                    onChange={function(e) {
+                      var val = (f.key === "phone" || f.key === "cell_phone")
+                        ? formatPhoneInput(e.target.value)
+                        : e.target.value;
+                      setField(f.key, val);
+                    }}
                   />
                 </div>
               );
@@ -246,6 +288,11 @@ function EditProfileScreen({ profile, onSave, onCancel, teamProfiles, branches }
 
 // â"€â"€ Main UsersPanel â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 function UsersPanel({ user, onBack, onLogout }) {
+  const viewerRole = user && user.role;
+  const isViewerAdmin = viewerRole === "admin" || viewerRole === "super_admin";
+  const isViewerBranchManager = !!(user && user.is_branch_manager);
+  const canManageUsers = isViewerAdmin || isViewerBranchManager;
+
   const [activeTab, setActiveTab] = useState("team");
 
   // â"€â"€ Supabase profile data â"€â"€â"€â"€
@@ -395,7 +442,7 @@ function UsersPanel({ user, onBack, onLogout }) {
   const [teamContactsLoading, setTeamContactsLoading] = useState(false);
   const [myContactId,         setMyContactId]         = useState(null);
 
-  const isAdmin      = user && ["super_admin", "admin"].includes(user.role);
+  const isAdmin      = user && ["super_admin", "admin", "branch_admin"].includes(user.role);
   const isSuperAdmin = user && user.role === "super_admin";
 
   // â"€â"€ Load profiles â"€â"€â"€â"€
@@ -814,6 +861,8 @@ function UsersPanel({ user, onBack, onLogout }) {
         onCancel={function() { setEditingProfile(null); }}
         teamProfiles={teamProfiles}
         branches={branches}
+        viewerRole={user && user.role}
+        isSelf={user && editingProfile && user.supabaseUser && user.supabaseUser.id === editingProfile.id}
       />
     );
   }
@@ -837,7 +886,7 @@ function UsersPanel({ user, onBack, onLogout }) {
           return allIds.filter(function(id) { return teamContacts.some(function(c) { return c.team_lead_contact_id === id; }); }).length;
         })())}
         {isAdmin && tabBtn("branches", "Branches", branches.length)}
-        {isAdmin && tabBtn("access",   "Access Control", allProfiles.length)}
+        {(isAdmin || isViewerBranchManager) && tabBtn("access", "Access Control", allProfiles.length)}
         {isAdmin && tabBtn("activity", "Activity", actActiveCount !== null ? actActiveCount + " active" : "...")}
       </div>
 
@@ -1402,3 +1451,4 @@ function UsersPanel({ user, onBack, onLogout }) {
 }
 
 window.UsersPanel = UsersPanel;
+window.EditProfileScreen = EditProfileScreen;

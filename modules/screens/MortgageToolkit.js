@@ -143,7 +143,7 @@ function ScenarioContactPanel({ contactId, scenarioId, scenario, darkMode, color
   const [editForm, setEditForm] = useState({ fu_date: "", fu_who: "", fu_priority: "", note_quick: "" });
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
-  const [leadStatus, setLeadStatus] = useState((scenario && scenario.lead_status) || "?");
+  const [leadStatus, setLeadStatus] = useState((scenario && scenario.lead_status) || "");
   const [savingStatus, setSavingStatus] = useState(false);
   const [notes, setNotes] = useState([]);
   const [newNote, setNewNote] = useState("");
@@ -976,8 +976,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
           ? ["payment", "fees", "breakeven", "amort", "recast", "prequal", "sellernet", "contactlender"]
           : ["payment", "fees", "breakeven", "amort", "contactlender"];
         const extra = Array.isArray(user.borrowerPermissions) ? user.borrowerPermissions : [];
-        // Also include primary tabs so they show as locked (discoverable)
-        return base.concat(extra).includes(m.id) || CLIENT_PRIMARY_TABS.includes(m.id);
+        return base.concat(extra).includes(m.id);
       }
       if (user && user.role === "realtor") {
         const isOwnScenario = activeScenario && user.supabaseUser && activeScenario.createdBy === user.supabaseUser.id;

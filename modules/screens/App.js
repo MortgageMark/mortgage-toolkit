@@ -1004,6 +1004,9 @@ function App() {
   const [showTasksScenarios,   setShowTasksScenarios]   = React.useState(false);
   const [showTasksContacts,    setShowTasksContacts]    = React.useState(false);
   const [showActivityReport,   setShowActivityReport]   = React.useState(false);
+  const [showLODashboard,      setShowLODashboard]      = React.useState(false);
+  const [showMyProfile,        setShowMyProfile]        = React.useState(false);
+  const [myProfileFull,        setMyProfileFull]        = React.useState(null);
   const [showChangePassword,   setShowChangePassword]   = React.useState(false);
   const [showLoginSettings,    setShowLoginSettings]    = React.useState(false);
   const [showLoSetupPrompt,    setShowLoSetupPrompt]    = React.useState(false);
@@ -1490,6 +1493,26 @@ function App() {
     setLoggedInUser(null);
   };
 
+  // ── Fetch full profile from Supabase when "My Profile" opens ──────
+  useEffect(function() {
+    if (!showMyProfile || !isInternal || !supabase || !loggedInUser) return;
+    var uid = loggedInUser.id;
+    if (!uid) return;
+    supabase.from("profiles").select("*").eq("id", uid).single()
+      .then(function(res) {
+        if (!res.error && res.data) {
+          // Attach the login email from loggedInUser since profiles.email may differ
+          var p = Object.assign({}, res.data);
+          if (!p.email) p.email = loggedInUser.email || "";
+          // Ensure id is always present (needed for UPDATE in EditProfileScreen)
+          if (!p.id) p.id = uid;
+          setMyProfileFull(p);
+        }
+      })
+      .catch(function() {});
+    return function() { setMyProfileFull(null); };
+  }, [showMyProfile]);
+
   // Detect new LO signup → show setup prompt and open their contact card (first login only)
   const _newLoHandledRef = React.useRef(false);
   React.useEffect(function() {
@@ -1743,6 +1766,7 @@ function App() {
   };
 
   // ── Determine page content (single return below) ──────────────────
+  const isPartner = !!(loggedInUser && (loggedInUser.role === "realtor" || loggedInUser.role === "builder"));
   const showDashboard = isInternal || (loggedInUser && loggedInUser.supabaseUser);
 
   let pageContent;
@@ -1779,6 +1803,17 @@ function App() {
         onComplete={function() { setShowProfileSetup(false); setProfileContactId(null); }}
       />
     );
+  } else if (showMyProfile && isInternal) {
+    const EditProfileScreen = window.EditProfileScreen;
+    pageContent = (myProfileFull && EditProfileScreen)
+      ? React.createElement(EditProfileScreen, {
+          profile: myProfileFull,
+          onSave:   function() { setShowMyProfile(false); setMyProfileFull(null); },
+          onCancel: function() { setShowMyProfile(false); setMyProfileFull(null); },
+          viewerRole: loggedInUser.role,
+          isSelf: true,
+        })
+      : React.createElement("div", { style: { padding: 40, textAlign: "center", color: "#6B7D8A", fontFamily: _font, fontSize: 14 } }, "Loading profile…");
   } else if (showMyInfo) {
     pageContent = (
       <ClientMyInfoPanel
@@ -1794,6 +1829,11 @@ function App() {
         onClose={function() { setShowLoginSettings(false); }}
       />
     );
+  } else if (showLODashboard && (isInternal || isPartner)) {
+    const LODashboard = window.LODashboard;
+    pageContent = LODashboard
+      ? React.createElement(LODashboard, { user: loggedInUser })
+      : React.createElement("div", { style: { padding: 40 } }, "Dashboard loading…");
   } else if (showActivityReport && isInternal) {
     pageContent = (
       <ActivityReportPage
@@ -1875,8 +1915,8 @@ function App() {
         onLogout={handleLogout}
         onContacts={(isInternal || (loggedInUser && (loggedInUser.role === "realtor" || loggedInUser.role === "builder"))) ? function() { setShowContacts(true); } : null}
         onOpenContact={isInternal ? function(contactId) { setPendingContactId(contactId); setShowContacts(true); } : null}
-        onUsers={loggedInUser && loggedInUser.role === "admin" ? function() { setShowUsers(true); } : null}
-        onMyInfo={(!isInternal && loggedInUser && loggedInUser.supabaseUser) ? function() { setShowMyInfo(true); } : null}
+        onUsers={isInternal ? function() { setShowUsers(true); } : null}
+        onMyInfo={loggedInUser && loggedInUser.supabaseUser ? function() { isInternal ? setShowMyProfile(true) : setShowMyInfo(true); } : null}
         onLoginSettings={(!isInternal && loggedInUser && loggedInUser.supabaseUser) ? function() { setShowLoginSettings(true); } : null}
       />
     );
@@ -1902,16 +1942,14 @@ function App() {
   // overflow:hidden, so the footer creates extra body height and causes the mobile
   // scroll confusion bug — user could scroll the page to reveal/stick the footer).
   const inToolkit = !authLoading && !!loggedInUser && !showChangePassword &&
-    !showProfileSetup && !showMyInfo && !showUsers && !showContacts &&
+    !showProfileSetup && !showMyInfo && !showMyProfile && !showUsers && !showContacts &&
     activeScenario !== null;
-
-  const isPartner = !!(loggedInUser && (loggedInUser.role === "realtor" || loggedInUser.role === "builder"));
 
   // Sidebar is visible for internal/partner users on non-scenario screens
   // Also show sidebar when Teams/Contacts is open (even if a scenario is active) so user can navigate back
   const showSidebar = !!((isInternal || isPartner) && loggedInUser && !authLoading &&
     (!activeScenario || showUsers || showContacts) &&
-    !showChangePassword && !showProfileSetup && !showMyInfo);
+    !showChangePassword && !showProfileSetup && !showMyInfo && !showMyProfile);
   const sidebarWidth = showSidebar && !isMobile ? (sidebarPinned ? 220 : 42) : 0;
 
   // Expose sidebar width as CSS variable so fixed-positioned children (e.g. save bar) can offset correctly
@@ -2092,6 +2130,15 @@ function App() {
                 Dashboard
               </div>
             )}
+            {(isInternal || isPartner) && sidebarNavBtn("Dashboard", showLODashboard, function() {
+              setShowLODashboard(true);
+              setShowContacts(false);
+              setShowTasksScenarios(false);
+              setShowTasksContacts(false);
+              setShowUsers(false);
+              setShowActivityReport(false);
+              if (isMobile) setMobileSidebarOpen(false);
+            }, "📊")}
             {(isInternal || isPartner) && sidebarNavBtn(t("People"), showContacts && !showTasksContacts, function() {
               setTypeFilter("all");
               setContactsKey(function(k) { return k + 1; });
@@ -2100,11 +2147,12 @@ function App() {
               setShowTasksContacts(false);
               setShowUsers(false);
               setShowActivityReport(false);
+              setShowLODashboard(false);
               setPendingContactId(null);
               if (isMobile) setMobileSidebarOpen(false);
             }, "👤")}
             {(function() {
-              const active = !showContacts && !showTasksScenarios && !showTasksContacts && !showActivityReport && groupFilter === "active";
+              const active = !showContacts && !showTasksScenarios && !showTasksContacts && !showActivityReport && !showLODashboard && groupFilter === "active";
               return sidebarNavBtn(t("Scenarios"), active, function() {
                 setGroupFilter("active");
                 setShowContacts(false);
@@ -2112,6 +2160,7 @@ function App() {
                 setShowTasksContacts(false);
                 setShowUsers(false);
                 setShowActivityReport(false);
+                setShowLODashboard(false);
                 if (activeScenario !== null) { handleBackToScenarios(); }
                 if (isMobile) setMobileSidebarOpen(false);
               }, "📋");
@@ -2125,8 +2174,8 @@ function App() {
               if (isMobile) setMobileSidebarOpen(false);
             }, "📊")}
 
-            {/* ── TEAM section (admin only) ── */}
-            {loggedInUser && loggedInUser.role === "admin" && (
+            {/* ── TEAM section (all internal) ── */}
+            {isInternal && (
               <React.Fragment>
                 {(sidebarPinned || isMobile) && <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "8px 16px 0" }} />}
                 {(sidebarPinned || isMobile) && (
@@ -2134,11 +2183,12 @@ function App() {
                     Team
                   </div>
                 )}
-                {sidebarNavBtn(t("Teams & Users"), showUsers, function() {
+                {sidebarNavBtn("Teams & Users", showUsers, function() {
                   setShowUsers(true);
                   setShowContacts(false);
                   setShowTasksScenarios(false);
                   setShowTasksContacts(false);
+                  setShowLODashboard(false);
                   if (isMobile) setMobileSidebarOpen(false);
                 }, "👥")}
               </React.Fragment>
@@ -2173,6 +2223,7 @@ function App() {
               onTeam: (loggedInUser && loggedInUser.role === "admin") ? function() { setShowUsers(true); } : null,
               onLogout: handleLogout, isInternal: isInternal,
               isAdmin: !!(loggedInUser && loggedInUser.role === "admin"),
+              onMyProfile: isInternal ? function() { setShowMyProfile(true); } : null,
             })}
           </div>
 
