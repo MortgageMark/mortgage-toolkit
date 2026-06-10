@@ -19,11 +19,17 @@ const TYPE_TABS_CT = [
   { key: "client",   label: "Client"   },
 ];
 
-const BUSINESS_CATEGORIES_CT = [
-  "Employee", "Financial Partner", "Home Builder", "Loan: Third Party",
-  "Loan Officer", "Marketing", "Other", "Personal", "Realtor", "Recruit",
-  "Work Relationship", "zz-Junk",
-];
+// Two-level category structure: alpha order, Other last at each level
+const BIZ_CAT_TREE_CT = {
+  "Builder": [],
+  "Lender":  ["Branch Manager", "Employee", "LOA", "Loan Officer", "Processor"],
+  "Realtor": [],
+  "Vendor":  ["Appraiser", "Insurance", "Title", "Other"],
+  "Other":   ["Financial", "Marketing", "Personal"],
+};
+const BIZ_CATS_CT = ["Builder", "Lender", "Realtor", "Vendor", "Other"];
+// Flat list for legacy filter/search compatibility
+const BUSINESS_CATEGORIES_CT = BIZ_CATS_CT;
 
 const CLIENT_CATEGORIES_CT = [
   "Client",
@@ -31,7 +37,6 @@ const CLIENT_CATEGORIES_CT = [
   "Past Client (PC)",
   "Past Client Referral (PCR)",
   "Client (Import)",
-  "zz-Junk",
 ];
 
 const TYPE_COLORS_CT = {
@@ -40,11 +45,21 @@ const TYPE_COLORS_CT = {
 };
 // Per-category overrides — more specific than contact_type
 const CATEGORY_COLORS_CT = {
-  "Realtor":       { bg: "rgba(234,88,12,0.12)",   text: "#ea580c" },
-  "Home Builder":  { bg: "rgba(124,58,237,0.12)",  text: "#7c3aed" },
-  "Loan Officer":  { bg: "rgba(59,130,246,0.13)",  text: "#2563eb" },
-  "Client":        { bg: "rgba(34,197,94,0.13)",   text: "#16a34a" },
+  "Realtor": { bg: "rgba(234,88,12,0.12)",   text: "#ea580c" },
+  "Builder": { bg: "rgba(124,58,237,0.12)",  text: "#7c3aed" },
+  "Lender":  { bg: "rgba(59,130,246,0.13)",  text: "#2563eb" },
+  "Vendor":  { bg: "rgba(20,184,166,0.13)",  text: "#0d9488" },
+  "Client":  { bg: "rgba(34,197,94,0.13)",   text: "#16a34a" },
 };
+
+// Incremental formatter for phone input (as-you-type)
+function ctFormatPhoneInput(val) {
+  var digits = (val || "").replace(/\D/g, "").slice(0, 10);
+  if (!digits) return "";
+  if (digits.length <= 3) return "(" + digits;
+  if (digits.length <= 6) return "(" + digits.slice(0,3) + ") " + digits.slice(3);
+  return "(" + digits.slice(0,3) + ") " + digits.slice(3,6) + "-" + digits.slice(6);
+}
 
 function ctFormatPhone(val) {
   if (!val) return "";
@@ -57,7 +72,7 @@ function ctFormatPhone(val) {
 const EMPTY_FORM_CT = {
   prefix: "", first_name: "", nickname: "", last_name: "",
   company: "",
-  contact_type: "client", contact_category: "Client",
+  contact_type: "client", contact_category: "Client", contact_subcategory: "",
   referred_by_contact_id: null,
   phone_cell: "", phone_work: "", phone_home: "", phone_best: "",
   email_personal: "", email_work: "", email_other: "", email_best: "",
@@ -258,6 +273,7 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
     { id: "fu_priority", label: "FU Priority",  defaultW: 90  },
     { id: "note_quick",  label: "Quick Notes",  defaultW: 150 },
     { id: "created_at",  label: "Created",      defaultW: 80  },
+    { id: "creator",     label: "Creator",      defaultW: 110 },
   ];
   const [ctColHidden,   setCtColHidden]   = useState(function() { try { return JSON.parse(localStorage.getItem("mtk_ct_col_hidden") || "[]"); } catch(e) { return []; } });
   const [ctColWidths,   setCtColWidths]   = useState(function() { try { return JSON.parse(localStorage.getItem("mtk_ct_col_widths") || "{}"); } catch(e) { return {}; } });
@@ -518,6 +534,35 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
     } finally { setDeletingId(null); }
   }
 
+  // ── Fuzzy / phonetic name matching ────────────────────────────────────
+  function ctSoundex(str) {
+    var s = String(str).toUpperCase().replace(/[^A-Z]/g, "");
+    if (!s) return "";
+    var map = {B:1,F:1,P:1,V:1,C:2,G:2,J:2,K:2,Q:2,S:2,X:2,Z:2,D:3,T:3,L:4,M:5,N:5,R:6};
+    var code = s[0], prev = map[s[0]] || 0;
+    for (var i = 1; i < s.length && code.length < 4; i++) {
+      var curr = map[s[i]] || 0;
+      if (curr && curr !== prev) code += curr;
+      prev = curr;
+    }
+    return (code + "000").slice(0, 4);
+  }
+  // Returns true if query fuzzy-matches target (substring OR per-token soundex)
+  function ctFuzzy(query, target) {
+    if (!query || !target) return false;
+    var q = query.toLowerCase(), t = target.toLowerCase();
+    if (t.includes(q)) return true;
+    var qToks = q.split(/\s+/).filter(Boolean);
+    var tToks = t.split(/\s+/).filter(Boolean);
+    return qToks.every(function(qt) {
+      if (qt.length < 3) return t.includes(qt);
+      var sq = ctSoundex(qt);
+      return tToks.some(function(tt) {
+        return tt.includes(qt) || (tt.length >= 3 && ctSoundex(tt) === sq);
+      });
+    });
+  }
+
   // ── Filtered contacts (type + status + search + FU filters) ───────────
   const filteredContacts = useMemo(function() {
     let list = contacts;
@@ -565,16 +610,25 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
     const q = searchTerm.trim().toLowerCase();
     if (q) {
       list = list.filter(function(c) {
-        var fullName = ((c.first_name || "") + " " + (c.last_name || "")).toLowerCase();
+        var fullName  = ((c.first_name  || "") + " " + (c.last_name  || "")).trim().toLowerCase();
+        var fullName2 = ((c.first_name2 || "") + " " + (c.last_name2 || "")).trim().toLowerCase();
         return (
-          fullName.includes(q) ||
-          (c.first_name || "").toLowerCase().includes(q) ||
-          (c.last_name  || "").toLowerCase().includes(q) ||
-          (c.email      || "").toLowerCase().includes(q) ||
+          ctFuzzy(q, fullName)  ||
+          ctFuzzy(q, fullName2) ||
+          ctFuzzy(q, c.first_name  || "") ||
+          ctFuzzy(q, c.last_name   || "") ||
+          ctFuzzy(q, c.nickname    || "") ||
+          ctFuzzy(q, c.first_name2 || "") ||
+          ctFuzzy(q, c.last_name2  || "") ||
+          ctFuzzy(q, c.nickname2   || "") ||
+          (c.email          || "").toLowerCase().includes(q) ||
           (c.email_personal || "").toLowerCase().includes(q) ||
           (c.email_work     || "").toLowerCase().includes(q) ||
+          (c.email2         || "").toLowerCase().includes(q) ||
+          (c.email2_work    || "").toLowerCase().includes(q) ||
           (c.phone      || "").toLowerCase().includes(q) ||
           (c.phone_cell || "").toLowerCase().includes(q) ||
+          (c.phone2     || "").toLowerCase().includes(q) ||
           (c.city       || "").toLowerCase().includes(q)
         );
       });
@@ -652,25 +706,41 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
   // ── Add new contact ───────────────────────────────────────────────────
   function handleAddSubmit(e) {
     e.preventDefault();
-    if (!addForm.last_name.trim()) { setAddError("Last name is required."); return; }
+    if (!addForm.first_name.trim()) { setAddError("First name is required."); return; }
+    if (!addForm.last_name.trim())  { setAddError("Last name is required."); return; }
+    var subcatRequired = addForm.contact_type === "business" &&
+      BIZ_CAT_TREE_CT[addForm.contact_category] && BIZ_CAT_TREE_CT[addForm.contact_category].length > 0;
+    if (subcatRequired && !addForm.contact_subcategory) { setAddError("Please select a subcategory."); return; }
     setAddSaving(true);
     setAddError(null);
 
-    // Trim + lowercase all email fields before saving
-    var cleanedForm = Object.assign({}, addForm, {
-      email_personal: (addForm.email_personal || "").trim().toLowerCase(),
-      email_work:     (addForm.email_work     || "").trim().toLowerCase(),
-      email_other:    (addForm.email_other    || "").trim().toLowerCase(),
+    // Trim all string fields; lowercase emails
+    var cleanedForm = {};
+    Object.keys(addForm).forEach(function(k) {
+      cleanedForm[k] = typeof addForm[k] === "string" ? addForm[k].trim() : addForm[k];
     });
+    cleanedForm.email_personal = (cleanedForm.email_personal || "").toLowerCase();
+    cleanedForm.email_work     = (cleanedForm.email_work     || "").toLowerCase();
+    cleanedForm.email_other    = (cleanedForm.email_other    || "").toLowerCase();
     saveContactToSupabase(cleanedForm).then(function(result) {
       setAddSaving(false);
-      if (result.error) { setAddError(result.error.message || "Failed to save contact."); return; }
+      if (result.error) {
+        var msg = result.error.message || "";
+        if (msg.includes("first_name") || msg.includes("null")) {
+          setAddError("First name and last name are required.");
+        } else if (msg.includes("duplicate") || msg.includes("unique")) {
+          setAddError("A contact with this email already exists.");
+        } else {
+          setAddError("Could not save contact. Please check your entries and try again.");
+        }
+        return;
+      }
       setContacts(function(prev) { return [result.data, ...prev]; });
       setAddForm(EMPTY_FORM_CT);
       setShowAddForm(false);
     }).catch(function(err) {
       setAddSaving(false);
-      setAddError(err.message || "Unexpected error saving contact.");
+      setAddError("Something went wrong. Please try again.");
     });
   }
 
@@ -1118,9 +1188,16 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
           },
         }, "✕ Clear"),
 
-        // Export CSV button
+        // Export CSV button — admins export all; non-admins only export contacts they own
         filteredContacts.length > 0 && React.createElement("button", {
-          onClick: function() { exportContactsToCSV(filteredContacts); },
+          onClick: function() {
+            var userId = user && user.id;
+            var exportable = isAdmin ? filteredContacts : filteredContacts.filter(function(c) {
+              return !userId || c.created_by_user_id === userId || c.assigned_lo_id === userId;
+            });
+            if (exportable.length === 0) { alert("No owned contacts to export. Shared contacts cannot be exported."); return; }
+            exportContactsToCSV(exportable);
+          },
           title: "Export " + filteredContacts.length + " contact" + (filteredContacts.length === 1 ? "" : "s") + " to CSV",
           style: {
             padding: "8px 14px", borderRadius: "8px", cursor: "pointer",
@@ -1168,28 +1245,25 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
             React.createElement("h3", {
               style: { margin: "0 0 4px", fontSize: "18px", fontWeight: 800, color: "#1e3a5f" }
             }, "New Contact"),
-            React.createElement("p", {
-              style: { margin: 0, fontSize: "13px", color: "#64748b" }
-            }, "Fill in the basics — you can add more details from the contact record.")
           ),
           React.createElement("form", { onSubmit: handleAddSubmit },
             // Row 1: First + Last name
             React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" } },
               React.createElement("div", null,
-                React.createElement("label", { style: { display: "block", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#64748b", marginBottom: "5px" } }, "First Name"),
+                React.createElement("label", { style: { display: "block", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#64748b", marginBottom: "5px" } }, "First Name ", React.createElement("span", { style: { color: "#dc2626" } }, "*")),
                 React.createElement("input", {
                   style: { width: "100%", padding: "10px 12px", border: "1.5px solid #e2e8f0", borderRadius: "8px", fontSize: "14px", color: "#1e293b", outline: "none", boxSizing: "border-box" },
                   value: addForm.first_name,
-                  placeholder: "Joe",
+                  placeholder: "",
                   onChange: function(e) { setAddField("first_name", e.target.value); }
                 })
               ),
               React.createElement("div", null,
-                React.createElement("label", { style: { display: "block", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#64748b", marginBottom: "5px" } }, "Last Name *"),
+                React.createElement("label", { style: { display: "block", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#64748b", marginBottom: "5px" } }, "Last Name ", React.createElement("span", { style: { color: "#dc2626" } }, "*")),
                 React.createElement("input", {
                   style: { width: "100%", padding: "10px 12px", border: "1.5px solid #e2e8f0", borderRadius: "8px", fontSize: "14px", color: "#1e293b", outline: "none", boxSizing: "border-box" },
                   value: addForm.last_name, required: true,
-                  placeholder: "Smith",
+                  placeholder: "",
                   onChange: function(e) { setAddField("last_name", e.target.value); }
                 })
               )
@@ -1202,7 +1276,7 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
                   type: "email",
                   style: { width: "100%", padding: "10px 12px", border: "1.5px solid #e2e8f0", borderRadius: "8px", fontSize: "14px", color: "#1e293b", outline: "none", boxSizing: "border-box" },
                   value: addForm.email_personal,
-                  placeholder: "joe@email.com",
+                  placeholder: "",
                   onChange: function(e) { setAddField("email_personal", e.target.value); }
                 })
               ),
@@ -1211,9 +1285,9 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
                 React.createElement("input", {
                   type: "tel",
                   style: { width: "100%", padding: "10px 12px", border: "1.5px solid #e2e8f0", borderRadius: "8px", fontSize: "14px", color: "#1e293b", outline: "none", boxSizing: "border-box" },
-                  value: addForm.phone,
-                  placeholder: "(555) 555-5555",
-                  onChange: function(e) { setAddField("phone", e.target.value); }
+                  value: addForm.phone_cell,
+                  placeholder: "",
+                  onChange: function(e) { setAddField("phone_cell", ctFormatPhoneInput(e.target.value)); }
                 })
               )
             ),
@@ -1226,8 +1300,8 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
                   value: addForm.contact_type,
                   onChange: function(e) {
                     var newType = e.target.value;
-                    var defaultCat = newType === "business" ? "Other" : "Client";
-                    setAddForm(function(p) { return Object.assign({}, p, { contact_type: newType, contact_category: defaultCat }); });
+                    var defaultCat = newType === "business" ? "Realtor" : "Client";
+                    setAddForm(function(p) { return Object.assign({}, p, { contact_type: newType, contact_category: defaultCat, contact_subcategory: "" }); });
                   }
                 },
                   React.createElement("option", { value: "client" },   "Client"),
@@ -1239,22 +1313,25 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
                 React.createElement("select", {
                   style: { width: "100%", padding: "10px 12px", border: "1.5px solid #e2e8f0", borderRadius: "8px", fontSize: "14px", color: "#1e293b", outline: "none", boxSizing: "border-box", background: "#fff", cursor: "pointer" },
                   value: addForm.contact_category,
-                  onChange: function(e) { setAddField("contact_category", e.target.value); }
+                  onChange: function(e) { setAddForm(function(p) { return Object.assign({}, p, { contact_category: e.target.value, contact_subcategory: "" }); }); }
                 },
-                  (addForm.contact_type === "business" ? BUSINESS_CATEGORIES_CT : CLIENT_CATEGORIES_CT)
+                  (addForm.contact_type === "business" ? BIZ_CATS_CT : CLIENT_CATEGORIES_CT)
                     .map(function(cat) { return React.createElement("option", { key: cat, value: cat }, cat); })
                 )
               )
             ),
-            // Company
+            // Subcategory row (business only, when selected category has subs)
+            addForm.contact_type === "business" && BIZ_CAT_TREE_CT[addForm.contact_category] && BIZ_CAT_TREE_CT[addForm.contact_category].length > 0 &&
             React.createElement("div", { style: { marginBottom: "14px" } },
-              React.createElement("label", { style: { display: "block", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#64748b", marginBottom: "5px" } }, "Company"),
-              React.createElement("input", {
-                style: { width: "100%", padding: "10px 12px", border: "1.5px solid #e2e8f0", borderRadius: "8px", fontSize: "14px", color: "#1e293b", outline: "none", boxSizing: "border-box" },
-                value: addForm.company,
-                placeholder: "Acme Realty, CMG, etc.",
-                onChange: function(e) { setAddField("company", e.target.value); }
-              })
+              React.createElement("label", { style: { display: "block", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#64748b", marginBottom: "5px" } }, "Subcategory ", React.createElement("span", { style: { color: "#dc2626" } }, "*")),
+              React.createElement("select", {
+                style: { width: "100%", padding: "10px 12px", border: "1.5px solid #e2e8f0", borderRadius: "8px", fontSize: "14px", color: "#1e293b", outline: "none", boxSizing: "border-box", background: "#fff", cursor: "pointer" },
+                value: addForm.contact_subcategory || "",
+                onChange: function(e) { setAddField("contact_subcategory", e.target.value); }
+              },
+                React.createElement("option", { value: "" }, "— Select —"),
+                BIZ_CAT_TREE_CT[addForm.contact_category].map(function(sub) { return React.createElement("option", { key: sub, value: sub }, sub); })
+              )
             ),
             // Referred By
             React.createElement("div", { style: { marginBottom: "20px" } },
@@ -1654,7 +1731,7 @@ function ContactsTab({ user, onBack, onLogout, onSelectScenario, initialContactI
             React.createElement("tbody", null,
               filteredContacts.map(function(contact) {
                 var fullName  = ((contact.first_name || "") + " " + (contact.last_name || "")).trim() || "Unnamed";
-                var category  = contact.contact_category || contact.contact_type || "client";
+                var category  = contact.contact_subcategory || contact.contact_category || contact.contact_type || "client";
                 var tc        = CATEGORY_COLORS_CT[contact.contact_category] || TYPE_COLORS_CT[contact.contact_type] || TYPE_COLORS_CT.business;
                 var phone     = ctFormatPhone(contact.phone_cell || contact.phone_work || contact.phone || "");
                 var email     = contact.email_personal || contact.email_work || contact.email || "";

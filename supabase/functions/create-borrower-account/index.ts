@@ -40,7 +40,7 @@ serve(async (req) => {
     console.log("SUPABASE_SERVICE present:", !!SUPABASE_SERVICE);
     if (!SUPABASE_URL || !SUPABASE_SERVICE) {
       console.error("Missing env vars");
-      return json({ error: "Server misconfiguration — env vars missing" }, 500);
+      return json({ error: "Server misconfiguration — env vars missing" });
     }
 
     // ── 2. Extract caller user ID from the JWT ─────────────────────────────────
@@ -51,7 +51,7 @@ serve(async (req) => {
     const callerId = claims.sub as string | undefined;
     console.log("Caller ID from JWT:", callerId ?? "none");
     if (!callerId) {
-      return json({ error: "Unauthorized — could not parse JWT" }, 401);
+      return json({ error: "Unauthorized — could not parse JWT" });
     }
 
     // ── 3. Look up caller's profile (role + tenant) ───────────────────────────
@@ -67,7 +67,7 @@ serve(async (req) => {
 
     console.log("Caller profile:", callerProfile?.role ?? "none", "error:", profileErr?.message ?? "none");
     if (!callerProfile || !["admin", "internal"].includes(callerProfile.role)) {
-      return json({ error: "Forbidden — LOs and admins only" }, 403);
+      return json({ error: "Forbidden — LOs and admins only" });
     }
 
     // ── 4. Parse + validate body ───────────────────────────────────────────────
@@ -75,16 +75,21 @@ serve(async (req) => {
     const { contactId, email, displayName } = body;
     console.log("Body — contactId:", contactId, "email:", email);
     if (!contactId || !email) {
-      return json({ error: "Missing required fields: contactId, email" }, 400);
+      return json({ error: "Missing required fields: contactId, email" });
     }
 
     const cleanEmail = email.trim().toLowerCase();
 
-    // ── 5. Create the Auth user with default password ──────────────────────────
+    // ── 5. Create the Auth user ────────────────────────────────────────────────
+    // Generate a random 16-char password — user will change it on first login
+    const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$";
+    let tmpPwd = "";
+    for (let i = 0; i < 16; i++) tmpPwd += chars[Math.floor(Math.random() * chars.length)];
+
     console.log("Calling auth.admin.createUser for:", cleanEmail);
     const { data: createData, error: createErr } = await adminClient.auth.admin.createUser({
       email:         cleanEmail,
-      password:      "123456",
+      password:      tmpPwd,
       email_confirm: true,
       user_metadata: {
         display_name: (displayName || cleanEmail).trim(),
@@ -98,7 +103,8 @@ serve(async (req) => {
       if (msg.includes("already") || msg.includes("exists") || msg.includes("registered")) {
         return json({ alreadyExists: true });
       }
-      return json({ error: createErr.message }, 500);
+      // Return 200 with error so the frontend can display the actual message
+      return json({ error: createErr.message });
     }
 
     const newUserId = createData.user.id;
@@ -122,7 +128,7 @@ serve(async (req) => {
 
   } catch (err) {
     console.error("create-borrower-account unexpected error:", err);
-    return json({ error: String(err) }, 500);
+    return json({ error: String(err) });
   }
 });
 

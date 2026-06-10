@@ -80,6 +80,7 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
   const [suPassword, setSuPassword] = useState("");
   const [suPassword2, setSuPassword2] = useState("");
   const [suRole, setSuRole] = useState("borrower");
+  const [suLmtRole, setSuLmtRole] = useState("lo");
   const [suNmls, setSuNmls] = useState("");
   const [appLang, setLang] = useLocalStorage("app_lang", "en");
   // Read ?lang= from URL on mount
@@ -128,6 +129,30 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
       if (role === "borrower" && metaRole && metaRole !== "borrower") {
         const { error: roleFixErr } = await supabase.from("profiles").update({ role: metaRole }).eq("id", user.id);
         if (!roleFixErr) role = metaRole;
+      }
+      // Auto-upgrade: if a contact with this email has category "Lender", they're internal team
+      if (role === "borrower") {
+        const emailLc = user.email ? user.email.toLowerCase() : "";
+        if (emailLc) {
+          const { data: lenderContact } = await supabase
+            .from("contacts")
+            .select("id, contact_category, contact_subcategory")
+            .or("email.eq." + emailLc + ",email_personal.eq." + emailLc + ",email_work.eq." + emailLc)
+            .eq("contact_category", "Lender")
+            .limit(1)
+            .maybeSingle();
+          if (lenderContact) {
+            var upgradePayload = { role: "internal", app_access: ["lmt", "hlt"] };
+            var subcat = lenderContact.contact_subcategory || "";
+            var lmtFromSubcat = subcat === "LOA" ? "loa"
+              : subcat === "Processor" ? "processor"
+              : subcat === "Branch Manager" ? "manager"
+              : "lo";
+            upgradePayload.lmt_role = lmtFromSubcat;
+            await supabase.from("profiles").update(upgradePayload).eq("id", user.id);
+            role = "internal";
+          }
+        }
       }
       const displayName = (profile && profile.display_name) ? profile.display_name : (user.email || "User");
       const isInternal = ["admin", "internal", "branch_admin"].includes(role);
@@ -223,18 +248,25 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
     if (suPassword !== suPassword2) { setError("Passwords do not match."); return; }
     setLoading(true);
     try {
+      // Branch Manager maps to branch_admin role; all other lenders stay "internal"
+      const effectiveRole = (suRole === "internal" && suLmtRole === "manager") ? "branch_admin" : suRole;
       const { data, error: signUpErr } = await supabase.auth.signUp({
         email: suEmail.trim(),
         password: suPassword,
         options: {
           data: {
             display_name: (suFirstName.trim() + " " + suLastName.trim()).trim(),
-            role: suRole
+            role: effectiveRole,
+            lmt_role: suRole === "internal" ? suLmtRole : undefined,
           }
         }
       });
       if (signUpErr) {
-        setError(signUpErr.message || "Sign-up failed.");
+        console.error("signUp error full object:", JSON.stringify(signUpErr, null, 2));
+        var detail = signUpErr.message || "Sign-up failed.";
+        if (signUpErr.status) detail += " (status " + signUpErr.status + ")";
+        if (signUpErr.code)   detail += " [" + signUpErr.code + "]";
+        setError(detail);
         setLoading(false);
         return;
       }
@@ -268,10 +300,10 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
         // If the trigger defaulted the profile to 'borrower' but the user chose a different role,
         // correct it now. This happens when ON CONFLICT DO NOTHING skips the insert (e.g. a
         // prior failed signup already created the row) or the trigger doesn't receive metadata.
-        let role = (profile && profile.role) ? profile.role : suRole;
-        if (profile && profile.role === "borrower" && suRole && suRole !== "borrower") {
-          await supabase.from("profiles").update({ role: suRole }).eq("id", user.id);
-          role = suRole;
+        let role = (profile && profile.role) ? profile.role : effectiveRole;
+        if (profile && profile.role === "borrower" && effectiveRole && effectiveRole !== "borrower") {
+          await supabase.from("profiles").update({ role: effectiveRole }).eq("id", user.id);
+          role = effectiveRole;
         }
         const displayName = (profile && profile.display_name) ? profile.display_name : (suFirstName.trim() + " " + suLastName.trim()).trim();
         const isInternal = ["admin", "internal", "branch_admin"].includes(role);
@@ -292,9 +324,11 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
           } catch(e) {}
         }
 
-        // Save NMLS to profile if provided (LO signup)
-        if (suRole === "internal" && suNmls.trim()) {
-          await supabase.from("profiles").update({ nmls: suNmls.trim() }).eq("id", user.id);
+        // Save NMLS + lmt_role to profile (Lender signup)
+        if (suRole === "internal") {
+          const lmtUpdate = { lmt_role: suLmtRole };
+          if (suNmls.trim()) lmtUpdate.nmls = suNmls.trim();
+          await supabase.from("profiles").update(lmtUpdate).eq("id", user.id);
         }
 
         // Ensure a contact record exists; returns new contact ID for brand-new users
@@ -302,7 +336,7 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
         // ?from= links (Realtor/Builder referral) → NO auto-assign; Realtor uses Refer button
         const assignedLoId      = loRef ? loRef.id : null;
         const referredByContact = fromRef ? fromRef.id : null;
-        const newContactId = await ensureContactForNewUser(displayName, user.email, role, suPhone.trim(), suFirstName.trim(), suLastName.trim(), assignedLoId, referredByContact);
+        const newContactId = await ensureContactForNewUser(displayName, user.email, role, suPhone.trim(), suFirstName.trim(), suLastName.trim(), assignedLoId, referredByContact, suLmtRole);
         // Clear referral tokens after successful signup
         try { sessionStorage.removeItem("mtk_lo_ref");   } catch(e) {}
         try { sessionStorage.removeItem("mtk_from_ref"); } catch(e) {}
@@ -358,7 +392,7 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
 
   // Helper: create a contact record for a newly registered user.
   // Returns the new contact's ID if just created, or null if one already existed.
-  async function ensureContactForNewUser(displayName, email, role, phone, firstName, lastName, assignedLoId, referredByContactId) {
+  async function ensureContactForNewUser(displayName, email, role, phone, firstName, lastName, assignedLoId, referredByContactId, lmtRole) {
     if (!supabase || !email) return null;
     try {
       const emailLower = email.toLowerCase();
@@ -396,10 +430,16 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
         email_personal:  email.toLowerCase(),
         phone_cell:      (phone || "").replace(/\D/g, ""),
         contact_type:    (role === "internal" || role === "branch_admin" || role === "realtor" || role === "builder") ? "business" : "client",
-        contact_category: (role === "internal" || role === "branch_admin") ? "Loan Officer"
+        contact_category: (role === "internal" || role === "branch_admin") ? "Lender"
                         : role === "realtor"  ? "Realtor"
-                        : role === "builder"  ? "Home Builder"
+                        : role === "builder"  ? "Builder"
                         : null,
+        contact_subcategory: (role === "internal" || role === "branch_admin")
+          ? (lmtRole === "loa"       ? "LOA"
+           : lmtRole === "processor" ? "Processor"
+           : lmtRole === "manager"   ? "Branch Manager"
+           : "Loan Officer")
+          : null,
         status:          "active",
         tags:            [],
         source:          "self-signup",
@@ -776,13 +816,26 @@ function LoginScreen({ onLogin, viewPrefill, pendingLive }) {
           React.createElement("label", { style: labelStyle }, "I AM A"),
           React.createElement("select", {
             value: suRole,
-            onChange: function(e) { setSuRole(e.target.value); setSuNmls(""); },
+            onChange: function(e) { setSuRole(e.target.value); setSuNmls(""); setSuLmtRole("lo"); },
             style: inputStyle
           },
             React.createElement("option", { value: "borrower" }, "Client / Borrower"),
             React.createElement("option", { value: "realtor" }, "Realtor"),
             React.createElement("option", { value: "builder" }, "Builder"),
-            React.createElement("option", { value: "internal" }, "Loan Officer")
+            React.createElement("option", { value: "internal" }, "Lender")
+          )
+        ),
+        suRole === "internal" && React.createElement("div", { style: { marginBottom: 14 } },
+          React.createElement("label", { style: labelStyle }, "MY ROLE"),
+          React.createElement("select", {
+            value: suLmtRole,
+            onChange: function(e) { setSuLmtRole(e.target.value); },
+            style: inputStyle
+          },
+            React.createElement("option", { value: "lo" },        "Loan Officer"),
+            React.createElement("option", { value: "loa" },       "Loan Officer Assistant"),
+            React.createElement("option", { value: "processor" }, "Processor"),
+            React.createElement("option", { value: "manager" },   "Branch Manager")
           )
         ),
         suRole === "internal" && React.createElement("div", { style: { marginBottom: 14 } },

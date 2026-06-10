@@ -538,6 +538,10 @@ const sb = window._supabase;
 
 const DEFAULT_STATUSES = [
   { label: '00. TBD',                                  color: '#6B7280', bg: '#F3F4F6' },
+  { label: '(A) Loan App: Sent',                       color: '#7C3AED', bg: '#EDE9FE' },
+  { label: '(B) Loan App: Received',                   color: '#7C3AED', bg: '#DDD6FE' },
+  { label: '(C) Pre-Qualified',                        color: '#5B21B6', bg: '#C4B5FD' },
+  { label: '(D) Pre-Approved',                         color: '#4C1D95', bg: '#A78BFA' },
   { label: '01. Contract / Go',                        color: '#1D4ED8', bg: '#DBEAFE' },
   { label: '02. Disclosures: Ordered',                 color: '#0369A1', bg: '#E0F2FE' },
   { label: '03. Disclosures Sent',                     color: '#0369A1', bg: '#BAE6FD' },
@@ -589,18 +593,37 @@ const getPermanentCards = (deal) => {
 };
 const VARIABLE_TYPES= ['voe','vor','flood','payoff','other'];
 
-const PEOPLE_CATS = ['Client','LO','LOA','Processor','Setup','Realtor','Builder','Underwriter','Closer','Title','Appraisal','HOI','Survey'];
+const PEOPLE_CATS = ['Client','LO','LOA','Processor','Setup','Realtor','Builder','Underwriter','Closer','Title','Appraiser','Insurance','Survey'];
+const APP_ID = 'lmt'; // Identifier for this app — used for app_access gating
+
 const LMT_TO_HLT_CAT = {
   'Client':'Client','Realtor':'Realtor','Builder':'Home Builder',
   'LO':'Loan Officer','LOA':'Employee','Setup':'Employee',
   'Processor':'Employee','Underwriter':'Employee','Closer':'Employee',
-  'Title':'Loan: Third Party','Appraisal':'Loan: Third Party',
-  'HOI':'Loan: Third Party','Survey':'Loan: Third Party',
+  'Title':'Title','Appraiser':'Appraiser','Insurance':'Insurance','Survey':'Insurance',
 };
 const HLT_TO_LMT_CAT = {
   'Client':'Client','CCR':'Client','PC':'Client','PCR':'Client','Client (Import)':'Client',
   'Realtor':'Realtor','Home Builder':'Builder','Loan Officer':'LO',
-  'Employee':'LOA','Loan: Third Party':'Title','Financial Partner':'Title',
+  'Employee':'LOA',
+  'Title':'Title','Appraiser':'Appraiser','Insurance':'Insurance',
+  'Loan: Third Party':'Title', // legacy fallback
+  'Financial Partner':'Title',
+};
+// Map a shared contacts row → LMT local shape (adds .category from lmt_category or HLT fallback)
+const fromContact = (c) => ({
+  ...c,
+  category: c.lmt_category || HLT_TO_LMT_CAT[c.contact_category] || 'Client',
+});
+// Map LMT form → shared contacts table payload for insert/update
+const toContactPayload = (form) => {
+  const { category, ...rest } = form;
+  return {
+    ...rest,
+    lmt_category:     category,
+    contact_category: LMT_TO_HLT_CAT[category] || 'Other',
+    contact_type:     ['Client','Realtor','Builder'].includes(category) ? 'client' : 'business',
+  };
 };
 const CAT_STYLE = {
   'Client':      {color:'#1D4ED8',bg:'#DBEAFE'},
@@ -613,14 +636,14 @@ const CAT_STYLE = {
   'Underwriter': {color:'#92400E',bg:'#FEF3C7'},
   'Closer':      {color:'#B45309',bg:'#FEF3C7'},
   'Title':       {color:'#B91C1C',bg:'#FEE2E2'},
-  'Appraisal':   {color:'#991B1B',bg:'#FEE2E2'},
-  'HOI':         {color:'#BE123C',bg:'#FFE4E6'},
+  'Appraiser':   {color:'#991B1B',bg:'#FEE2E2'},
+  'Insurance':   {color:'#BE123C',bg:'#FFE4E6'},
   'Survey':      {color:'#374151',bg:'#F3F4F6'},
 };
-const isPeopleCompany = (cat) => ['Title','Appraisal','HOI','Survey'].includes(cat);
+const isPeopleCompany = (cat) => ['Title','Appraiser','Insurance','Survey'].includes(cat);
 const TYPE_LABELS   = {
   contract:'Contract', le:'LE / Disclosure', icd:'Initial CD (ICD)',
-  title:'Title', appraisal:'Appraisal', hoi:'HOI',
+  title:'Title', appraisal:'Appraiser', hoi:'Insurance',
   voe:'VOE', vor:'VOR', flood:'Flood Cert', payoff:'Payoff',
   file:'File Rec\'d', other:'Other',
 };
@@ -1117,11 +1140,11 @@ function AgentPicker({ label, value, onChange, saveCategory }) {
     setSavedToHlt(false);
     if (!q.trim() || q.length < 2) { setResults([]); setOpen(false); return; }
     setSearching(true);
-    const { data } = await sb.from('lmt_contacts')
-      .select('id,category,first_name,last_name,company,email,phone')
+    const { data } = await sb.from('contacts')
+      .select('id,lmt_category,contact_category,first_name,last_name,company,email,phone')
       .or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%,email.ilike.%${q}%,company.ilike.%${q}%`)
       .limit(8);
-    setResults(data || []);
+    setResults((data || []).map(fromContact));
     setOpen(true);
     setSearching(false);
   };
@@ -1136,11 +1159,11 @@ function AgentPicker({ label, value, onChange, saveCategory }) {
     if (!query.trim() || saving) return;
     setSaving(true);
     const parts = query.trim().split(' ');
-    const { data, error } = await sb.from('lmt_contacts').insert({
+    const { data, error } = await sb.from('contacts').insert(toContactPayload({
       first_name: parts[0]||'', last_name: parts.slice(1).join(' ')||'',
       category: saveCategory||'Realtor',
       email:'', phone:'', cell_phone:'', license_nmls:'', notes:'',
-    }).select().single();
+    })).select().single();
     setSaving(false);
     if (!error && data) {
       setSavedToHlt(true); setOpen(false);
@@ -1728,7 +1751,7 @@ function DealModal({ deal, profiles, statuses, branches, existingDeals, onSave, 
                     <div className="form-group">
                       <label>Contact Name</label>
                       <AgentPicker label="Contact" value={form[v.contactKey]||''}
-                        saveCategory={v.label==='Title Company'?'Title':v.label==='Appraiser'?'Appraisal':v.label==='HOI Company'?'HOI':'Other'}
+                        saveCategory={v.label==='Title Company'?'Title':v.label==='Appraiser'?'Appraiser':v.label==='HOI Company'?'Insurance':'Other'}
                         onChange={a=>setForm(p=>({...p,[v.contactKey]:a.name,[v.emailKey]:a.email||p[v.emailKey]||'',...(v.phoneKey?{[v.phoneKey]:a.phone||p[v.phoneKey]||''}:{})}))} />
                     </div>
                     <div className="form-group">
@@ -3869,7 +3892,7 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
                         </div>
                         <div className="form-group" style={{marginBottom:0}}><label>Contact</label>
                           <AgentPicker label="Contact" value={ctForm[v.contactKey]||''}
-                            saveCategory={v.label==='Title Company'?'Title':v.label==='Appraiser'?'Appraisal':v.label==='HOI Company'?'HOI':'Other'}
+                            saveCategory={v.label==='Title Company'?'Title':v.label==='Appraiser'?'Appraiser':v.label==='HOI Company'?'Insurance':'Other'}
                             onChange={a=>setCtForm(p=>({...p,[v.contactKey]:a.name,[v.emailKey]:a.email||p[v.emailKey]||'',...(v.phoneKey?{[v.phoneKey]:a.phone||p[v.phoneKey]||''}:{})}))} />
                         </div>
                       </div>
@@ -4206,8 +4229,8 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
                 email: email||'', phone: phone||'',
                 cell_phone:'', license_nmls:'', notes:'',
               };
-              const {data} = await sb.from('lmt_contacts').insert(rec).select().single();
-              if (data && setLmtContacts) setLmtContacts(prev=>[data,...prev]);
+              const {data} = await sb.from('contacts').insert(toContactPayload(rec)).select().single();
+              if (data && setLmtContacts) setLmtContacts(prev=>[fromContact(data),...prev]);
             };
             const ContactCard = ({ role, name, email, phone, note, peopleCategory }) => {
               if (!name) return null;
@@ -4419,8 +4442,8 @@ function ContactEditPanel({ contact, onSave, onDelete, onClose, saving }) {
             <option value="Closer">Closer</option>
           </optgroup>
           <optgroup label="── Vendors ──">
-            <option value="Appraisal">Appraiser</option>
-            <option value="HOI">HOI</option>
+            <option value="Appraiser">Appraiser</option>
+            <option value="Insurance">Insurance</option>
             <option value="Survey">Survey</option>
             <option value="Title">Title</option>
           </optgroup>
@@ -4443,7 +4466,7 @@ function ContactEditPanel({ contact, onSave, onDelete, onClose, saving }) {
       <div className="form-group"><label>Email</label><input type="email" value={form.email||''} onChange={e=>fset('email',e.target.value)} /></div>
       <div className="form-group"><label>Phone</label><input value={form.phone||''} onChange={e=>fset('phone',e.target.value)} /></div>
       <div className="form-group"><label>Cell</label><input value={form.cell_phone||''} onChange={e=>fset('cell_phone',e.target.value)} /></div>
-      {['LO','Appraisal'].includes(form.category) && (
+      {['LO','Appraiser'].includes(form.category) && (
         <div className="form-group"><label>License / NMLS #</label><input value={form.license_nmls||''} onChange={e=>fset('license_nmls',e.target.value)} /></div>
       )}
       <div className="form-group"><label>Notes</label><textarea value={form.notes||''} onChange={e=>fset('notes',e.target.value)} rows={3} style={{resize:'vertical'}} /></div>
@@ -4455,165 +4478,7 @@ function ContactEditPanel({ contact, onSave, onDelete, onClose, saving }) {
   );
 }
 
-// ─────────────────────────────────────────────
-// HLT SYNC MODAL
-// ─────────────────────────────────────────────
-function HltSyncModal({ lmtContacts, setLmtContacts, onClose }) {
-  const [hltContacts, setHltContacts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState('pull');
-  const [selected, setSelected] = useState(new Set());
-  const [syncing, setSyncing] = useState(false);
-
-  React.useEffect(() => {
-    (async () => {
-      setLoading(true);
-      const { data } = await sb.from('contacts').select('id,first_name,last_name,email,phone,contact_category,contact_type').order('last_name');
-      setHltContacts(data || []);
-      setLoading(false);
-    })();
-  }, []);
-
-  const existingHltIds = new Set(lmtContacts.map(c => c.hlt_contact_id).filter(Boolean));
-
-  const pullCandidates = hltContacts.filter(h =>
-    !existingHltIds.has(h.id) && HLT_TO_LMT_CAT[h.contact_category]
-  );
-
-  const pushCandidates = lmtContacts.filter(c => !c.hlt_contact_id);
-
-  const candidates = tab === 'pull' ? pullCandidates : pushCandidates;
-
-  const toggleSelect = (id) => {
-    setSelected(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
-
-  const selectAll = () => {
-    if (selected.size === candidates.length) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(candidates.map(c => c.id)));
-    }
-  };
-
-  const doPull = async () => {
-    setSyncing(true);
-    const toInsert = pullCandidates.filter(h => selected.has(h.id)).map(h => ({
-      category: HLT_TO_LMT_CAT[h.contact_category] || 'Client',
-      first_name: h.first_name || '',
-      last_name: h.last_name || '',
-      email: h.email || '',
-      phone: h.phone || '',
-      company: '',
-      cell_phone: '',
-      license_nmls: '',
-      notes: '',
-      hlt_contact_id: h.id,
-    }));
-    const { data } = await sb.from('lmt_contacts').insert(toInsert).select();
-    if (data) setLmtContacts(prev => [...data, ...prev]);
-    setSyncing(false);
-    onClose();
-  };
-
-  const doPush = async () => {
-    setSyncing(true);
-    const toPush = pushCandidates.filter(c => selected.has(c.id));
-    for (const c of toPush) {
-      const { data } = await sb.from('contacts').insert({
-        first_name: c.first_name,
-        last_name: c.last_name,
-        email: c.email,
-        phone: c.phone || c.cell_phone,
-        contact_category: LMT_TO_HLT_CAT[c.category] || 'Other',
-        contact_type: ['Client','Realtor','Builder'].includes(c.category) ? 'client' : 'business',
-      }).select().single();
-      if (data) {
-        await sb.from('lmt_contacts').update({ hlt_contact_id: data.id }).eq('id', c.id);
-        setLmtContacts(prev => prev.map(x => x.id === c.id ? { ...x, hlt_contact_id: data.id } : x));
-      }
-    }
-    setSyncing(false);
-    onClose();
-  };
-
-  const handleAction = () => tab === 'pull' ? doPull() : doPush();
-
-  return (
-    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.4)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center'}}>
-      <div style={{background:'white',borderRadius:12,width:580,maxHeight:'80vh',display:'flex',flexDirection:'column',overflow:'hidden'}}>
-        {/* Header */}
-        <div style={{background:'#1B2A4A',padding:'14px 20px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-          <span style={{color:'white',fontWeight:700,fontSize:15}}>↕ Sync with HLT</span>
-          <button onClick={onClose} style={{background:'none',border:'none',color:'white',fontSize:20,cursor:'pointer',lineHeight:1}}>×</button>
-        </div>
-        {/* Tabs */}
-        <div style={{display:'flex',borderBottom:'1px solid #E5E7EB'}}>
-          {[['pull',`⬇ Pull from HLT (${pullCandidates.length})`],['push',`⬆ Push to HLT (${pushCandidates.length})`]].map(([t,label])=>(
-            <button key={t} onClick={()=>{setTab(t);setSelected(new Set());}}
-              style={{flex:1,padding:'10px 0',fontSize:13,fontWeight:600,border:'none',cursor:'pointer',
-                background:'white',color:tab===t?'#1B2A4A':'#9CA3AF',
-                borderBottom:tab===t?'2px solid #1B2A4A':'2px solid transparent'}}>
-              {label}
-            </button>
-          ))}
-        </div>
-        {/* Body */}
-        <div style={{flex:1,overflowY:'auto',padding:16}}>
-          {loading
-            ? <div style={{textAlign:'center',padding:40,color:'#6B7280',fontSize:13}}>Loading…</div>
-            : candidates.length === 0
-              ? <div style={{textAlign:'center',padding:40,color:'#9CA3AF',fontSize:13}}>No contacts to sync</div>
-              : candidates.map(c => {
-                  const isPull = tab === 'pull';
-                  const id = c.id;
-                  const name = [c.first_name, c.last_name].filter(Boolean).join(' ') || c.company || '—';
-                  const email = isPull ? c.email : c.email;
-                  const cat = isPull ? (HLT_TO_LMT_CAT[c.contact_category] || c.contact_category) : c.category;
-                  const cs = CAT_STYLE[cat] || {color:'#374151',bg:'#F3F4F6'};
-                  return (
-                    <div key={id} onClick={()=>toggleSelect(id)}
-                      style={{display:'flex',alignItems:'center',gap:12,padding:'10px 12px',borderRadius:8,
-                        border:`1px solid ${selected.has(id)?'#1B2A4A':'#E5E7EB'}`,
-                        background:selected.has(id)?'#EFF6FF':'white',cursor:'pointer',marginBottom:6}}>
-                      <input type="checkbox" checked={selected.has(id)} onChange={()=>toggleSelect(id)}
-                        onClick={e=>e.stopPropagation()} style={{flexShrink:0}} />
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontWeight:700,fontSize:13,color:'#1B2A4A'}}>{name}</div>
-                        {email && <div style={{fontSize:11,color:'#9CA3AF'}}>{email}</div>}
-                      </div>
-                      <span style={{fontSize:10,fontWeight:700,padding:'2px 7px',borderRadius:4,background:cs.bg,color:cs.color,flexShrink:0}}>
-                        {cat}
-                      </span>
-                      {isPull && c.contact_category && (
-                        <span style={{fontSize:11,color:'#9CA3AF',fontStyle:'italic',flexShrink:0}}>{c.contact_category}</span>
-                      )}
-                    </div>
-                  );
-                })
-          }
-        </div>
-        {/* Footer */}
-        <div style={{padding:'12px 16px',borderTop:'1px solid #E5E7EB',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-          <button onClick={selectAll} style={{background:'none',border:'none',color:'#1B2A4A',fontSize:13,cursor:'pointer',fontWeight:600,padding:0}}>
-            {selected.size === candidates.length && candidates.length > 0 ? 'Deselect All' : 'Select All'}
-          </button>
-          <div style={{display:'flex',gap:8}}>
-            <button className="btn btn-ghost" onClick={onClose} disabled={syncing}>Cancel</button>
-            <button className="btn btn-navy" onClick={handleAction}
-              disabled={selected.size === 0 || syncing}>
-              {syncing ? 'Syncing…' : tab === 'pull' ? `Pull Selected (${selected.size})` : `Push Selected (${selected.size})`}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+// HltSyncModal removed — contacts are now unified in the shared contacts table
 
 // ─────────────────────────────────────────────
 // PEOPLE SCREEN
@@ -4623,36 +4488,38 @@ function PeopleScreen({ user, lmtContacts, setLmtContacts }) {
   const [catFilter, setCatFilter] = useState('all');
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [showSync, setShowSync] = useState(false);
 
   // Self-sufficient fetch — runs on mount so People always loads even if Promise.all index shifts
   useEffect(() => {
     if (!user) return;
-    sb.from('lmt_contacts').select('*').order('last_name').then(({data, error}) => {
-      if (error) { console.error('lmt_contacts load error:', error); return; }
-      if (data) setLmtContacts(data);
+    sb.from('contacts').select('*').order('last_name').then(({data, error}) => {
+      if (error) return;
+      if (data) setLmtContacts(data.map(fromContact));
     });
   }, [user]);
 
   const newBlank = () => ({ category:'Client', first_name:'', last_name:'', company:'', email:'', phone:'', cell_phone:'', license_nmls:'', notes:'' });
 
-  const displayName = (c) => isPeopleCompany(c.category)&&c.company ? c.company : [c.first_name,c.last_name].filter(Boolean).join(' ')||c.company||'—';
+  // Always show person name first; fall back to company only if no name exists
+  const displayName = (c) => [c.first_name,c.last_name].filter(Boolean).join(' ') || c.company || '—';
 
   const filtered = lmtContacts.filter(c => {
     if (catFilter !== 'all' && c.category !== catFilter) return false;
     if (!search) return true;
     const s = search.toLowerCase();
-    return [c.first_name,c.last_name,c.company,c.email,c.phone].some(v=>v?.toLowerCase().includes(s));
+    const fullName = [c.first_name,c.last_name].filter(Boolean).join(' ').toLowerCase();
+    return fullName.includes(s) || [c.first_name,c.last_name,c.company,c.email,c.phone,c.cell_phone,c.notes].some(v=>v?.toLowerCase().includes(s));
   });
 
   const saveContact = async (form) => {
     setSaving(true);
+    const payload = toContactPayload(form);
     if (form.id) {
-      const {data} = await sb.from('lmt_contacts').update(form).eq('id',form.id).select().single();
-      if (data) setLmtContacts(prev=>prev.map(c=>c.id===data.id?data:c));
+      const {data} = await sb.from('contacts').update(payload).eq('id',form.id).select().single();
+      if (data) setLmtContacts(prev=>prev.map(c=>c.id===data.id?fromContact(data):c));
     } else {
-      const {data} = await sb.from('lmt_contacts').insert({...form}).select().single();
-      if (data) setLmtContacts(prev=>[data,...prev]);
+      const {data} = await sb.from('contacts').insert(payload).select().single();
+      if (data) setLmtContacts(prev=>[fromContact(data),...prev]);
     }
     setSaving(false);
     setEditing(null);
@@ -4660,7 +4527,7 @@ function PeopleScreen({ user, lmtContacts, setLmtContacts }) {
 
   const deleteContact = async (id) => {
     if (!confirm('Delete this contact? This cannot be undone.')) return;
-    await sb.from('lmt_contacts').delete().eq('id',id);
+    await sb.from('contacts').delete().eq('id',id);
     setLmtContacts(prev=>prev.filter(c=>c.id!==id));
     setEditing(null);
   };
@@ -4674,7 +4541,6 @@ function PeopleScreen({ user, lmtContacts, setLmtContacts }) {
           <input value={search} onChange={e=>setSearch(e.target.value)}
             placeholder="Search people…"
             style={{flex:1,padding:'8px 12px',border:'1px solid #E5E7EB',borderRadius:8,fontSize:13}} />
-          <button className="btn btn-ghost" style={{border:'1px solid #E5E7EB',fontSize:13}} onClick={()=>setShowSync(true)}>↕ HLT</button>
           <button className="btn btn-navy" onClick={()=>setEditing(newBlank())}>+ Add</button>
         </div>
         {/* Category filter pills */}
@@ -4702,7 +4568,7 @@ function PeopleScreen({ user, lmtContacts, setLmtContacts }) {
           : filtered.map(c=>{
               const cs = CAT_STYLE[c.category]||{color:'#374151',bg:'#F3F4F6'};
               const name = displayName(c);
-              const sub = isPeopleCompany(c.category) ? [c.first_name,c.last_name].filter(Boolean).join(' ') : c.company;
+              const sub = c.company || null;
               const active = editing?.id===c.id;
               return (
                 <div key={c.id} onClick={()=>setEditing({...c})}
@@ -4728,7 +4594,6 @@ function PeopleScreen({ user, lmtContacts, setLmtContacts }) {
       {editing && (
         <ContactEditPanel key={editing.id||'new'} contact={editing} onSave={saveContact} onDelete={deleteContact} onClose={()=>setEditing(null)} saving={saving} />
       )}
-      {showSync && <HltSyncModal lmtContacts={lmtContacts} setLmtContacts={setLmtContacts} onClose={()=>setShowSync(false)} />}
     </div>
   );
 }
@@ -7014,11 +6879,11 @@ function App() {
       safe(sb.from('lmt_milestones').select('deal_id,milestone_type,due_date,followup_date,icd_signed_date,is_done,is_na')),
       safe(sb.from('lmt_coborrowers').select('deal_id,name').order('sort_order')),
       safe(sb.from('branches').select('id,name')),
-      safe(sb.from('lmt_contacts').select('*').order('last_name')),
+      safe(sb.from('contacts').select('*').order('last_name')),
       safe(sb.from('profiles').select('*').eq('id', user.id).single()),
     ]).then(function(results) {
       var d=results[0], p=results[1], pr=results[2], t=results[3], ms=results[4], cobs=results[5], br=results[6];
-      if (results[7]?.data) setLmtContacts(results[7].data);
+      if (results[7]?.data) setLmtContacts(results[7].data.map(fromContact));
       if (results[8]?.data) setProfile(results[8].data);
       setBranches(br.data || []);
       setDeals(d.data || []);
@@ -7309,6 +7174,27 @@ function App() {
   );
 
   if (!user) return <LoginScreen onLogin={setUser} />;
+
+  // App-access gate: profile is loaded async — show spinner until it arrives,
+  // then block if this user hasn't been granted 'lmt' access.
+  if (!profile) return (
+    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#1B2A4A'}}>
+      <div className="spinner" style={{width:32,height:32,borderWidth:3}}></div>
+    </div>
+  );
+  if (profile.app_access && !profile.app_access.includes(APP_ID)) return (
+    <div style={{minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'#1B2A4A',gap:16}}>
+      <div style={{fontSize:48}}>🔒</div>
+      <div style={{color:'white',fontSize:20,fontWeight:700}}>Access Denied</div>
+      <div style={{color:'#94A3B8',fontSize:14,textAlign:'center',maxWidth:320}}>
+        Your account hasn't been granted access to Loan Manager.<br/>Contact your administrator.
+      </div>
+      <button onClick={handleLogout}
+        style={{marginTop:8,padding:'8px 20px',borderRadius:8,background:'white',color:'#1B2A4A',fontWeight:700,border:'none',cursor:'pointer',fontSize:14}}>
+        Sign Out
+      </button>
+    </div>
+  );
 
   return (
     <div>

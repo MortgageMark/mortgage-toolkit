@@ -291,14 +291,18 @@ function MortgageComparison() {
 
       // ── Loan program & upfront MI ────────────────────────────────────────
       const prog = s.id === 1 ? pcProg : (s.prog || "conventional");
-      // Default upfront MI pct by program (FHA 1.75%, VA 2.3% standard, USDA 1%)
-      const defUpfrontPct = prog === "fha" ? 0.0175 : prog === "va" ? 0.023 : prog === "usda" ? 0.01 : 0;
+      // VA funding fee: default to subsequent use (more conservative / common)
+      // Rates vary by down payment tier; first-use vs subsequent only differ at <5% down
+      const _vaDp = 100 - (hp > 0 ? baseLa / hp * 100 : 100);
+      const vaSubseqPct  = _vaDp >= 10 ? 0.0125 : _vaDp >= 5 ? 0.015 : 0.033;
+      const vaFirstPct   = _vaDp >= 10 ? 0.0125 : _vaDp >= 5 ? 0.015 : 0.0215;
+      const defUpfrontPct = prog === "fha" ? 0.0175 : prog === "va" ? vaSubseqPct : prog === "usda" ? 0.01 : 0;
       const defUpfrontMi  = Math.round(baseLa * defUpfrontPct);
-      // Scenario A: Fee Sheet is the source of truth; B/C: use override or default
+      // Scenario A: Fee Sheet is the source of truth; B/C: override now stored as a PERCENTAGE (e.g. "3.3")
       const upfrontMiFee = s.id === 1
         ? (parseInt(fsMcGovFee) || 0)
         : (s.upfrontMiOvr !== "" && s.upfrontMiOvr !== undefined
-            ? (parseFloat(s.upfrontMiOvr) || 0)
+            ? Math.round(baseLa * (parseFloat(s.upfrontMiOvr) || 0) / 100)
             : defUpfrontMi);
       // Financed mode: Scenario A reads from Fee Sheet; B/C from their own field
       const upfrontFinanced = s.id === 1 ? pcUpfrontMode : (s.upfrontFinanced || "rolled_in");
@@ -449,7 +453,7 @@ function MortgageComparison() {
         closingCosts: finalClosingCosts, prepaids: finalPrepaids, apr,
         usesFSValues,           // true when B/C use Fee Sheet exact values (same HP+DP as A)
         addlCostsDollar, addlCreditsDollar,
-        prog, upfrontMiFee, defUpfrontPct, upfrontFinanced, upfrontAsCost,
+        prog, upfrontMiFee, defUpfrontPct, upfrontFinanced, upfrontAsCost, vaFirstPct, vaSubseqPct,
       };
     });
   // scenProgsKey: explicit dep so any scenario program change guarantees recomputation
@@ -861,6 +865,115 @@ function MortgageComparison() {
     return null;
   };
 
+  // ── Print single scenario for client ────────────────────────────────────
+  const printSingleScenario = (s, a) => {
+    if (!a) return;
+    let clientName = "Client";
+    try {
+      const sc = JSON.parse(localStorage.getItem("mtk_active_scenario") || "null");
+      clientName = sc?.name || sc?.clientName || "Client";
+    } catch {}
+    let loLine = "CMG Home Loans";
+    try {
+      const u = JSON.parse(localStorage.getItem("mtk_app_user") || "null");
+      if (u?.display_name) loLine = u.display_name + " · CMG Home Loans";
+    } catch {}
+    const taxMonthly = parseFloat(localStorage.getItem("pc_eff_tax")) || 0;
+    const insMonthly = parseFloat(localStorage.getItem("pc_eff_ins")) || 0;
+    const pb = getPermBD(perScenarioBD[scenarios.findIndex(sc => sc.id === s.id)] || {});
+    const pi = pb ? pb.bdMPI : a.monthlyPI;
+    const piti = pi + a.pmiMonthly + taxMonthly + insMonthly;
+    const scenLabel = s.customLabel ? `${s.label} — ${s.customLabel}` : s.label;
+    const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+    const progLabels = { conventional: "Conventional", fha: "FHA", va: "VA", usda: "USDA" };
+    const progName = progLabels[a.prog] || a.prog || "Conventional";
+    const rStr = String(a.rate || "").trim();
+    const rDec = rStr.indexOf(".") === -1 ? 3 : Math.max(3, rStr.length - rStr.indexOf(".") - 1);
+    const aprStr = a.apr && Math.abs(a.apr - parseFloat(a.rate)) > 0.001 ? `APR ${a.apr.toFixed(rDec)}%` : "";
+    const dp = a.downPayment > 0 ? `${fmt(Math.round(a.downPayment))} (${a.dpPct.toFixed(1)}%)` : "—";
+
+    const row = (label, value, bold) =>
+      '<tr class="' + (bold ? 'strong' : '') + '"><td>' + label + '</td><td>' + value + '</td></tr>';
+
+    const win = window.open("", "_blank", "width=720,height=900");
+    win.document.write(`<!DOCTYPE html><html><head>
+      <meta charset="UTF-8">
+      <title>${scenLabel} — ${clientName}</title>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+      <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:'DM Sans',sans-serif; background:#fff; color:#1A2530; padding:36px 44px; }
+        .hdr { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:24px; padding-bottom:14px; border-bottom:3px solid #0C4160; }
+        .hdr-left h1 { font-size:24px; font-weight:800; color:#0C4160; letter-spacing:-0.3px; }
+        .hdr-left p { font-size:12px; color:#64748B; margin-top:5px; }
+        .hdr-left p strong { color:#1A2530; }
+        .hdr-right { text-align:right; font-size:11px; color:#64748B; line-height:1.8; }
+        .hdr-right strong { color:#0C4160; font-size:12px; }
+        .sec { margin-bottom:20px; }
+        .sec-title { font-size:10px; font-weight:700; color:#0C4160; text-transform:uppercase; letter-spacing:0.08em; border-bottom:1.5px solid #0C4160; padding-bottom:6px; margin-bottom:10px; }
+        table { width:100%; border-collapse:collapse; }
+        tr td { padding:7px 0; font-size:13px; border-bottom:1px solid #f1f5f9; }
+        tr td:first-child { color:#64748B; font-weight:500; }
+        tr td:last-child { text-align:right; font-weight:600; color:#1A2530; }
+        tr.strong td { font-size:14px; font-weight:700; color:#0C4160; border-bottom:2px solid #0C4160; }
+        .disc { margin-top:24px; font-size:9px; color:#94a3b8; font-style:italic; line-height:1.7; border-top:1px solid #e2e8f0; padding-top:10px; }
+        @page { size: letter; margin: 0.4in; }
+        @media print { body { padding: 0; } }
+        print-color-adjust: exact; -webkit-print-color-adjust: exact;
+      </style>
+    </head><body>
+      <div class="hdr">
+        <div class="hdr-left">
+          <h1>${scenLabel}</h1>
+          <p>Prepared for: <strong>${clientName}</strong></p>
+        </div>
+        <div class="hdr-right">
+          <strong>${loLine}</strong><br>${today}
+        </div>
+      </div>
+      <div class="sec">
+        <div class="sec-title">Loan Structure</div>
+        <table>
+          ${row("Loan Program", progName)}
+          ${row("Purchase Price", fmt(Math.round(a.hp)))}
+          ${row("Down Payment", dp)}
+          ${row("Loan Amount", fmt(Math.round(a.la)))}
+          ${row("Interest Rate", a.rate + "%" + (aprStr ? " \xB7 " + aprStr : ""))}
+          ${row("Term", a.termYrs + " years")}
+        </table>
+      </div>
+      <div class="sec">
+        <div class="sec-title">Monthly Payment (PITI)</div>
+        <table>
+          ${row("Principal & Interest", fmt2(pi))}
+          ${a.pmiMonthly > 0 ? row("Monthly MI", fmt2(a.pmiMonthly)) : ""}
+          ${taxMonthly > 0 ? row("Monthly Taxes", fmt2(taxMonthly)) : ""}
+          ${insMonthly > 0 ? row("Monthly Insurance", fmt2(insMonthly)) : ""}
+          ${row("Total Monthly (PITI)", fmt2(piti), true)}
+        </table>
+      </div>
+      <div class="sec">
+        <div class="sec-title">Costs &amp; Credits</div>
+        <table>
+          ${a.pts > 0 ? row("Discount Points", fmt(Math.round(a.pts))) : ""}
+          ${a.sellerConc > 0 ? row("Seller Concessions", "(" + fmt(Math.round(a.sellerConc)) + ")") : ""}
+          ${a.closingCosts > 0 ? row("Closing Costs", fmt(Math.round(a.closingCosts))) : ""}
+          ${a.prepaids > 0 ? row("Prepaids &amp; Escrows", fmt(Math.round(a.prepaids))) : ""}
+        </table>
+      </div>
+      <div class="sec">
+        <div class="sec-title">Cash to Close</div>
+        <table>
+          ${row("Estimated Cash to Close", fmt(Math.round(effectiveCtc(a, scenarios.findIndex(sc => sc.id === s.id)))), true)}
+        </table>
+      </div>
+      <div class="disc">This scenario is for illustration purposes only and is not a commitment to lend. Rates and fees are estimates subject to change without notice. All loans are subject to credit approval and underwriting. Contact your loan officer for a formal Loan Estimate.</div>
+    </body></html>`);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 400);
+  };
+
   // ── Print side-by-side for client ────────────────────────────────────────
   const printComparison = () => {
     let clientName = "Client";
@@ -1002,6 +1115,16 @@ function MortgageComparison() {
                         color: COLORS.navy, outline: "none",
                       }}
                     />
+                    <button
+                      onClick={(e) => { e.stopPropagation(); printSingleScenario(s, analyses.find(a => a.id === s.id)); }}
+                      title="Print this scenario"
+                      style={{
+                        flexShrink: 0, padding: "6px 10px", borderRadius: 6, cursor: "pointer",
+                        border: `1.5px solid ${s.color}66`, background: `${s.color}11`,
+                        color: s.color, fontSize: 13, fontWeight: 700, fontFamily: font,
+                        lineHeight: 1,
+                      }}
+                    >🖨️</button>
                   </span>
                 }
                 accent={s.color}
@@ -1094,22 +1217,42 @@ function MortgageComparison() {
               ) : (
                 isGovProg(s.prog || "conventional") && (() => {
                   const sAnalysis = analyses.find(a => a.id === s.id);
-                  const defAmt = sAnalysis ? sAnalysis.upfrontMiFee : 0;
-                  const upfrontPctStr = sAnalysis && sAnalysis.defUpfrontPct > 0
-                    ? ` (${parseFloat((sAnalysis.defUpfrontPct * 100).toFixed(2))}%)`
-                    : "";
+                  const defPct  = sAnalysis ? sAnalysis.defUpfrontPct : 0;
+                  const defAmt  = sAnalysis ? sAnalysis.upfrontMiFee  : 0;
+                  const baseLaUI = sAnalysis ? sAnalysis.baseLa : 0;
+                  const isVA    = (s.prog || "conventional") === "va";
+                  const vaFirst = sAnalysis ? sAnalysis.vaFirstPct  : 0;
+                  const vaSubseq= sAnalysis ? sAnalysis.vaSubseqPct : 0;
+                  const overridePct = s.upfrontMiOvr !== "" && s.upfrontMiOvr !== undefined
+                    ? parseFloat(s.upfrontMiOvr) : null;
+                  const displayDollar = overridePct !== null
+                    ? Math.round(baseLaUI * overridePct / 100)
+                    : defAmt;
                   return (
                     <SectionCard title="UPFRONT MI" accent={s.color}>
                       <LabeledInput
-                        label="Upfront MI Override"
-                        prefix="$"
+                        label="Upfront MI Factor"
+                        suffix="%"
                         value={s.upfrontMiOvr || ""}
                         onChange={(v) => updateScenario(s.id, "upfrontMiOvr", v)}
-                        useCommas
                         small
-                        hint={s.upfrontMiOvr === "" || s.upfrontMiOvr === undefined ? `Default: ${fmt(defAmt)}${upfrontPctStr}` : undefined}
-                        info="Leave blank to use default; enter 0 if buyer is exempt"
+                        hint={s.upfrontMiOvr === "" || s.upfrontMiOvr === undefined
+                          ? `Default: ${parseFloat((defPct * 100).toFixed(3))}%`
+                          : undefined}
+                        info="Enter a percentage (e.g. 3.3 for 3.3%). Leave blank to use default; enter 0 if exempt."
                       />
+                      {baseLaUI > 0 && (
+                        <div style={{ fontSize: 11, color: "#64748b", fontFamily: font, marginTop: -6, marginBottom: 8, lineHeight: 1.5 }}>
+                          {overridePct !== null
+                            ? `${overridePct}% × ${fmt(baseLaUI)} = ${fmt(displayDollar)}`
+                            : `${parseFloat((defPct * 100).toFixed(3))}% × ${fmt(baseLaUI)} = ${fmt(defAmt)}`}
+                          {isVA && vaFirst !== vaSubseq && (
+                            <span style={{ display: "block", color: "#0369a1", marginTop: 2 }}>
+                              Assuming subsequent use ({parseFloat((vaSubseq * 100).toFixed(2))}%). First-time use: {parseFloat((vaFirst * 100).toFixed(2))}%.
+                            </span>
+                          )}
+                        </div>
+                      )}
                       <Select
                         label="Upfront Financed"
                         value={s.upfrontFinanced || "rolled_in"}

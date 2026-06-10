@@ -33,6 +33,163 @@ function SettingsPanel({ open, onClose, darkMode, allModules, openTab }) {
   const [fuWhoInput, setFuWhoInput] = useState("");
   const [fuWhoSaving, setFuWhoSaving] = useState(false);
 
+  // ── Team hierarchy state ───────────────────────────────────────────────
+  const [teamHierarchy, setTeamHierarchy] = useState(null);
+  const [teamHierarchyLoading, setTeamHierarchyLoading] = useState(false);
+
+  useEffect(function() {
+    if (settingsTab !== "team") return;
+    if (!_supabase || !_spUser) return;
+    if (teamHierarchy !== null) return; // already loaded
+    setTeamHierarchyLoading(true);
+    (async function() {
+      try {
+        var userId = _spUser.id;
+        var userRole = _spUser.role || "internal";
+        var lmtRole = _spUser.lmt_role || "lo";
+        var teamLeadId = _spUser.team_lead_id || null;
+
+        if (userRole === "admin" || userRole === "branch_admin") {
+          // Admin: fetch ALL internal profiles, group by team_lead_id
+          var { data: all } = await _supabase
+            .from("profiles")
+            .select("id, display_name, email, lmt_role, team_lead_id, role")
+            .in("role", ["internal", "admin", "branch_admin"])
+            .order("display_name");
+          setTeamHierarchy({ mode: "admin", profiles: all || [] });
+        } else if (!teamLeadId) {
+          // LO (or standalone): fetch their direct reports
+          var { data: members } = await _supabase
+            .from("profiles")
+            .select("id, display_name, email, lmt_role, team_lead_id")
+            .eq("team_lead_id", userId)
+            .order("lmt_role");
+          setTeamHierarchy({ mode: "lo", members: members || [] });
+        } else {
+          // LOA / Processor: fetch team lead + teammates
+          var { data: lead } = await _supabase
+            .from("profiles")
+            .select("id, display_name, email, lmt_role")
+            .eq("id", teamLeadId)
+            .maybeSingle();
+          var { data: teammates } = await _supabase
+            .from("profiles")
+            .select("id, display_name, email, lmt_role")
+            .eq("team_lead_id", teamLeadId)
+            .neq("id", userId)
+            .order("lmt_role");
+          setTeamHierarchy({ mode: "member", lead: lead, teammates: teammates || [] });
+        }
+      } catch(e) {}
+      setTeamHierarchyLoading(false);
+    })();
+  }, [settingsTab]);
+
+  // ── Referral slug state ────────────────────────────────────────────────
+  const [referralSlug, setReferralSlug] = useState("");
+  const [referralSlugInput, setReferralSlugInput] = useState("");
+  const [referralSlugSaving, setReferralSlugSaving] = useState(false);
+  const [referralSlugMsg, setReferralSlugMsg] = useState(null); // {type: "ok"|"err", text}
+
+  useEffect(function() {
+    if (settingsTab !== "team" || !_supabase || !_spUser || !_spUser.id) return;
+    (async function() {
+      try {
+        var { data } = await _supabase.from("profiles").select("referral_slug").eq("id", _spUser.id).single();
+        if (data) {
+          var s = data.referral_slug || "";
+          setReferralSlug(s);
+          setReferralSlugInput(s);
+        }
+      } catch(e) {}
+    })();
+  }, [settingsTab]);
+
+  async function saveReferralSlug() {
+    var raw = referralSlugInput.trim();
+    if (!raw) {
+      // Allow clearing the slug
+      setReferralSlugSaving(true);
+      try {
+        await _supabase.from("profiles").update({ referral_slug: null }).eq("id", _spUser.id);
+        setReferralSlug("");
+        setReferralSlugMsg({ type: "ok", text: "Cleared." });
+      } catch(e) { setReferralSlugMsg({ type: "err", text: "Save failed." }); }
+      setReferralSlugSaving(false);
+      setTimeout(function() { setReferralSlugMsg(null); }, 3000);
+      return;
+    }
+    // Validate: letters, numbers, hyphens only, 3-40 chars
+    if (!/^[A-Za-z0-9-]{3,40}$/.test(raw)) {
+      setReferralSlugMsg({ type: "err", text: "Use only letters, numbers, and hyphens (3–40 chars)." });
+      return;
+    }
+    setReferralSlugSaving(true);
+    setReferralSlugMsg(null);
+    try {
+      // Check for duplicates
+      var { data: existing } = await _supabase.from("profiles")
+        .select("id").eq("referral_slug", raw).neq("id", _spUser.id).maybeSingle();
+      if (existing) {
+        setReferralSlugMsg({ type: "err", text: "That URL is already taken. Try another." });
+        setReferralSlugSaving(false);
+        return;
+      }
+      await _supabase.from("profiles").update({ referral_slug: raw }).eq("id", _spUser.id);
+      setReferralSlug(raw);
+      setReferralSlugMsg({ type: "ok", text: "Saved! Your link is live." });
+      setTimeout(function() { setReferralSlugMsg(null); }, 4000);
+    } catch(e) { setReferralSlugMsg({ type: "err", text: "Save failed. Try again." }); }
+    setReferralSlugSaving(false);
+  }
+
+  // ── Team sharing state ─────────────────────────────────────────────────
+  const [shareContacts, setShareContacts] = useState(function() {
+    try {
+      var u = JSON.parse(localStorage.getItem("mtk_app_user") || "null");
+      return !!(u && u.team_share_contacts);
+    } catch(e) { return false; }
+  });
+  const [shareContactsSaving, setShareContactsSaving] = useState(false);
+  const [shareContactsSaved,  setShareContactsSaved]  = useState(false);
+
+  // Always read fresh from Supabase when Team tab opens — localStorage can be stale
+  useEffect(function() {
+    if (settingsTab !== "team" || !_supabase || !_spUser || !_spUser.id) return;
+    (async function() {
+      try {
+        var { data } = await _supabase.from("profiles").select("team_share_contacts").eq("id", _spUser.id).single();
+        if (data) {
+          var val = !!(data.team_share_contacts);
+          setShareContacts(val);
+          // Keep localStorage in sync too
+          try {
+            var u = JSON.parse(localStorage.getItem("mtk_app_user") || "null");
+            if (u) { u.team_share_contacts = val; localStorage.setItem("mtk_app_user", JSON.stringify(u)); }
+          } catch(e) {}
+        }
+      } catch(e) {}
+    })();
+  }, [settingsTab]);
+
+  async function saveShareContacts(newVal) {
+    setShareContacts(newVal);
+    try {
+      var u = JSON.parse(localStorage.getItem("mtk_app_user") || "null");
+      if (!u || !u.id || !_supabase) return;
+      setShareContactsSaving(true);
+      await _supabase.from("profiles").update({ team_share_contacts: newVal }).eq("id", u.id);
+      // Update localStorage cache so toggle shows correct value on reopen
+      u.team_share_contacts = newVal;
+      try { localStorage.setItem("mtk_app_user", JSON.stringify(u)); } catch(e) {}
+      // Clear sessionStorage cache so team members reload fresh on next contact/scenario load
+      try { sessionStorage.removeItem("mtk_team_lead_shares_contacts"); } catch(e) {}
+      setShareContactsSaving(false);
+      setShareContactsSaved(true);
+      setTimeout(function() { setShareContactsSaved(false); }, 2500);
+    } catch(e) { setShareContactsSaving(false); }
+  }
+
   async function saveFuWhoOptions(newVal) {
     setFuWhoOptions(newVal);
     try {
@@ -248,16 +405,22 @@ function SettingsPanel({ open, onClose, darkMode, allModules, openTab }) {
 
   const inputStyle = { width: "100%", padding: "8px 12px", borderRadius: 6, border: `1px solid ${border}`, background: inputBg, color: fg, fontSize: 13, fontFamily: font };
 
+  // Full-page layout when open=true (no overlay)
   return (
-    <>
-      <div className="mtk-settings-overlay" onClick={onClose} />
-      <div className={`mtk-settings-panel${darkMode ? " dark" : ""}`} style={{ background: bg, color: fg }}>
-        <div style={{ padding: "20px 24px", borderBottom: `1px solid ${border}` }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontSize: 18, fontWeight: 700, fontFamily: font }}>⚙️ Settings</div>
-            <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: fg, padding: 4 }}>✕</button>
-          </div>
-          <div style={{ display: "flex", gap: 4, marginTop: 12 }}>
+    <div style={{
+      minHeight: "100dvh", background: bg, color: fg,
+      display: "flex", flexDirection: "column", fontFamily: font,
+    }}>
+      {/* ── Header ── */}
+      <div style={{
+        padding: "16px 24px", borderBottom: `1px solid ${border}`,
+        background: bg, position: "sticky", top: 0, zIndex: 10,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+          <div style={{ fontSize: 20, fontWeight: 800, color: fg, fontFamily: font }}>Settings</div>
+        </div>
+        {/* ── Tab bar ── */}
+        <div style={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
             <button onClick={() => setSettingsTab("branding")} style={tabStyle(settingsTab === "branding")}>Branding</button>
             <button onClick={() => setSettingsTab("templates")} style={tabStyle(settingsTab === "templates")}>Templates</button>
             <button onClick={() => setSettingsTab("scenarios")} style={tabStyle(settingsTab === "scenarios")}>Scenarios</button>
@@ -265,10 +428,12 @@ function SettingsPanel({ open, onClose, darkMode, allModules, openTab }) {
             <button onClick={() => setSettingsTab("portal")} style={tabStyle(settingsTab === "portal")}>Client Portal</button>
             {_spIsInternal && <button onClick={() => setSettingsTab("followup")} style={tabStyle(settingsTab === "followup")}>Follow-Up</button>}
             {_spIsInternal && <button onClick={() => setSettingsTab("warnings")} style={tabStyle(settingsTab === "warnings")}>Warnings</button>}
-            <button onClick={() => setSettingsTab("language")} style={tabStyle(settingsTab === "language")}>🌐 Language</button>
-          </div>
+            {_spIsInternal && <button onClick={() => setSettingsTab("team")} style={tabStyle(settingsTab === "team")}>Team</button>}
+            <button onClick={() => setSettingsTab("language")} style={tabStyle(settingsTab === "language")}>Language</button>
         </div>
-        <div style={{ padding: "20px 24px" }}>
+      </div>
+      {/* ── Content ── */}
+      <div style={{ flex: 1, padding: "28px 24px", maxWidth: 720, width: "100%", boxSizing: "border-box" }}>
           {settingsTab === "branding" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div style={{ fontSize: 13, fontWeight: 600, fontFamily: font }}>Customize how the toolkit appears</div>
@@ -775,9 +940,217 @@ function SettingsPanel({ open, onClose, darkMode, allModules, openTab }) {
               </div>
             );
           })()}
+
+          {settingsTab === "team" && _spIsInternal && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, fontFamily: font, color: fg }}>
+                Share my contacts with my team
+              </div>
+              <div style={{ fontSize: 13, color: darkMode ? "#8A9BAA" : "#64748B", fontFamily: font, lineHeight: 1.6 }}>
+                When enabled, your LOA and Processors can view and edit your contacts. They cannot delete contacts or export your data.
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", userSelect: "none" }}>
+                  <div
+                    onClick={function() { saveShareContacts(!shareContacts); }}
+                    style={{
+                      position: "relative", width: 44, height: 24, borderRadius: 99, cursor: "pointer",
+                      background: shareContacts ? "#22C55E" : (darkMode ? "#374151" : "#CBD5E1"),
+                      transition: "background 0.2s",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <div style={{
+                      position: "absolute", top: 3,
+                      left: shareContacts ? 22 : 3,
+                      width: 18, height: 18, borderRadius: "50%",
+                      background: "#fff",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
+                      transition: "left 0.2s",
+                    }} />
+                  </div>
+                  <span style={{ fontSize: 14, fontWeight: 600, fontFamily: font, color: shareContacts ? "#22C55E" : (darkMode ? "#8A9BAA" : "#94A3B0") }}>
+                    {shareContacts ? "On" : "Off"}
+                  </span>
+                </label>
+                {shareContactsSaving && (
+                  <span style={{ fontSize: 12, color: darkMode ? "#8A9BAA" : "#94A3B0", fontFamily: font }}>Saving…</span>
+                )}
+                {shareContactsSaved && !shareContactsSaving && (
+                  <span style={{ fontSize: 12, color: "#22C55E", fontFamily: font }}>Saved</span>
+                )}
+              </div>
+              <div style={{ fontSize: 12, color: darkMode ? "#6B7D8A" : "#94A3B0", fontFamily: font, lineHeight: 1.6 }}>
+                Changes take effect immediately. Your team members may need to refresh to see the update.
+              </div>
+
+              {/* ── Referral Link ──────────────────────────────── */}
+              <div style={{ marginTop: 8, borderTop: "1px solid " + (darkMode ? "#2A3A48" : "#E8EEF4"), paddingTop: 20 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, fontFamily: font, color: fg, marginBottom: 6 }}>
+                  Your Referral Link
+                </div>
+                <div style={{ fontSize: 12, color: darkMode ? "#8A9BAA" : "#64748B", fontFamily: font, lineHeight: 1.6, marginBottom: 14 }}>
+                  Create a custom URL that sends clients directly to your toolkit. Use letters, numbers, and hyphens — no spaces.
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 10 }}>
+                  <span style={{
+                    padding: "8px 10px", background: darkMode ? "#1A2A38" : "#F1F5F9",
+                    border: "1px solid " + border, borderRight: "none",
+                    borderRadius: "6px 0 0 6px", fontSize: 12, color: darkMode ? "#8A9BAA" : "#64748B",
+                    fontFamily: font, whiteSpace: "nowrap", lineHeight: 1,
+                  }}>homeloantoolkit.com/</span>
+                  <input
+                    value={referralSlugInput}
+                    onChange={function(e) {
+                      setReferralSlugInput(e.target.value.replace(/[^A-Za-z0-9-]/g, ""));
+                      setReferralSlugMsg(null);
+                    }}
+                    placeholder="CustomizeName"
+                    maxLength={40}
+                    style={Object.assign({}, inputStyle, {
+                      borderRadius: "0 6px 6px 0", borderLeft: "none", flex: 1,
+                    })}
+                  />
+                  <button
+                    onClick={saveReferralSlug}
+                    disabled={referralSlugSaving}
+                    style={{
+                      marginLeft: 8, padding: "8px 16px", borderRadius: 6,
+                      background: COLORS.navy, color: "#fff", border: "none",
+                      fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: font,
+                      opacity: referralSlugSaving ? 0.6 : 1, whiteSpace: "nowrap",
+                    }}
+                  >{referralSlugSaving ? "Saving…" : "Save"}</button>
+                </div>
+                {referralSlug && (
+                  <div style={{ fontSize: 12, color: darkMode ? "#8A9BAA" : "#475569", fontFamily: font, marginBottom: 6 }}>
+                    Current link:{" "}
+                    <a href={"https://www.homeloantoolkit.com/" + referralSlug} target="_blank" rel="noopener noreferrer"
+                      style={{ color: COLORS.blue, fontWeight: 600 }}>
+                      homeloantoolkit.com/{referralSlug}
+                    </a>
+                  </div>
+                )}
+                {referralSlugMsg && (
+                  <div style={{ fontSize: 12, fontFamily: font, fontWeight: 600,
+                    color: referralSlugMsg.type === "ok" ? "#22C55E" : "#ef4444" }}>
+                    {referralSlugMsg.text}
+                  </div>
+                )}
+              </div>
+
+              {/* ── Team Hierarchy ─────────────────────────────── */}
+              <div style={{ marginTop: 8, borderTop: "1px solid " + (darkMode ? "#2A3A48" : "#E8EEF4"), paddingTop: 20 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, fontFamily: font, color: fg, marginBottom: 14 }}>
+                  Team Structure
+                </div>
+
+                {teamHierarchyLoading && (
+                  <div style={{ fontSize: 13, color: darkMode ? "#6B7D8A" : "#94A3B0", fontFamily: font }}>Loading…</div>
+                )}
+
+                {!teamHierarchyLoading && teamHierarchy && (function() {
+                  var roleLabel = function(r) {
+                    return r === "lo" ? "Loan Officer" : r === "loa" ? "LOA" : r === "processor" ? "Processor" : r === "manager" ? "Branch Manager" : r || "—";
+                  };
+                  var memberRow = function(p, indent, isSelf) {
+                    return React.createElement("div", {
+                      key: p.id,
+                      style: {
+                        display: "flex", alignItems: "center", gap: 10,
+                        padding: "8px 12px", marginLeft: indent ? 24 : 0,
+                        borderRadius: 8,
+                        background: isSelf ? (darkMode ? "rgba(14,116,190,0.12)" : "rgba(12,65,96,0.06)") : "transparent",
+                        borderLeft: indent ? "2px solid " + (darkMode ? "#2A3A48" : "#D1E0EC") : "none",
+                      }
+                    },
+                      React.createElement("div", {
+                        style: {
+                          width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
+                          background: isSelf ? COLORS.navy : (darkMode ? "#2A3A48" : "#E2EBF3"),
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 12, fontWeight: 700,
+                          color: isSelf ? "#fff" : (darkMode ? "#8A9BAA" : "#4A6280"),
+                          fontFamily: font,
+                        }
+                      }, (p.display_name || p.email || "?").slice(0,2).toUpperCase()),
+                      React.createElement("div", { style: { flex: 1, minWidth: 0 } },
+                        React.createElement("div", {
+                          style: { fontSize: 13, fontWeight: isSelf ? 700 : 500, color: fg, fontFamily: font, display: "flex", alignItems: "center", gap: 6 }
+                        },
+                          p.display_name || p.email || "Unknown",
+                          isSelf && React.createElement("span", {
+                            style: { fontSize: 10, fontWeight: 700, color: COLORS.navy, background: darkMode ? "rgba(14,116,190,0.2)" : "#DBEAFE", borderRadius: 4, padding: "1px 6px", fontFamily: font }
+                          }, "You")
+                        ),
+                        React.createElement("div", {
+                          style: { fontSize: 11, color: darkMode ? "#6B7D8A" : "#94A3B0", fontFamily: font, marginTop: 1 }
+                        }, roleLabel(p.lmt_role))
+                      )
+                    );
+                  };
+
+                  // ── LO view ──────────────────────────────────────────
+                  if (teamHierarchy.mode === "lo") {
+                    var myProfile = { id: _spUser.id, display_name: _spUser.name || _spUser.email, email: _spUser.email, lmt_role: _spUser.lmt_role || "lo" };
+                    return React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 2 } },
+                      memberRow(myProfile, false, true),
+                      teamHierarchy.members.length === 0
+                        ? React.createElement("div", { style: { fontSize: 12, color: darkMode ? "#6B7D8A" : "#94A3B0", fontFamily: font, padding: "8px 12px 4px 36px", fontStyle: "italic" } }, "No team members linked yet. Ask your LOA or Processor to set you as their Team Lead in their profile.")
+                        : teamHierarchy.members.map(function(m) { return memberRow(m, true, false); })
+                    );
+                  }
+
+                  // ── LOA / Processor view ──────────────────────────────
+                  if (teamHierarchy.mode === "member") {
+                    var myProf = { id: _spUser.id, display_name: _spUser.name || _spUser.email, email: _spUser.email, lmt_role: _spUser.lmt_role };
+                    return React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 2 } },
+                      teamHierarchy.lead
+                        ? memberRow(teamHierarchy.lead, false, false)
+                        : React.createElement("div", { style: { fontSize: 12, color: darkMode ? "#6B7D8A" : "#94A3B0", fontFamily: font, padding: "8px 12px", fontStyle: "italic" } }, "No Team Lead set. Ask your admin to link you to an LO."),
+                      memberRow(myProf, true, true),
+                      teamHierarchy.teammates.map(function(m) { return memberRow(m, true, false); })
+                    );
+                  }
+
+                  // ── Admin / Branch Admin view ─────────────────────────
+                  if (teamHierarchy.mode === "admin") {
+                    var allProfiles = teamHierarchy.profiles || [];
+                    // Group: team leads = profiles with no team_lead_id (or lmt_role=lo/manager)
+                    var leads = allProfiles.filter(function(p) { return !p.team_lead_id; });
+                    var byLead = {};
+                    allProfiles.forEach(function(p) {
+                      if (p.team_lead_id) {
+                        if (!byLead[p.team_lead_id]) byLead[p.team_lead_id] = [];
+                        byLead[p.team_lead_id].push(p);
+                      }
+                    });
+                    if (leads.length === 0) {
+                      return React.createElement("div", { style: { fontSize: 12, color: darkMode ? "#6B7D8A" : "#94A3B0", fontFamily: font, fontStyle: "italic" } }, "No team structure found.");
+                    }
+                    return React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 12 } },
+                      leads.map(function(lead) {
+                        var reports = byLead[lead.id] || [];
+                        var isMe = lead.id === _spUser.id;
+                        return React.createElement("div", { key: lead.id, style: { borderRadius: 10, border: "1px solid " + (darkMode ? "#2A3A48" : "#E2EBF3"), overflow: "hidden" } },
+                          memberRow(lead, false, isMe),
+                          reports.length > 0
+                            ? React.createElement("div", { style: { borderTop: "1px solid " + (darkMode ? "#2A3A48" : "#E8EEF4"), paddingTop: 4, paddingBottom: 4 } },
+                                reports.map(function(m) { return memberRow(m, true, m.id === _spUser.id); })
+                              )
+                            : React.createElement("div", { style: { fontSize: 11, color: darkMode ? "#6B7D8A" : "#94A3B0", fontFamily: font, padding: "6px 12px 8px 36px", fontStyle: "italic" } }, "No members linked")
+                        );
+                      })
+                    );
+                  }
+
+                  return null;
+                })()}
+              </div>
+            </div>
+          )}
         </div>
       </div>
-    </>
   );
 }
 

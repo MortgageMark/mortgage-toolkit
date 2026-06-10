@@ -203,7 +203,7 @@ async function saveScenarioToSupabase({
   if (uid              !== undefined && uid) payload.scenario_id = uid;
   if (contact_id            !== undefined) payload.contact_id            = contact_id;
   if (co_borrower_contact_id !== undefined) payload.co_borrower_contact_id = co_borrower_contact_id || null;
-  if (lead_status      !== undefined) payload.lead_status      = lead_status;
+  payload.lead_status = (lead_status !== undefined) ? lead_status : "";
   if (loan_purpose     !== undefined) payload.loan_purpose     = loan_purpose;
   if (property_address !== undefined) payload.property_address = property_address || null;
   if (lead_source      !== undefined) payload.lead_source      = lead_source || null;
@@ -241,9 +241,33 @@ async function fetchScenariosFromSupabase() {
   const canSeeAll   = ADMIN_ROLES.includes(role);
 
   let query = supabase.from("scenarios").select("*").order("updated_at", { ascending: false });
-  // Non-admins always filter client-side to their own scenarios.
-  // RLS provides server-side enforcement; this is a defence-in-depth client filter.
-  if (!canSeeAll) query = query.eq("user_id", user.id);
+  // Non-admins filter to own scenarios + team lead's scenarios when sharing is enabled.
+  if (!canSeeAll) {
+    var _scTeamLeadId = null;
+    var _scTeamLeadShares = false;
+    try {
+      var _scCachedLeadId    = sessionStorage.getItem("mtk_team_lead_id");
+      var _scCachedLeadShare = sessionStorage.getItem("mtk_team_lead_shares_contacts");
+      if (_scCachedLeadId !== null && _scCachedLeadShare !== null) {
+        _scTeamLeadId    = _scCachedLeadId || null;
+        _scTeamLeadShares = _scCachedLeadShare === "1";
+      } else {
+        var { data: _scMyProf } = await supabase.from("profiles").select("team_lead_id").eq("id", user.id).single();
+        _scTeamLeadId = (_scMyProf && _scMyProf.team_lead_id) || null;
+        try { sessionStorage.setItem("mtk_team_lead_id", _scTeamLeadId || ""); } catch(e) {}
+        if (_scTeamLeadId) {
+          var { data: _scLeadProf } = await supabase.from("profiles").select("team_share_contacts").eq("id", _scTeamLeadId).single();
+          _scTeamLeadShares = !!(_scLeadProf && _scLeadProf.team_share_contacts);
+        }
+        try { sessionStorage.setItem("mtk_team_lead_shares_contacts", _scTeamLeadShares ? "1" : "0"); } catch(e) {}
+      }
+    } catch(e) {}
+    if (_scTeamLeadShares && _scTeamLeadId) {
+      query = query.or("user_id.eq." + user.id + ",user_id.eq." + _scTeamLeadId);
+    } else {
+      query = query.eq("user_id", user.id);
+    }
+  }
 
   const { data, error } = await query;
   if (error || !data) return { data: data || [], error };
@@ -475,10 +499,44 @@ async function fetchContactsFromSupabase() {
   const ADMIN_ROLES = ["super_admin", "admin", "branch_admin"];
   const isAdmin    = ADMIN_ROLES.includes(role);
 
+  // For team members (LOA/Processor): also load their team lead's contacts
+  // when the team lead has team_share_contacts = true.
+  var teamLeadId = null;
+  var teamLeadSharesContacts = false;
+  if (!isAdmin) {
+    try {
+      var cachedLeadId = sessionStorage.getItem("mtk_team_lead_id");
+      var cachedLeadShare = sessionStorage.getItem("mtk_team_lead_shares_contacts");
+      if (cachedLeadId !== null && cachedLeadShare !== null) {
+        teamLeadId = cachedLeadId || null;
+        teamLeadSharesContacts = cachedLeadShare === "1";
+      } else {
+        var { data: myProf } = await supabase.from("profiles").select("team_lead_id").eq("id", user.id).single();
+        teamLeadId = (myProf && myProf.team_lead_id) || null;
+        try { sessionStorage.setItem("mtk_team_lead_id", teamLeadId || ""); } catch(e) {}
+        if (teamLeadId) {
+          var { data: leadProf } = await supabase.from("profiles").select("team_share_contacts").eq("id", teamLeadId).single();
+          teamLeadSharesContacts = !!(leadProf && leadProf.team_share_contacts);
+        }
+        try { sessionStorage.setItem("mtk_team_lead_shares_contacts", teamLeadSharesContacts ? "1" : "0"); } catch(e) {}
+      }
+    } catch(e) {}
+  }
+
   let query = supabase.from("contacts").select("*").order("updated_at", { ascending: false });
   // Non-admins always filter client-side for defence-in-depth.
-  // LOs see contacts they created OR are assigned to as LO.
-  if (!isAdmin) query = query.or(`created_by_user_id.eq.${user.id},assigned_lo_id.eq.${user.id}`);
+  if (!isAdmin) {
+    if (teamLeadSharesContacts && teamLeadId) {
+      query = query.or(
+        "created_by_user_id.eq." + user.id +
+        ",assigned_lo_id.eq." + user.id +
+        ",created_by_user_id.eq." + teamLeadId +
+        ",assigned_lo_id.eq." + teamLeadId
+      );
+    } else {
+      query = query.or("created_by_user_id.eq." + user.id + ",assigned_lo_id.eq." + user.id);
+    }
+  }
 
   const { data, error } = await query;
   return { data: data || [], error };
@@ -488,7 +546,7 @@ async function fetchContactsFromSupabase() {
 async function saveContactToSupabase({
   contactId, prefix, first_name, last_name, nickname,
   company, team_name, photo_url, logo_url, team_logo_url, signature_url,
-  contact_type, contact_category, referred_by_contact_id,
+  contact_type, contact_category, contact_subcategory, referred_by_contact_id,
   // phone
   phone_cell, phone_work, phone_home, phone_best,
   // email
@@ -528,6 +586,7 @@ async function saveContactToSupabase({
     signature_url: signature_url || null,
     contact_type:           contact_type           || "client",
     contact_category:       contact_category       || null,
+    contact_subcategory:    contact_subcategory    || null,
     referred_by_contact_id: referred_by_contact_id || null,
     // phone
     phone_cell: phone_cell || null,
@@ -590,6 +649,10 @@ async function saveContactToSupabase({
     tags:   tags   || [],
     source: source || "",
   };
+  // Trim all string values — universal rule, covers both add and edit paths
+  Object.keys(payload).forEach(function(k) {
+    if (typeof payload[k] === "string") payload[k] = payload[k].trim() || null;
+  });
   if (contactId) {
     const { data, error } = await supabase
       .from("contacts").update(payload).eq("id", contactId).select().single();

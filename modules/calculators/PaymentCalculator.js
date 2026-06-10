@@ -1240,24 +1240,19 @@ function PaymentCalculator({ isInternal, user }) {
                   infoTip: "Used only to show the loan limit for your county — it doesn't affect your payment calculation. Leave blank if you're searching a wide area or don't know the county yet. If your loan is well under the floor shown, you don't need to worry about this.",
                   options: countyOptions,
                 }),
-                isFHAorConv && React.createElement("div", {
+                isFHAorConv && over2 && React.createElement("div", {
                   style: {
                     display: "flex", alignItems: "center", justifyContent: "space-between",
                     marginTop: -4, marginBottom: 6, padding: "7px 12px", borderRadius: 7,
-                    background: over2 ? "#FEF2F2" : limitAmt2 ? "#F0FDF4" : "#F8FAFC",
-                    border: "1px solid " + (over2 ? "#FECACA" : limitAmt2 ? "#86EFAC" : "#E2E8F0"),
+                    background: "#FEF2F2", border: "1px solid #FECACA",
                     fontSize: 12, fontFamily: font,
                   }
                 },
-                  React.createElement("span", { style: { color: over2 ? "#DC2626" : limitAmt2 ? "#16a34a" : "#64748b", fontWeight: 500 } },
-                    over2
-                      ? "⚠️ Exceeds " + programLabel2 + " limit for " + pcCounty
-                      : limitAmt2
-                        ? "✓ Within " + programLabel2 + " limit — " + pcCounty
-                        : "Selecting a county helps determine loan limits —"
+                  React.createElement("span", { style: { color: "#DC2626", fontWeight: 500 } },
+                    "⚠️ Exceeds " + programLabel2 + " limit for " + pcCounty
                   ),
-                  React.createElement("span", { style: { color: over2 ? "#DC2626" : limitAmt2 ? "#15803d" : "#64748b", fontWeight: 700 } },
-                    "$" + (limitAmt2 || floorAmt).toLocaleString("en-US")
+                  React.createElement("span", { style: { color: "#DC2626", fontWeight: 700 } },
+                    "$" + limitAmt2.toLocaleString("en-US")
                   )
                 )
               );
@@ -1320,12 +1315,8 @@ function PaymentCalculator({ isInternal, user }) {
               if (loanProgram === "fha" && la > fhaLimit) {
                 warnings.push({ color: "#dc2626", bg: "#fef2f2", border: "#fca5a5", icon: "⚠️", text: countyKnown ? `Loan amount exceeds the FHA limit for ${pcCounty} (${fmt(fhaLimit)}).` : `Loan amount may exceed the FHA limit for this county. Select a county above to verify.` });
               }
-              if (isConvType && la > conformingLimit * 0.95 && la <= conformingLimit) {
-                warnings.push({ color: "#2563eb", bg: "#eff6ff", border: "#93c5fd", icon: "ℹ️", text: `Loan amount is within 5% of the ${countyKnown ? pcCounty + " conforming" : "standard conforming"} limit (${fmt(conformingLimit)}). Consider staying below to avoid jumbo pricing.` });
-              }
-              if (loanProgram === "fha" && la > fhaLimit * 0.95 && la <= fhaLimit) {
-                warnings.push({ color: "#2563eb", bg: "#eff6ff", border: "#93c5fd", icon: "ℹ️", text: `Loan amount is approaching the FHA limit${countyKnown ? " for " + pcCounty : " for this area"} (${fmt(fhaLimit)}).` });
-              }
+              // (5% conforming proximity note removed — shown inline under loan amount instead)
+              // (FHA approaching limit note removed — shown inline under loan amount instead)
 
               // ── Conventional 2-4 unit LTV limits (Fannie Mae eligibility matrix) ──
               // 2-unit primary:     85% purchase / rate-term,  75% cash-out
@@ -1575,18 +1566,16 @@ function PaymentCalculator({ isInternal, user }) {
               return React.createElement("div", {
                 style: {
                   display: "flex", alignItems: "center", justifyContent: "space-between",
-                  marginTop: 4, marginBottom: 4, padding: "7px 12px", borderRadius: 7,
-                  background: overLa ? "#FEF2F2" : limitAmtLa ? "#F0FDF4" : "#F8FAFC",
-                  border: "1px solid " + (overLa ? "#FECACA" : limitAmtLa ? "#86EFAC" : "#E2E8F0"),
+                  marginTop: 4, marginBottom: 2, padding: "3px 2px",
                   fontSize: 12, fontFamily: font,
                 }
               },
-                React.createElement("span", { style: { color: overLa ? "#DC2626" : limitAmtLa ? "#16a34a" : "#64748b", fontWeight: 500 } },
+                React.createElement("span", { style: { color: overLa ? "#DC2626" : "#64748b", fontWeight: 500 } },
                   overLa      ? "⚠️ Exceeds " + progLabelLa + " limit for " + pcCounty
-                  : limitAmtLa ? "✓ Within " + progLabelLa + " limit — " + pcCounty
+                  : limitAmtLa ? progLabelLa + " limit — " + pcCounty
                   : "Selecting a county helps determine loan limits —"
                 ),
-                React.createElement("span", { style: { color: overLa ? "#DC2626" : limitAmtLa ? "#15803d" : "#64748b", fontWeight: 700 } },
+                React.createElement("span", { style: { color: overLa ? "#DC2626" : "#64748b", fontWeight: 600 } },
                   "$" + (limitAmtLa || floorAmtLa).toLocaleString("en-US")
                 )
               );
@@ -2413,12 +2402,12 @@ function PaymentCalculator({ isInternal, user }) {
                   </SectionCard>
                 );
               })()}
-              {/* ── MI OVERRIDES (LO ONLY) — moved above PMI table ── */}
+              {/* ── MI OVERRIDES (INTERNAL) — moved above PMI table ── */}
               {isInternal && (() => {
                 const la = parseFloat(loanAmount) || 0;
                 const hasOverride = parseFloat(monthlyMiOvr) > 0 || parseFloat(upfrontMiOvr) > 0;
                 return (
-                  <SectionCard title="MI OVERRIDES (LO ONLY)" accent={c.blue}>
+                  <SectionCard title="MI OVERRIDES (INTERNAL)" accent={c.blue}>
                     <div style={{ fontSize: 12, color: c.gray, fontFamily: font, lineHeight: 1.6, marginBottom: 14 }}>
                       Enter a factor <em>or</em> a dollar amount to override the system-calculated MI. Leave blank to use the auto value.
                       {hasOverride && <span style={{ marginLeft: 8, color: "#b45309", fontWeight: 700 }}>⚠ Override active</span>}
@@ -2500,8 +2489,8 @@ function PaymentCalculator({ isInternal, user }) {
                 );
               })()}
 
-              {/* ── PMI BY DOWN PAYMENT — INTERNAL ── */}
-              {_miInt && isConvType && loanProgram !== "jumbo" && calc.ltv > 80 && (parseFloat(homePrice) || 0) > 0 && (() => {
+              {/* ── PMI BY DOWN PAYMENT — ADMIN ONLY ── */}
+              {isAdmin && isConvType && loanProgram !== "jumbo" && calc.ltv > 80 && (parseFloat(homePrice) || 0) > 0 && (() => {
                 const hp3 = parseFloat(homePrice) || 0;
                 const la3 = parseFloat(loanAmount) || 0;
                 const currentDP    = hp3 - la3;

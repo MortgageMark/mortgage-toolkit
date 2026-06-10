@@ -19,10 +19,13 @@ function AppHeader({
   onTeam,
   onTemplates,
   onWarnings,
+  onSettings,
   onModules,
   onLogout,
   isInternal,
   isAdmin,
+  onClientView,
+  clientViewMode,
 }) {
   const [showProfile, setShowProfile] = _ahUseState(false);
   const [dropPos, setDropPos] = _ahUseState(null);
@@ -151,7 +154,7 @@ function AppHeader({
                 style={dropItem}
                 onClick={() => { onContactInfo(); setShowProfile(false); }}
               >
-                👤 My Profile
+                My Profile
               </button>
             )}
 
@@ -160,7 +163,7 @@ function AppHeader({
                 style={dropItem}
                 onClick={() => { onLoginSettings(); setShowProfile(false); }}
               >
-                🔑 Login & Password
+                Login &amp; Password
               </button>
             )}
 
@@ -169,39 +172,39 @@ function AppHeader({
                 style={dropItem}
                 onClick={() => { onMyProfile(); setShowProfile(false); }}
               >
-                👤 My Profile
+                My Profile
               </button>
             )}
 
+            {onTeam && (
+              <button
+                style={dropItem}
+                onClick={() => { onTeam(); setShowProfile(false); }}
+              >
+                Teams &amp; Users
+              </button>
+            )}
 
             <hr style={divider} />
             <div style={sectionLabel}>Settings</div>
 
-            <button
-              style={dropItem}
-              onClick={() => { setDarkMode(!darkMode); setShowProfile(false); }}
-            >
-              {darkMode ? "☀️  Light Mode" : "🌙  Dark Mode"}
-            </button>
-
             {isInternal && onTemplates && (
-              <button
-                style={dropItem}
-                onClick={() => { onTemplates(); setShowProfile(false); }}
-              >
-                📋 Templates
-              </button>
+              <button style={dropItem} onClick={() => { onTemplates(); setShowProfile(false); }}>Templates</button>
             )}
-
             {isInternal && onWarnings && (
+              <button style={dropItem} onClick={() => { onWarnings(); setShowProfile(false); }}>Warnings</button>
+            )}
+            {isInternal && onSettings && (
+              <button style={dropItem} onClick={() => { onSettings(); setShowProfile(false); }}>Team</button>
+            )}
+            {isInternal && onClientView && (
               <button
-                style={dropItem}
-                onClick={() => { onWarnings(); setShowProfile(false); }}
+                style={{ ...dropItem, color: clientViewMode ? "#d97706" : "#1B2A3B", fontWeight: clientViewMode ? 700 : 500 }}
+                onClick={() => { onClientView(); setShowProfile(false); }}
               >
-                ⚠️ Warnings
+                {clientViewMode ? "✓ Client View (on)" : "View as Client"}
               </button>
             )}
-
 
             {isAdmin && setUserRole && (
               <>
@@ -210,11 +213,7 @@ function AppHeader({
                 {["admin", "lo", "realtor", "builder", "client"].map(r => (
                   <button
                     key={r}
-                    style={{
-                      ...dropItem,
-                      fontWeight: userRole === r ? 700 : 500,
-                      color: userRole === r ? "#2563eb" : "#1B2A3B",
-                    }}
+                    style={{ ...dropItem, fontWeight: userRole === r ? 700 : 500, color: userRole === r ? "#2563eb" : "#1B2A3B" }}
                     onClick={() => { setUserRole(r); setShowProfile(false); }}
                   >
                     {userRole === r ? "✓ " : "   "}{roleLabels[r]}
@@ -223,25 +222,25 @@ function AppHeader({
               </>
             )}
 
-            <hr style={divider} />
-            <button
-              style={dropItem}
-              onClick={() => {
-                // Always read fresh from localStorage — never trust stale React state
-                var currentLang = "en";
-                try { var _cl = localStorage.getItem("app_lang"); if (_cl) { try { currentLang = JSON.parse(_cl); } catch(e) { currentLang = _cl; } } } catch(e) {}
-                var next = currentLang === "es" ? "en" : "es";
-                try { localStorage.setItem("app_lang", JSON.stringify(next)); } catch(e) {}
-                try {
-                  var _scen = localStorage.getItem("active_scenario");
-                  if (_scen && _scen !== "null") sessionStorage.setItem("mtk_lang_scenario", _scen);
-                } catch(e) {}
-                setShowProfile(false);
-                setTimeout(function() { window.location.reload(); }, 50);
-              }}
-            >
-              {appLang === "es" ? "🇺🇸 Switch to English" : "🇲🇽 Cambiar a Español"}
-            </button>
+            {isAdmin && (
+              <button
+                style={dropItem}
+                onClick={() => {
+                  var currentLang = "en";
+                  try { var _cl = localStorage.getItem("app_lang"); if (_cl) { try { currentLang = JSON.parse(_cl); } catch(e) { currentLang = _cl; } } } catch(e) {}
+                  var next = currentLang === "es" ? "en" : "es";
+                  try { localStorage.setItem("app_lang", JSON.stringify(next)); } catch(e) {}
+                  try {
+                    var _scen = localStorage.getItem("active_scenario");
+                    if (_scen && _scen !== "null") sessionStorage.setItem("mtk_lang_scenario", _scen);
+                  } catch(e) {}
+                  setShowProfile(false);
+                  setTimeout(function() { window.location.reload(); }, 50);
+                }}
+              >
+                {appLang === "es" ? "English" : "Spanish"}
+              </button>
+            )}
 
             <hr style={divider} />
             <a
@@ -249,16 +248,18 @@ function AppHeader({
               style={{ ...dropItem, textDecoration: "none", display: "block" }}
               onClick={() => setShowProfile(false)}
             >
-              ❓ Help &amp; Support
+              Help
             </a>
-
-            <hr style={divider} />
             <button
               style={{ ...dropItem, color: "#dc2626" }}
               onClick={() => { setShowProfile(false); onLogout(); }}
             >
               Log Out
             </button>
+
+            <div style={{ padding: "6px 16px 8px", fontSize: 10, color: "#94a3b8", fontFamily: f, letterSpacing: "0.04em", userSelect: "none" }}>
+              v202506101542
+            </div>
           </div>
         )}
       </div>

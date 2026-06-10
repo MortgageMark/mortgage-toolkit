@@ -10,9 +10,10 @@ const cdSaveScenario = window.saveScenarioToSupabase;
 
 // Lead helpers (mirrors ScenarioDashboard)
 function cdGetLeadStatusColors(leadStatus) {
-  if (!leadStatus || leadStatus === "?")  return { bg: "rgba(107,114,128,0.12)", text: "#6b7280" };
+  if (!leadStatus)  return { bg: "rgba(107,114,128,0.12)", text: "#6b7280" };
+  if (leadStatus === "?")                return { bg: "rgba(139,92,246,0.15)",  text: "#7c3aed" };
   if (leadStatus.startsWith("("))        return { bg: "rgba(59,130,246,0.12)",  text: "#1d4ed8" };
-  if (leadStatus.startsWith("Waiting"))  return { bg: "rgba(245,158,11,0.12)",  text: "#b45309" };
+  if (leadStatus.startsWith("Waiting") || leadStatus === ".Suspended")  return { bg: "rgba(245,158,11,0.12)",  text: "#b45309" };
   if (leadStatus.startsWith("z"))        return { bg: "rgba(107,114,128,0.12)", text: "#6b7280" };
   return { bg: "rgba(34,197,94,0.12)", text: "#16a34a" };
 }
@@ -36,11 +37,16 @@ const CONTACT_TYPE_COLORS_CD = {
   client:   { bg: "#dcfce7", text: "#166534" },
 };
 
-const CD_BUSINESS_CATEGORIES = [
-  "Employee", "Financial Partner", "Home Builder", "Loan: Third Party",
-  "Loan Officer", "Marketing", "Other", "Personal", "Realtor", "Recruit",
-  "Work Relationship", "zz-Junk",
-];
+// Two-level category structure: alpha order, Other last at each level
+const CD_BIZ_CAT_TREE = {
+  "Builder": [],
+  "Lender":  ["Branch Manager", "Employee", "LOA", "Loan Officer", "Processor"],
+  "Realtor": [],
+  "Vendor":  ["Appraiser", "Insurance", "Title", "Other"],
+  "Other":   ["Financial", "Marketing", "Personal"],
+};
+const CD_BIZ_CATS = ["Builder", "Lender", "Realtor", "Vendor", "Other"];
+const CD_BUSINESS_CATEGORIES = CD_BIZ_CATS; // alias for any remaining references
 
 const CD_CLIENT_CATEGORIES = [
   "Client",
@@ -987,7 +993,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
       .from("contacts")
       .select("id, first_name, last_name, company, lo_title, contact_category")
       .eq("contact_type", "business")
-      .in("contact_category", ["Loan Officer", "Realtor", "Builder"])
+      .in("contact_category", ["Lender", "Realtor", "Builder"])
       .order("first_name", { ascending: true })
       .then(function(res) {
         if (!res.error && res.data) setLoContacts(res.data);
@@ -1027,6 +1033,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
     // Classification
     contact_type:           contact.contact_type            || "client",
     contact_category:       contact.contact_category        || "",
+    contact_subcategory:    contact.contact_subcategory     || "",
     referred_by_contact_id: contact.referred_by_contact_id  || null,
     assigned_lo_id:         contact.assigned_lo_id          || null,
     // Phone (fall back to legacy phone field for existing records)
@@ -1306,7 +1313,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
       // propagate the new profile fields immediately without requiring a re-login.
       var isOwnLoContact = (
         editForm.contact_type === "business" &&
-        editForm.contact_category === "Loan Officer" &&
+        editForm.contact_category === "Lender" &&
         user &&
         (editForm.email_personal === user.email || editForm.email_work === user.email)
       );
@@ -1364,7 +1371,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
         notes:           "",
         calculationData: { uid: uid },
         contact_id:      contact.id,
-        lead_status:     "?",
+        lead_status:     "",
         loan_purpose:    "purchase",
       });
       if (error || !data) { alert("Could not create scenario. Please try again."); return; }
@@ -1374,7 +1381,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
         notes:            "",
         createdBy:        data.user_id,
         status:           "active",
-        lead_status:      "?",
+        lead_status:      "",
         loan_purpose:     "purchase",
         contact_id:       contact.id,
         calculatorData:   {},
@@ -1410,7 +1417,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
         createdAt:        data.created_at,
         updatedAt:        data.updated_at,
         status:           data.status        || "active",
-        lead_status:      data.lead_status   || "?",
+        lead_status:      data.lead_status   || "",
         loan_purpose:     data.loan_purpose  || "purchase",
         property_address: data.property_address || "",
         contact_id:       data.contact_id    || null,
@@ -1961,7 +1968,14 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                       </div>
                     </div>
                     <div>
-                      <label style={labelStyle}>Permanent Note</label>
+                      <label style={Object.assign({}, labelStyle, { display: "flex", alignItems: "center", gap: 5 })}>
+                        Permanent Note
+                        <span title={"Use this for things you want to quickly reference:\n• \"Listing Agent for John Smith's purchase\"\n• \"Goal: 12 buyer + 12 listing sides; did 15 last year\"\n• \"Kids: Bobby (boy, 2010) and Taylor (boy, 2015)\"\n• \"Has a golden retriever named Fido\""}
+                          style={{ display: "inline-flex", alignItems: "center", justifyContent: "center",
+                            width: 15, height: 15, borderRadius: "50%", background: "#94a3b8",
+                            color: "#fff", fontSize: 10, fontWeight: 700, cursor: "default",
+                            flexShrink: 0, lineHeight: 1 }}>i</span>
+                      </label>
                       <textarea style={Object.assign({}, fieldStyle, { minHeight: "80px", resize: "vertical" })}
                         value={editForm.notes}
                         onChange={function(e) { handleFieldChange("notes", e.target.value); }} />
@@ -1970,7 +1984,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                 ) : (
                   <React.Fragment>
                     <InfoRow label="Quick Note"     value={contact.note_quick || null} />
-                    <InfoRow label="Permanent Note" value={contact.notes || null} />
+                    <InfoRow label="Permanent Note ⓘ" value={contact.notes || null} labelTitle={"Use for quick-reference info:\n• Listing Agent for John Smith's purchase\n• Goal: 12 buyer + 12 listing sides\n• Kids: Bobby (boy, 2010) and Taylor (boy, 2015)\n• Has a golden retriever named Fido"} />
                   </React.Fragment>
                 )}
               </div>
@@ -2115,8 +2129,8 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
 
         </div>
 
-        {/* Internal Info - LO/Admin only, hidden when LO views their own card */}
-        {(isInternal || isAdmin) && !isOwnProfile && (
+        {/* Internal Info - LO/Admin only */}
+        {(isInternal || isAdmin) && (
           <div style={sectionStyle} onDoubleClick={cardDoubleClick}>
             <div style={sectionTitleStyle}>Lead Details (Internal)</div>
             {editMode ? (
@@ -2129,7 +2143,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                       onChange={function(e) {
                         var newType = e.target.value;
                         var defaultCat = newType === "business" ? "Other" : "Client";
-                        setEditForm(function(prev) { return Object.assign({}, prev, { contact_type: newType, contact_category: defaultCat }); });
+                        setEditForm(function(prev) { return Object.assign({}, prev, { contact_type: newType, contact_category: defaultCat, contact_subcategory: "" }); });
                       }}>
                       <option value="client">Client</option>
                       <option value="business">Business</option>
@@ -2138,11 +2152,21 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                   <div>
                     <label style={labelStyle}>Category</label>
                     <select style={fieldStyle} value={editForm.contact_category}
-                      onChange={function(e) { handleFieldChange("contact_category", e.target.value); }}>
-                      {(editForm.contact_type === "business" ? CD_BUSINESS_CATEGORIES : CD_CLIENT_CATEGORIES)
+                      onChange={function(e) { setEditForm(function(prev) { return Object.assign({}, prev, { contact_category: e.target.value, contact_subcategory: "" }); }); }}>
+                      {(editForm.contact_type === "business" ? CD_BIZ_CATS : CD_CLIENT_CATEGORIES)
                         .map(function(cat) { return <option key={cat} value={cat}>{cat}</option>; })}
                     </select>
                   </div>
+                  {editForm.contact_type === "business" && CD_BIZ_CAT_TREE[editForm.contact_category] && CD_BIZ_CAT_TREE[editForm.contact_category].length > 0 && (
+                    <div>
+                      <label style={labelStyle}>Subcategory</label>
+                      <select style={fieldStyle} value={editForm.contact_subcategory || ""}
+                        onChange={function(e) { handleFieldChange("contact_subcategory", e.target.value); }}>
+                        <option value="">— Select —</option>
+                        {CD_BIZ_CAT_TREE[editForm.contact_category].map(function(sub) { return <option key={sub} value={sub}>{sub}</option>; })}
+                      </select>
+                    </div>
+                  )}
                 </div>
                 {/* Right: Source + Assigned LO */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px", ...rightColStyle }}>
@@ -2178,7 +2202,7 @@ function ContactDetail({ contact, user, onBack, onSave, onArchive, onDelete, onL
                 {/* Left: Type + Category */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 <InfoRow label="Type" value={contact.contact_type ? contact.contact_type.charAt(0).toUpperCase() + contact.contact_type.slice(1) : ""} />
-                <InfoRow label="Category" value={contact.contact_category} />
+                <InfoRow label="Category" value={contact.contact_category + (contact.contact_subcategory ? " · " + contact.contact_subcategory : "")} />
                 </div>
                 {/* Right: Source + Assigned LO + Creator + Referral */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px", ...rightColStyle }}>

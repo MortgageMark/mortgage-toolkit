@@ -147,7 +147,6 @@ function DisclaimerModal({ onAck }) {
           fontFamily: _font,
           lineHeight: 1.7,
         }}>
-          Mark Pfeiffer | NMLS #729612 | CMG Home Loans | NMLS #1820<br />
           Equal Housing Lender | Not affiliated with HUD or any government agency.<br />
           NMLS Consumer Access: www.nmlsconsumeraccess.org
         </div>
@@ -1003,13 +1002,14 @@ function App() {
   const [showUsers,            setShowUsers]            = React.useState(false);
   const [showTasksScenarios,   setShowTasksScenarios]   = React.useState(false);
   const [showTasksContacts,    setShowTasksContacts]    = React.useState(false);
-  const [showActivityReport,   setShowActivityReport]   = React.useState(false);
   const [showLODashboard,      setShowLODashboard]      = React.useState(false);
   const [showMyProfile,        setShowMyProfile]        = React.useState(false);
   const [myProfileFull,        setMyProfileFull]        = React.useState(null);
   const [showChangePassword,   setShowChangePassword]   = React.useState(false);
   const [showLoginSettings,    setShowLoginSettings]    = React.useState(false);
+  const [showAppSettings,      setShowAppSettings]      = React.useState(false);
   const [showLoSetupPrompt,    setShowLoSetupPrompt]    = React.useState(false);
+  const [clientViewMode,       setClientViewMode]       = React.useState(false);
   const [sidebarPinned,        setSidebarPinned]        = React.useState(true);
   const [mobileSidebarOpen,    setMobileSidebarOpen]    = React.useState(false);
   const [isMobile,             setIsMobile]             = React.useState(window.innerWidth < 768);
@@ -1051,6 +1051,27 @@ function App() {
     var liveId    = params.get("live");
     var loNmls    = params.get("lo");
     var fromId    = params.get("from");
+
+    // Handle clean slug URLs like /TeamMazz — look up LO and store their NMLS
+    (async function() {
+      try {
+        var slugMatch = window.location.pathname.match(/^\/([A-Za-z0-9][A-Za-z0-9-]{1,39})$/);
+        if (slugMatch) {
+          var slug = slugMatch[1];
+          var _sc = window._supabaseClient;
+          if (_sc) {
+            var { data: slugProfile } = await _sc.from("profiles")
+              .select("id, nmls, display_name")
+              .eq("referral_slug", slug)
+              .maybeSingle();
+            if (slugProfile && slugProfile.nmls) {
+              try { sessionStorage.setItem("mtk_lo_ref", String(slugProfile.nmls)); } catch(e2) {}
+              window.history.replaceState({}, "", "/");
+            }
+          }
+        }
+      } catch(e) {}
+    })();
 
     // Handle ?lo= referral link — store NMLS so LoginScreen can auto-assign
     if (loNmls) {
@@ -1192,7 +1213,7 @@ function App() {
                 .from("contacts")
                 .select("first_name, last_name, lo_title, lo_nmls, lo_email_display, lo_company_nmls, lo_branch_nmls, lo_website, phone_cell, phone_work, company, address1_street, address1_city, address1_state, address1_zip")
                 .eq("contact_type", "business")
-                .eq("contact_category", "Loan Officer")
+                .eq("contact_category", "Lender")
                 .or("email_personal.eq." + user.email + ",email_work.eq." + user.email)
                 .limit(1)
                 .maybeSingle()
@@ -1766,7 +1787,8 @@ function App() {
   };
 
   // ── Determine page content (single return below) ──────────────────
-  const isPartner = !!(loggedInUser && (loggedInUser.role === "realtor" || loggedInUser.role === "builder"));
+  const isPartner  = !!(loggedInUser && (loggedInUser.role === "realtor" || loggedInUser.role === "builder"));
+  const isAdminUser = !!(loggedInUser && ["admin","branch_admin","super_admin"].includes(loggedInUser.role));
   const showDashboard = isInternal || (loggedInUser && loggedInUser.supabaseUser);
 
   let pageContent;
@@ -1829,18 +1851,22 @@ function App() {
         onClose={function() { setShowLoginSettings(false); }}
       />
     );
+  } else if (showAppSettings && isInternal) {
+    const _SP = window.SettingsPanel;
+    pageContent = _SP
+      ? React.createElement(_SP, {
+          open: true,
+          onClose: function() { setShowAppSettings(false); },
+          darkMode: darkMode,
+          allModules: [],
+          openTab: "team",
+        })
+      : React.createElement("div", { style: { padding: 40 } }, "Loading settings…");
   } else if (showLODashboard && (isInternal || isPartner)) {
     const LODashboard = window.LODashboard;
     pageContent = LODashboard
       ? React.createElement(LODashboard, { user: loggedInUser })
       : React.createElement("div", { style: { padding: 40 } }, "Dashboard loading…");
-  } else if (showActivityReport && isInternal) {
-    pageContent = (
-      <ActivityReportPage
-        user={loggedInUser}
-        onBack={function() { setShowActivityReport(false); }}
-      />
-    );
   } else if (showUsers) {
     pageContent = (
       <UsersPanel
@@ -1918,6 +1944,7 @@ function App() {
         onUsers={isInternal ? function() { setShowUsers(true); } : null}
         onMyInfo={loggedInUser && loggedInUser.supabaseUser ? function() { isInternal ? setShowMyProfile(true) : setShowMyInfo(true); } : null}
         onLoginSettings={(!isInternal && loggedInUser && loggedInUser.supabaseUser) ? function() { setShowLoginSettings(true); } : null}
+        onSettings={isInternal ? function() { setShowAppSettings(true); } : null}
       />
     );
   } else {
@@ -1948,8 +1975,8 @@ function App() {
   // Sidebar is visible for internal/partner users on non-scenario screens
   // Also show sidebar when Teams/Contacts is open (even if a scenario is active) so user can navigate back
   const showSidebar = !!((isInternal || isPartner) && loggedInUser && !authLoading &&
-    (!activeScenario || showUsers || showContacts) &&
-    !showChangePassword && !showProfileSetup && !showMyInfo && !showMyProfile);
+    (!activeScenario || showUsers || showContacts || showMyProfile) &&
+    !showChangePassword && !showProfileSetup && !showMyInfo);
   const sidebarWidth = showSidebar && !isMobile ? (sidebarPinned ? 220 : 42) : 0;
 
   // Expose sidebar width as CSS variable so fixed-positioned children (e.g. save bar) can offset correctly
@@ -2130,69 +2157,39 @@ function App() {
                 Dashboard
               </div>
             )}
-            {(isInternal || isPartner) && sidebarNavBtn("Dashboard", showLODashboard, function() {
+            {isAdminUser && !clientViewMode && sidebarNavBtn("Dashboard", showLODashboard, function() {
               setShowLODashboard(true);
               setShowContacts(false);
               setShowTasksScenarios(false);
               setShowTasksContacts(false);
               setShowUsers(false);
-              setShowActivityReport(false);
               if (isMobile) setMobileSidebarOpen(false);
             }, "📊")}
-            {(isInternal || isPartner) && sidebarNavBtn(t("People"), showContacts && !showTasksContacts, function() {
+            {(isInternal || isPartner) && !clientViewMode && sidebarNavBtn(t("Contacts"), showContacts && !showTasksContacts, function() {
               setTypeFilter("all");
               setContactsKey(function(k) { return k + 1; });
               setShowContacts(true);
               setShowTasksScenarios(false);
               setShowTasksContacts(false);
               setShowUsers(false);
-              setShowActivityReport(false);
               setShowLODashboard(false);
               setPendingContactId(null);
               if (isMobile) setMobileSidebarOpen(false);
             }, "👤")}
             {(function() {
-              const active = !showContacts && !showTasksScenarios && !showTasksContacts && !showActivityReport && !showLODashboard && groupFilter === "active";
+              const active = !showContacts && !showTasksScenarios && !showTasksContacts && !showLODashboard && groupFilter === "active";
               return sidebarNavBtn(t("Scenarios"), active, function() {
                 setGroupFilter("active");
                 setShowContacts(false);
                 setShowTasksScenarios(false);
                 setShowTasksContacts(false);
                 setShowUsers(false);
-                setShowActivityReport(false);
-                setShowLODashboard(false);
+                  setShowLODashboard(false);
                 if (activeScenario !== null) { handleBackToScenarios(); }
                 if (isMobile) setMobileSidebarOpen(false);
               }, "📋");
             })()}
 
-            {/* ── Activity Report (internal only) ── */}
-            {isInternal && sidebarNavBtn("Activity Report", showActivityReport, function() {
-              setShowActivityReport(true);
-              setShowContacts(false); setShowUsers(false);
-              setShowTasksScenarios(false); setShowTasksContacts(false);
-              if (isMobile) setMobileSidebarOpen(false);
-            }, "📊")}
-
-            {/* ── TEAM section (all internal) ── */}
-            {isInternal && (
-              <React.Fragment>
-                {(sidebarPinned || isMobile) && <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "8px 16px 0" }} />}
-                {(sidebarPinned || isMobile) && (
-                  <div style={{ padding: isMobile ? "10px 18px 4px" : "8px 16px 4px", fontSize: isMobile ? 13 : 10, fontWeight: 700, color: "rgba(255,255,255,0.38)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                    Team
-                  </div>
-                )}
-                {sidebarNavBtn("Teams & Users", showUsers, function() {
-                  setShowUsers(true);
-                  setShowContacts(false);
-                  setShowTasksScenarios(false);
-                  setShowTasksContacts(false);
-                  setShowLODashboard(false);
-                  if (isMobile) setMobileSidebarOpen(false);
-                }, "👥")}
-              </React.Fragment>
-            )}
 
           </div>
 
@@ -2224,6 +2221,9 @@ function App() {
               onLogout: handleLogout, isInternal: isInternal,
               isAdmin: !!(loggedInUser && ["admin","branch_admin"].includes(loggedInUser.role)),
               onMyProfile: isInternal ? function() { setShowMyProfile(true); } : null,
+              onSettings: isInternal ? function() { setShowAppSettings(true); } : null,
+              clientViewMode: clientViewMode,
+              onClientView: isInternal ? function() { setClientViewMode(function(v) { return !v; }); } : null,
             })}
           </div>
 
@@ -2237,6 +2237,24 @@ function App() {
         minHeight: "100dvh",
         display: "flex", flexDirection: "column",
       }}>
+        {clientViewMode && (
+          <div style={{
+            background: "#f59e0b", color: "#000", padding: "8px 20px",
+            fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center",
+            justifyContent: "space-between", gap: 12, flexShrink: 0,
+            fontFamily: "'Inter', system-ui, sans-serif",
+          }}>
+            <span>👁 Client View — you're seeing what a borrower sees</span>
+            <button
+              onClick={function() { setClientViewMode(false); }}
+              style={{
+                background: "rgba(0,0,0,0.15)", border: "none", borderRadius: 5,
+                padding: "3px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer",
+                color: "#000", fontFamily: "inherit",
+              }}
+            >Exit</button>
+          </div>
+        )}
         {pageContent}
       </div>
     </React.Fragment>

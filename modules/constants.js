@@ -296,6 +296,7 @@ const LEAD_STATUSES = [
   { value: "13. Instructions Out",                     label: "13. Instructions Out",                     group: "active"   },
   { value: "14. Closed",                               label: "14. Closed",                               group: "active"   },
   { value: "15. Funded",                               label: "15. Funded",                               group: "active"   },
+  { value: ".Suspended",                               label: ".Suspended",                               group: "waiting"  },
   { value: "Waiting",                                  label: "Waiting",                                  group: "waiting"  },
   { value: "Waiting - Building",                       label: "Waiting - Building",                       group: "waiting"  },
   { value: "z- Can't",                                 label: "z- Can't",                                 group: "archived" },

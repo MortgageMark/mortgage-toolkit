@@ -36,20 +36,22 @@ const LEAD_GROUP_LABELS = { pre: "All", active: "Active", waiting: "Waiting", ar
 function getLeadGroup(leadStatus) {
   if (!leadStatus) return "active";
   if (leadStatus.startsWith("z")) return "archived";        // z- and zz- prefixes
-  if (leadStatus.startsWith("Waiting")) return "waiting";   // Waiting, Waiting - Building
+  if (leadStatus.startsWith("Waiting") || leadStatus === ".Suspended") return "waiting";
   return "active";                                          // ?, (A)-(D), 01.-15.
 }
 
 function getLeadStatusColors(leadStatus) {
-  if (!leadStatus || leadStatus === "?")
-    return { bg: "rgba(107,114,128,0.12)", text: "#6b7280" };   // gray – unknown
+  if (!leadStatus)
+    return { bg: "rgba(107,114,128,0.12)", text: "#6b7280" };   // gray   – no status (not a lead)
+  if (leadStatus === "?")
+    return { bg: "rgba(139,92,246,0.15)",  text: "#7c3aed" };   // purple – identified lead, uncategorized
   if (leadStatus.startsWith("("))
-    return { bg: "rgba(59,130,246,0.12)",  text: "#1d4ed8" };   // blue  – pre-pipeline
-  if (leadStatus.startsWith("Waiting"))
-    return { bg: "rgba(245,158,11,0.12)",  text: "#b45309" };   // amber – waiting
+    return { bg: "rgba(59,130,246,0.12)",  text: "#1d4ed8" };   // blue   – pre-pipeline
+  if (leadStatus.startsWith("Waiting") || leadStatus === ".Suspended")
+    return { bg: "rgba(245,158,11,0.12)",  text: "#b45309" };   // amber  – waiting / suspended
   if (leadStatus.startsWith("z"))
-    return { bg: "rgba(107,114,128,0.12)", text: "#6b7280" };   // gray  – archived
-  return { bg: "rgba(34,197,94,0.12)",   text: "#16a34a" };     // green – active pipeline
+    return { bg: "rgba(107,114,128,0.12)", text: "#6b7280" };   // gray   – archived
+  return { bg: "rgba(34,197,94,0.12)",   text: "#16a34a" };     // green  – active pipeline
 }
 
 function getLoanPurposeLabel(purpose) {
@@ -62,14 +64,14 @@ function getLoanPurposeLabel(purpose) {
 function LeadStatusSelect({ value, onChange, style }) {
   const LEAD_STATUSES = window.LEAD_STATUSES || [];
   const groups = [
-    { label: "All",    key: "pre"      },
+    { label: "Lead",             key: "pre"      },
     { label: "Active Pipeline", key: "active"   },
-    { label: "Waiting",         key: "waiting"  },
+    { label: "Waiting / Suspended", key: "waiting"  },
     { label: "Archived",        key: "archived" },
   ];
   return (
     <select value={value} onChange={onChange} style={style}>
-      <option value="">— Clear —</option>
+      <option value="">None</option>
       {groups.map(function(g) {
         const opts = LEAD_STATUSES.filter(function(s) { return s.group === g.key; });
         if (opts.length === 0) return null;
@@ -229,7 +231,7 @@ function ActivityReportPage({ user, onBack }) {
 window.ActivityReportPage = ActivityReportPage;
 
 // ── Main Component ─────────────────────────────────────────────────────────
-function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpenContact, onUsers, onMyInfo, onLoginSettings, pageTitle,
+function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpenContact, onUsers, onMyInfo, onLoginSettings, onSettings, pageTitle,
   groupFilter: groupFilterProp, setGroupFilter: setGroupFilterProp }) {
   const c = useThemeColors();
   const isTaskView = pageTitle === "Tasks: Scenarios"; // tasks view hides/adds specific columns
@@ -311,7 +313,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
   const [newUid, setNewUid] = useState("");
   const [newClientName, setNewClientName] = useState("");
   const [newNotes, setNewNotes] = useState("");
-  const [newLeadStatus, setNewLeadStatus] = useState("?");
+  const [newLeadStatus, setNewLeadStatus] = useState("");
   const [newLoanPurpose, setNewLoanPurpose] = useState("purchase");
   const [newPropertyAddress, setNewPropertyAddress] = useState("");
   const [newLeadSource, setNewLeadSource] = useState("");
@@ -482,7 +484,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
       createdAt:       row.created_at,
       updatedAt:       row.updated_at,
       status:          row.status       || "active",
-      lead_status:     row.lead_status  || "?",
+      lead_status:     row.lead_status  || "",
       loan_purpose:    row.loan_purpose || "purchase",
       property_address:  row.property_address  || "",
       lead_source:       row.lead_source      || "",
@@ -759,7 +761,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
     setNewUid("");
     setNewClientName("");
     setNewNotes("");
-    setNewLeadStatus("?");
+    setNewLeadStatus("");
     setNewLoanPurpose("purchase");
     setNewPropertyAddress("");
     setNewLeadSource("");
@@ -934,7 +936,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
           notes:            "",
           calculationData:  { ...templateCalcData, uid: newUid },
           contact_id:       finalContactId,
-          lead_status:      "?",
+          lead_status:      "",
           loan_purpose:     newLoanPurpose,
           property_address: null,
           lead_source:      null,
@@ -960,7 +962,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
         createdAt:        now,
         updatedAt:        now,
         status:           "active",
-        lead_status:      "?",
+        lead_status:      "",
         loan_purpose:     newLoanPurpose,
         property_address: "",
         calculatorData:   { ...templateCalcData, uid: newUid },
@@ -990,7 +992,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
   }
 
   async function changeLeadStatus(scenario, newStatus) {
-    if (newStatus === (scenario.lead_status || "?")) return;
+    if (newStatus === (scenario.lead_status || "")) return;
     if (isCloudUser) {
       const { error } = await supabase
         .from("scenarios")
@@ -999,7 +1001,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
       if (error) { alert("Could not update lead status: " + error.message); return; }
       writeAuditLog(
         scenario.id, "lead_status_changed",
-        { old: scenario.lead_status || "?", new: newStatus },
+        { old: scenario.lead_status || "", new: newStatus },
         scenario.clientName
       );
     }
@@ -1074,7 +1076,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
           notes:            scenario.notes || "",
           calculationData:  { ...(scenario.calculatorData || scenario.calculation_data || {}), uid: generateScenarioId() },
           contact_id:       scenario.contact_id || null,
-          lead_status:      scenario.lead_status || "?",
+          lead_status:      scenario.lead_status || "",
           loan_purpose:     scenario.loan_purpose || "purchase",
           property_address: scenario.property_address || null,
         });
@@ -1397,11 +1399,11 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
   const LEAD_STATUSES_ALL = window.LEAD_STATUSES || [];
   const pipelineMetrics = {
     pre: scenarios.filter(function(s) {
-      const m = LEAD_STATUSES_ALL.find(function(x) { return x.value === (s.lead_status || "?"); });
+      const m = LEAD_STATUSES_ALL.find(function(x) { return x.value === (s.lead_status || ""); });
       return m && m.group === "pre";
     }).length,
     active: scenarios.filter(function(s) {
-      const m = LEAD_STATUSES_ALL.find(function(x) { return x.value === (s.lead_status || "?"); });
+      const m = LEAD_STATUSES_ALL.find(function(x) { return x.value === (s.lead_status || ""); });
       return m && m.group === "active";
     }).length,
     waiting: scenarios.filter(function(s) { return getLeadGroup(s.lead_status) === "waiting"; }).length,
@@ -1469,7 +1471,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
       }
       if (pipelineSubFilter === "pre") {
         var m = LEAD_STATUSES_ALL.find(function(x) { return x.value === s.lead_status; });
-        return m ? m.group === "pre" : (s.lead_status === "?" || !s.lead_status);
+        return m ? m.group === "pre" : !s.lead_status;
       }
       if (pipelineSubFilter === "pipeline") {
         var m2 = LEAD_STATUSES_ALL.find(function(x) { return x.value === s.lead_status; });
@@ -1487,35 +1489,68 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
         if (v === null || v === undefined) return "";
         try { return JSON.parse(v) || ""; } catch (e) { return String(v) || ""; }
       }
+      // Phonetic/fuzzy match helper (same algorithm as ContactsTab)
+      function sdx(str) {
+        var s2 = String(str).toUpperCase().replace(/[^A-Z]/g, "");
+        if (!s2) return "";
+        var m = {B:1,F:1,P:1,V:1,C:2,G:2,J:2,K:2,Q:2,S:2,X:2,Z:2,D:3,T:3,L:4,M:5,N:5,R:6};
+        var code = s2[0], prev = m[s2[0]] || 0;
+        for (var i = 1; i < s2.length && code.length < 4; i++) {
+          var curr = m[s2[i]] || 0;
+          if (curr && curr !== prev) code += curr;
+          prev = curr;
+        }
+        return (code + "000").slice(0, 4);
+      }
+      function sdFuzzy(q, target) {
+        if (!q || !target) return false;
+        var tl = target.toLowerCase();
+        if (tl.includes(q)) return true;
+        var qToks = q.split(/\s+/).filter(Boolean);
+        var tToks = tl.split(/\s+/).filter(Boolean);
+        return qToks.every(function(qt) {
+          if (qt.length < 3) return tl.includes(qt);
+          var sq = sdx(qt);
+          return tToks.some(function(tt) { return tt.includes(qt) || (tt.length >= 3 && sdx(tt) === sq); });
+        });
+      }
       const d = s.calculatorData || {};
       const c2fn = parseV(d["abt_c2fn"]);
       const c2ln = parseV(d["abt_c2ln"]);
       const c2label = (c2ln && c2fn ? c2ln + ", " + c2fn : c2fn || c2ln).toLowerCase();
-      const ctFull  = ct ? ((ct.first_name || "") + " " + (ct.last_name || "")).trim().toLowerCase() : "";
-      const ctFullR = ct ? ((ct.last_name  || "") + ", " + (ct.first_name || "")).trim().toLowerCase() : "";
+      const ctFull  = ct ? ((ct.first_name || "") + " " + (ct.last_name || "")).trim() : "";
+      const ctFullR = ct ? ((ct.last_name  || "") + ", " + (ct.first_name || "")).trim() : "";
+      const ct2Full = ct ? ((ct.first_name2 || "") + " " + (ct.last_name2 || "")).trim() : "";
       return (
-        s.clientName.toLowerCase().includes(term) ||
-        getClientLabel(s).toLowerCase().includes(term) ||
-        (c2label && c2label.includes(term)) ||
+        sdFuzzy(term, s.clientName) ||
+        sdFuzzy(term, getClientLabel(s)) ||
+        (c2label && sdFuzzy(term, c2label)) ||
         (s.notes && s.notes.toLowerCase().includes(term)) ||
         (s.createdByName && s.createdByName.toLowerCase().includes(term)) ||
         (s.property_address && s.property_address.toLowerCase().includes(term)) ||
-        (ctFull  && ctFull.includes(term)) ||
-        (ctFullR && ctFullR.includes(term)) ||
-        (ct && ct.first_name && ct.first_name.toLowerCase().includes(term)) ||
-        (ct && ct.last_name  && ct.last_name.toLowerCase().includes(term)) ||
+        sdFuzzy(term, ctFull) ||
+        sdFuzzy(term, ctFullR) ||
+        (ct && sdFuzzy(term, ct.first_name  || "")) ||
+        (ct && sdFuzzy(term, ct.last_name   || "")) ||
+        (ct && sdFuzzy(term, ct.nickname    || "")) ||
+        sdFuzzy(term, ct2Full) ||
+        (ct && sdFuzzy(term, ct.first_name2 || "")) ||
+        (ct && sdFuzzy(term, ct.last_name2  || "")) ||
+        (ct && sdFuzzy(term, ct.nickname2   || "")) ||
         (ct && ct.phone_cell && ct.phone_cell.toLowerCase().includes(term)) ||
         (ct && ct.phone_work && ct.phone_work.toLowerCase().includes(term)) ||
         (ct && ct.phone_home && ct.phone_home.toLowerCase().includes(term)) ||
+        (ct && ct.phone2     && ct.phone2.toLowerCase().includes(term)) ||
         (ct && ct.email_personal && ct.email_personal.toLowerCase().includes(term)) ||
-        (ct && ct.email_work    && ct.email_work.toLowerCase().includes(term))
+        (ct && ct.email_work    && ct.email_work.toLowerCase().includes(term)) ||
+        (ct && ct.email2        && ct.email2.toLowerCase().includes(term))
       );
     })
     // ── Column filters ────────────────────────────────────────────────────
     .filter(function(s) {
       if (!filterLeadStatus) return true;
       const LEAD_STATUSES_ALL2 = window.LEAD_STATUSES || [];
-      const m = LEAD_STATUSES_ALL2.find(function(x) { return x.value === (s.lead_status || "?"); });
+      const m = LEAD_STATUSES_ALL2.find(function(x) { return x.value === (s.lead_status || ""); });
       const grp = m ? m.group : getLeadGroup(s.lead_status);
       return grp === filterLeadStatus;
     })
@@ -1932,6 +1967,13 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                 >
                   {appLang === "es" ? "🇺🇸 Switch to English" : "🇲🇽 Cambiar a Español"}
                 </button>
+                {onSettings && (
+                  <button onClick={function() { setProfileMenuOpen(false); onSettings(); }} style={{
+                    display: "block", width: "100%", textAlign: "left", padding: "12px 16px",
+                    background: "none", border: "none", borderBottom: "1px solid #F0F4F8",
+                    fontSize: 13, fontWeight: 600, color: "#0C4160", cursor: "pointer",
+                  }}>⚙️ Settings</button>
+                )}
                 {onLogout && (
                   <button onClick={function() { setProfileMenuOpen(false); onLogout(); }} style={{
                     display: "block", width: "100%", textAlign: "left", padding: "12px 16px",
@@ -2769,7 +2811,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
               </thead>
               <tbody>
                 {filtered.map(function(scenario) {
-                  const ls      = scenario.lead_status || "?";
+                  const ls      = scenario.lead_status || "";
                   const lsColor = getLeadStatusColors(ls);
                   const contact = contactsMap[scenario.contact_id] || null;
                   const contactName = contact
@@ -3393,7 +3435,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                   </thead>
                   <tbody>
                     {filtered.map(function(scenario) {
-                      const ls       = scenario.lead_status || "?";
+                      const ls       = scenario.lead_status || "";
                       const lsColor  = getLeadStatusColors(ls);
                       const contact  = contactsMap[scenario.contact_id] || null;
                       const contactName = contact
@@ -3415,7 +3457,7 @@ function ScenarioDashboard({ user, onSelectScenario, onLogout, onContacts, onOpe
                               display: "inline-block", padding: "3px 8px", borderRadius: 5,
                               fontSize: 12, fontWeight: 700,
                               background: lsColor.bg, color: lsColor.text,
-                            }}>{ls}</span>
+                            }}>{ls || "—"}</span>
                           </td>
 
                           {/* Contact */}

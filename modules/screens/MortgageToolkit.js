@@ -1208,7 +1208,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                   </div>
                 )}
                 {/* Lead Status */}
-                {activeScenario && activeScenario.lead_status && activeScenario.lead_status !== "?" && (
+                {activeScenario && activeScenario.lead_status && (
                   <div style={{ display: "flex", gap: 10, marginTop: 2, fontSize: 12, opacity: 0.6, alignItems: "center" }}>
                     <span style={{ fontFamily: font }}>{activeScenario.lead_status}</span>
                   </div>
@@ -1247,6 +1247,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                   onTeam={isAdmin && onTeam ? onTeam : null}
                   onTemplates={function() { setSettingsInitialTab(null); setSettingsOpen(true); }}
                   onWarnings={isInternal ? function() { setSettingsInitialTab("warnings"); setSettingsOpen(true); } : null}
+                  onSettings={isInternal ? function() { setSettingsInitialTab("team"); setSettingsOpen(true); } : null}
                   onModules={isInternal ? function() { setActiveModule("__modules__"); } : null}
                   onLogout={onLogout}
                   isInternal={isInternal}
@@ -1517,9 +1518,15 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
                   {/* Vendor Contacts tab hidden — uncomment to restore: */}
                   {/* {!effectiveIsInternal && navBtn(activeModule === "contactlender", () => { setActiveModule("contactlender"); setSidebarOpen(false); }, "📬", "Vendor Contacts")} */}
                   {onBackToScenarios && navBtn(false, () => { onBackToScenarios(); setSidebarOpen(false); }, "🗂️", "Scenarios")}
-                  {isInternal && activeScenario && activeScenario.contact_id && onOpenContact && navBtn(false, () => { onOpenContact(activeScenario.contact_id); setSidebarOpen(false); }, React.createElement("span", { style: { filter: "grayscale(1) invert(1) opacity(0.7)" } }, "👤"), "Contact")}
+                  {isInternal && (
+                    <div style={{ margin: "8px 12px 2px", borderTop: "1px solid rgba(255,255,255,0.15)" }} />
+                  )}
+                  {isInternal && !(navCollapsed && !isMobile) && (
+                    <div style={{ padding: "2px 16px 4px", fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.4)", letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "inherit" }}>This Scenario</div>
+                  )}
+                  {isInternal && activeScenario && activeScenario.contact_id && onOpenContact && navBtn(false, () => { onOpenContact(activeScenario.contact_id); setSidebarOpen(false); }, React.createElement("span", { style: { filter: "grayscale(1) invert(1) opacity(0.7)" } }, "👤"), "Borrower")}
                   {isInternal && activeScenario && activeScenario.contact_id && navBtn(false, () => { setNotesOpen(true); setSidebarOpen(false); }, "📝", "Notes")}
-                  {isInternal && navBtn(activeModule === "__modules__", () => { setActiveModule("__modules__"); setSidebarOpen(false); }, "🔧", "Tools")}
+                  {isInternal && navBtn(activeModule === "__modules__", () => { setActiveModule("__modules__"); setSidebarOpen(false); }, "🔧", "Calculators")}
                   {(!isInternal || onOpenContact || onBackToScenarios) && !(navCollapsed && !isMobile) && (
                     <div style={{ margin: "6px 15px 2px", borderBottom: "1px solid rgba(255,255,255,0.12)" }} />
                   )}
@@ -1664,7 +1671,7 @@ function MortgageToolkit({ user, onLogout, activeScenario, onBackToScenarios, on
           var sid = activeScenario.id;
           var vendors = window.getClientVendorData ? window.getClientVendorData(sid) : [];
           if (!vendors.length) return null;
-          var VENDOR_CATS = { bld: "Home Builder", rea: "Realtor", ins: "Financial Partner", ttl: "Financial Partner" };
+          var VENDOR_CATS = { bld: "Builder", rea: "Realtor", ins: "Other", ttl: "Vendor" };
           return React.createElement(ClientVendorBanner, {
             key: "cvb_" + sid, scenarioId: sid, vendors: vendors,
             vendorCats: VENDOR_CATS, darkMode: darkMode, colors: colors, font: font
