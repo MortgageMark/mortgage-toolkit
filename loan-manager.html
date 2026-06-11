@@ -40,7 +40,7 @@
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #F8FAFC;
+      background: #DDE4EE;
       color: var(--text);
       font-size: 14px;
       min-height: 100vh;
@@ -273,6 +273,61 @@
       margin: 24px 0 14px;
     }
     .form-section-title:first-child { margin-top: 0; }
+
+    /* ── READ-ONLY form mode ── */
+
+    /* Each field becomes a labeled display tile */
+    .lmt-form-readonly .form-group {
+      background: #F5F7FB;
+      border: 1px solid #E5E9F0;
+      border-radius: 8px;
+      padding: 7px 11px 6px;
+    }
+    .lmt-form-readonly .form-group label {
+      font-size: 9.5px !important;
+      font-weight: 700 !important;
+      letter-spacing: 0.07em !important;
+      text-transform: uppercase !important;
+      color: #64748B !important;
+      margin-bottom: 2px !important;
+      display: block;
+    }
+    .lmt-form-readonly .form-group input,
+    .lmt-form-readonly .form-group select,
+    .lmt-form-readonly .form-group textarea {
+      border-color: transparent !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      cursor: default;
+      pointer-events: none;
+      color: #0F172A !important;
+      font-size: 13.5px !important;
+      font-weight: 600 !important;
+      padding: 0 !important;
+      height: auto !important;
+      min-height: unset !important;
+      line-height: 1.3 !important;
+    }
+    .lmt-form-readonly .form-group input:focus,
+    .lmt-form-readonly .form-group select:focus,
+    .lmt-form-readonly .form-group textarea:focus {
+      outline: none; border-color: transparent; box-shadow: none;
+    }
+    /* Hide placeholder hint text in read-only view */
+    .lmt-form-readonly .form-group input::placeholder,
+    .lmt-form-readonly .form-group textarea::placeholder { color: transparent !important; }
+    /* Dropdown chevron hidden in readonly */
+    .lmt-form-readonly .form-group select {
+      appearance: none !important;
+      -webkit-appearance: none !important;
+    }
+    /* Edit button must stay interactive inside the readonly div */
+    .lmt-form-readonly button { pointer-events: all; cursor: pointer; }
+
+    /* Hide number spinners in dates table */
+    .lmt-dates-days::-webkit-inner-spin-button,
+    .lmt-dates-days::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    .lmt-dates-days { -moz-appearance: textfield; }
 
     /* ── DEAL DETAIL ── */
     .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
@@ -1626,22 +1681,35 @@ function DealModal({ deal, profiles, statuses, branches, existingDeals, onSave, 
             <div style={{display:'flex',flexDirection:'column',gap:10}}>
               <div className="form-group">
                 <label>Closing</label>
-                <input type="date" className={form.closing_date ? '' : 'date-empty'} value={form.closing_date||''} onChange={e=>{
-                  const cd=e.target.value;
-                  const fd=calcFundingDate(cd,form.trans_type||'purchase',form.occupancy||'primary');
-                  setForm(p=>({...p,closing_date:cd,funding_date:fd}));
-                }} />
+                <input type="text" placeholder="mm/dd" className={form.closing_date ? '' : 'date-empty'}
+                  defaultValue={lmtFmtDate(form.closing_date)}
+                  key={'mcd-'+(form.closing_date||'')}
+                  onFocus={e=>e.target.select()}
+                  onBlur={e=>{
+                    var cd=lmtParseDate(e.target.value);
+                    e.target.value=lmtFmtDate(cd);
+                    var fd=calcFundingDate(cd||'',form.trans_type||'purchase',form.occupancy||'primary');
+                    setForm(p=>({...p,closing_date:cd||'',funding_date:fd}));
+                  }} />
               </div>
               <div className="form-group">
                 <label style={{display:'flex',alignItems:'center',gap:6}}>
                   Funding
                   {!form.funding_date_manual && <span style={{fontSize:10,background:'#EDE9FE',color:'#6D28D9',borderRadius:3,padding:'1px 5px',fontWeight:600}}>Auto</span>}
                 </label>
-                <input type="date" className={form.funding_date ? '' : 'date-empty'} value={form.funding_date||''} onChange={e=>setForm(p=>({...p,funding_date:e.target.value,funding_date_manual:true}))} />
+                <input type="text" placeholder="mm/dd" className={form.funding_date ? '' : 'date-empty'}
+                  defaultValue={lmtFmtDate(form.funding_date)}
+                  key={'mfd-'+(form.funding_date||'')}
+                  onFocus={e=>e.target.select()}
+                  onBlur={e=>{var fd=lmtParseDate(e.target.value);e.target.value=lmtFmtDate(fd);setForm(p=>({...p,funding_date:fd||'',funding_date_manual:true}));}} />
               </div>
               <div className="form-group">
                 <label>Lock Expiration</label>
-                <input type="date" className={form.lock_expiration_date ? '' : 'date-empty'} value={form.lock_expiration_date||''} onChange={e=>set('lock_expiration_date',e.target.value)} />
+                <input type="text" placeholder="mm/dd" className={form.lock_expiration_date ? '' : 'date-empty'}
+                  defaultValue={lmtFmtDate(form.lock_expiration_date)}
+                  key={'mle-'+(form.lock_expiration_date||'')}
+                  onFocus={e=>e.target.select()}
+                  onBlur={e=>{var le=lmtParseDate(e.target.value);e.target.value=lmtFmtDate(le);set('lock_expiration_date',le||'');}} />
               </div>
             </div>
           </div>
@@ -2494,11 +2562,11 @@ function DealDatesTab({ deal, profile, onDealChange, milestones, saveMilestone, 
         <table style={{width:'100%',borderCollapse:'collapse'}}>
           <thead>
             <tr style={{background:'#1B2A4A',color:'white'}}>
-              <th style={{padding:'9px 14px',textAlign:'left',fontWeight:600,fontSize:11}}>Lead Status</th>
-              <th style={{padding:'9px 10px',textAlign:'center',fontWeight:600,fontSize:11,width:80}}>Days</th>
-              <th style={{padding:'9px 14px',textAlign:'left',fontWeight:600,fontSize:11,width:130}}>Target</th>
-              <th style={{padding:'9px 14px',textAlign:'left',fontWeight:600,fontSize:11,width:130}}>Actual</th>
-              <th style={{padding:'9px 10px',textAlign:'center',fontWeight:600,fontSize:11,width:80}}>Delta</th>
+              <th style={{padding:'10px 20px',textAlign:'left',fontWeight:600,fontSize:11}}>Lead Status</th>
+              <th style={{padding:'10px 10px 10px 20px',textAlign:'center',fontWeight:600,fontSize:11,width:72}}>Days</th>
+              <th style={{padding:'10px 20px 10px 28px',textAlign:'left',fontWeight:600,fontSize:11,width:150}}>Target</th>
+              <th style={{padding:'10px 20px',textAlign:'left',fontWeight:600,fontSize:11,width:160}}>Actual</th>
+              <th style={{padding:'10px 20px',textAlign:'center',fontWeight:600,fontSize:11,width:90}}>Pace</th>
             </tr>
           </thead>
           <tbody>
@@ -2534,7 +2602,7 @@ function DealDatesTab({ deal, profile, onDealChange, milestones, saveMilestone, 
                   />
                   {actualStr
                     ? <span style={{fontSize:10,color:'#9CA3AF'}}>{fmtDayOfWeek(actualStr)}</span>
-                    : <button onClick={()=>setActual(s.key, today())} title="Set to today"
+                    : <button tabIndex={-1} onClick={()=>setActual(s.key, today())} title="Set to today"
                         style={{flexShrink:0,padding:'1px 5px',borderRadius:99,border:'1px solid #BFDBFE',background:'#EFF6FF',color:'#2563EB',fontSize:9,fontWeight:700,cursor:'pointer',lineHeight:1.4}}>
                         T
                       </button>
@@ -2545,18 +2613,19 @@ function DealDatesTab({ deal, profile, onDealChange, milestones, saveMilestone, 
 
               return (
                 <tr key={s.key} style={{background:rowBg,borderBottom:'1px solid #F3F4F6'}}>
-                  <td style={{padding:'8px 14px',fontWeight:isClosing||isFunding?700:400,color:isClosing?'#1D4ED8':isFunding?'#16A34A':'#374151'}}>
+                  <td style={{padding:'9px 20px',fontWeight:isClosing||isFunding?700:400,color:isClosing?'#1D4ED8':isFunding?'#16A34A':'#374151'}}>
                     {s.label}
                   </td>
-                  <td style={{padding:'5px 10px',textAlign:'center'}}>
+                  <td style={{padding:'5px 10px 5px 20px',textAlign:'center'}}>
                     {isFunding ? <span style={{fontSize:10,color:'#9CA3AF',fontStyle:'italic'}}>auto</span>
                      : isClosing ? <span style={{fontSize:10,color:'#9CA3AF',fontStyle:'italic'}}>—</span>
-                     : <input type="number" min={0} max={30} value={getVal(s.key)??''} onChange={e=>editingDates&&setVal(s.key,e.target.value)}
-                         readOnly={!editingDates}
-                         style={{width:50,padding:'3px 5px',border:`1px solid ${editingDates?'#E5E7EB':'transparent'}`,borderRadius:4,fontSize:11,textAlign:'center',background:editingDates?'white':'transparent',cursor:editingDates?'text':'default'}} />
+                     : <input type="text" inputMode="numeric" value={getVal(s.key)??''}
+                         onChange={e=>{const v=e.target.value;if(v===''||(/^\d{1,2}$/.test(v)&&+v<=30))setVal(s.key,v);}}
+                         onFocus={e=>{if(!editingDates)setEditingDates(true);e.target.select();}}
+                         style={{width:44,padding:'3px 5px',border:'1px solid #D1D5DB',borderRadius:4,fontSize:11,textAlign:'center',background:'white',cursor:'text'}} />
                     }
                   </td>
-                  <td style={{padding:'8px 14px'}}>
+                  <td style={{padding:'9px 20px 9px 28px'}}>
                     {targetStr ? (
                       <span style={{color:isClosing||isFunding?'#1B2A4A':'#374151',fontWeight:isClosing||isFunding?700:400}}>
                         {fmtDate(targetStr)}
@@ -2565,11 +2634,11 @@ function DealDatesTab({ deal, profile, onDealChange, milestones, saveMilestone, 
                       </span>
                     ) : <span style={{color:'#D1D5DB'}}>—</span>}
                   </td>
-                  <td style={{padding:'4px 8px'}}>
+                  <td style={{padding:'4px 20px'}}>
                     {actualCell}
                     {savingActuals && <span style={{fontSize:9,color:'#9CA3AF'}}>saving…</span>}
                   </td>
-                  <td style={{padding:'8px 10px',textAlign:'center'}}>
+                  <td style={{padding:'9px 20px',textAlign:'center'}}>
                     {delta !== null ? (
                       <span style={{fontSize:11,fontWeight:700,
                         color: delta < 0 ? '#16A34A' : delta > 0 ? '#DC2626' : '#6B7280',
@@ -2588,8 +2657,8 @@ function DealDatesTab({ deal, profile, onDealChange, milestones, saveMilestone, 
               return (
                 <tr style={{background:'#FFF7ED',borderTop:'2px solid #FED7AA'}}>
                   <td style={{padding:'8px 14px',fontWeight:700,color:'#C2410C'}}>16. Suspended</td>
-                  <td style={{padding:'5px 10px',textAlign:'center'}}><span style={{fontSize:10,color:'#9CA3AF',fontStyle:'italic'}}>—</span></td>
-                  <td style={{padding:'8px 14px'}}><span style={{color:'#D1D5DB'}}>—</span></td>
+                  <td style={{padding:'5px 10px 5px 20px',textAlign:'center'}}><span style={{fontSize:10,color:'#9CA3AF',fontStyle:'italic'}}>—</span></td>
+                  <td style={{padding:'9px 20px 9px 28px'}}><span style={{color:'#D1D5DB'}}>—</span></td>
                   <td style={{padding:'4px 8px'}}>
                     <div style={{display:'flex',alignItems:'center',gap:4}}>
                       <SmartDate value={susDate} onChange={e=>setActual('sus',e.target.value)} disabled={false} />
@@ -2604,6 +2673,15 @@ function DealDatesTab({ deal, profile, onDealChange, milestones, saveMilestone, 
             })()}
           </tbody>
         </table>
+      </div>
+
+      {/* Reset button below table */}
+      <div style={{display:'flex',justifyContent:'flex-end',marginTop:6,marginBottom:4}}>
+        <button onClick={resetToTemplate} title="Reset all Days values back to your saved template"
+          style={{fontSize:11,color:'#6B7280',background:'none',border:'1px solid #E5E7EB',borderRadius:6,
+            padding:'4px 10px',cursor:'pointer',display:'flex',alignItems:'center',gap:4}}>
+          ↺ Reset to template
+        </button>
       </div>
 
       {/* Summary footer */}
@@ -2863,6 +2941,10 @@ function MilestoneTableView({ milestones, onSave }) {
 }
 
 function MilestoneCard({ ms, presets, dealTurntimes, onChange, vendorInfo }) {
+  const [localNotes, setLocalNotes] = React.useState(ms.notes||'');
+  // Sync if parent ms.notes changes (e.g. after save)
+  React.useEffect(() => { setLocalNotes(ms.notes||''); }, [ms.notes]);
+
   const preset = presets.find(p => p.milestone_type === ms.milestone_type);
   // Use per-loan turntime override if available, else global preset
   const dealTT = dealTurntimes?.find(t => t.milestone_type === ms.milestone_type);
@@ -3047,8 +3129,10 @@ function MilestoneCard({ ms, presets, dealTurntimes, onChange, vendorInfo }) {
           <input type="checkbox" checked={!!ms.is_na} onChange={e=>onChange({...ms,is_na:e.target.checked})} />{' '}N/A
         </span>
       </div>
-      <textarea value={ms.notes||''} onChange={e=>onChange({...ms,notes:e.target.value})} placeholder="Notes…"
+      <textarea value={localNotes} placeholder="Notes…"
         disabled={ms.is_na} rows={1}
+        onChange={e=>setLocalNotes(e.target.value)}
+        onBlur={e=>{ if(e.target.value !== (ms.notes||'')) onChange({...ms,notes:e.target.value}); }}
         style={{width:'100%',marginTop:8,padding:'4px 6px',border:'1px solid #E5E7EB',borderRadius:4,fontSize:11,fontFamily:'inherit',resize:'vertical',color:'#6B7280',background:ms.is_na?'#F9FAFB':'white'}} />
     </div>
   );
@@ -3187,12 +3271,52 @@ function EmailComposer({ emailModal, onClose, loProfile }) {
   );
 }
 
+// ── Date input helpers ────────────────────────────────────────────────────────
+// Parse "6/30", "6/30/25", "06/30/2026" → "2026-06-30"  (null if unrecognized)
+function lmtParseDate(raw) {
+  if (!raw || !raw.trim()) return null;
+  var m = raw.trim().match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
+  if (!m) return null;
+  var mon = m[1].padStart(2,'0');
+  var day = m[2].padStart(2,'0');
+  var yr  = m[3] ? (m[3].length===2 ? '20'+m[3] : m[3]) : String(new Date().getFullYear());
+  return yr+'-'+mon+'-'+day;
+}
+// Format "2026-06-30" → "06/30/2026" for display in a text input
+function lmtFmtDate(iso) {
+  if (!iso) return '';
+  var p = String(iso).split('-');
+  return p.length >= 3 ? p[1]+'/'+p[2]+'/'+p[0] : '';
+}
+
 // ─────────────────────────────────────────────
 // DEAL DETAIL MODAL
 // ─────────────────────────────────────────────
 function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, onArchive, onDuplicate, currentUser, pageMode, initialTab, customStatuses, loProfile, lmtContacts, setLmtContacts, onDealChange }) {
   const [tab, setTab] = useState(initialTab || 'milestones');
   const [msView, setMsView] = useState('card');
+  const [pendingTab, setPendingTab] = useState(null); // tab nav blocked by unsaved edits
+
+  const isEditing = () => (tab === 'info_edit' && infoEditing) || (tab === 'contacts_edit' && ctEditing);
+
+  const handleTabClick = (key) => {
+    if (key === tab) return;
+    if (isEditing()) { setPendingTab(key); return; }
+    setTab(key);
+  };
+
+  const confirmNavSave = async () => {
+    if (tab === 'info_edit') await saveInfo();
+    else await saveCt();
+    setTab(pendingTab);
+    setPendingTab(null);
+  };
+  const confirmNavDiscard = () => {
+    if (tab === 'info_edit') discardInfo();
+    else discardCt();
+    setTab(pendingTab);
+    setPendingTab(null);
+  };
 
   // ── Inline Info form state ──────────────────────────────────
   const [infoForm, setInfoForm] = useState(null);
@@ -3223,6 +3347,7 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
   }, [deal?.id]);
 
   const iset = (k,v) => setInfoForm(p=>({...p,[k]:v}));
+  const cset = (k,v) => setCtForm(p=>({...p,[k]:v}));
 
   const saveInfo = async () => {
     if (!infoForm) return;
@@ -3253,8 +3378,10 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
       }
     }
     setInfoSaving(false);
+    setInfoEditing(false);
     if (data) {
       setDeals(prev=>prev.map(d=>d.id===deal.id?{...d,...data}:d));
+      if (onDealChange) onDealChange({...deal, ...data}); // propagates closing_date → Dates tab
       setInfoJustSaved(true);
       setTimeout(() => setInfoJustSaved(false), 3000);
     }
@@ -3262,39 +3389,55 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
 
   // ── Inline Contacts form state ─────────────────────────────
   const [infoJustSaved, setInfoJustSaved] = useState(false);
+  const [infoEditing, setInfoEditing] = useState(false);
   const [ctForm, setCtForm] = useState(null);
   const [ctSaving, setCtSaving] = useState(false);
   const [ctJustSaved, setCtJustSaved] = useState(false);
+  const [ctEditing, setCtEditing] = useState(() => !deal?.primary_first_name && !deal?.primary_borrower_name);
   const [dragVI, setDragVI] = useState(null);
   const [dragVO, setDragVO] = useState(null);
 
-  useEffect(() => { if (!ctForm && deal) setCtForm({...deal}); }, [deal]);
+  useEffect(() => {
+    if (!ctForm && deal) {
+      const f = {...deal};
+      // Auto-assign current user as LO if the deal has none
+      if (!f.assigned_lo_id && currentUser && ['internal'].includes(currentUser.role)) {
+        if (currentUser.lmt_role === 'lo' || currentUser.lmt_role == null) {
+          f.assigned_lo_id = currentUser.id;
+        }
+      }
+      setCtForm(f);
+    }
+  }, [deal]);
 
   const ctset = (k,v) => setCtForm(p=>({...p,[k]:v}));
 
   const saveCt = async () => {
     if (!ctForm) return;
     setCtSaving(true);
-    await sb.from('lmt_deals').update(ctForm).eq('id',deal.id);
+    const ctPayload = {
+      ...ctForm,
+      primary_borrower_name: [ctForm.primary_first_name||'', ctForm.primary_last_name||''].filter(Boolean).join(' ') || ctForm.primary_borrower_name,
+    };
+    await sb.from('lmt_deals').update(ctPayload).eq('id', deal.id);
+    // Save co-borrowers
+    await sb.from('lmt_coborrowers').delete().eq('deal_id', deal.id);
+    const cobsToInsert = infoCobs.filter(cb=>(cb.name||cb.first_name||'').trim()).map((cb,i)=>({
+      deal_id: deal.id, name: cb.name||[cb.first_name||'',cb.last_name||''].filter(Boolean).join(' '),
+      first_name: cb.first_name||'', last_name: cb.last_name||'', nickname: cb.nickname||'',
+      email: cb.email||'', phone: cb.phone||'', sort_order: i+1,
+    }));
+    if (cobsToInsert.length > 0) await sb.from('lmt_coborrowers').insert(cobsToInsert);
     setCtSaving(false);
     setCtJustSaved(true);
+    setCtEditing(false);
     setTimeout(() => setCtJustSaved(false), 3000);
-    if (onDealChange) onDealChange({ ...deal, ...ctForm });
+    if (onDealChange) onDealChange({ ...deal, ...ctPayload });
   };
 
-  // Auto-save info form after 1.5s of inactivity
-  React.useEffect(() => {
-    if (!infoFormMounted.current) { infoFormMounted.current = true; return; }
-    if (infoAutoSaveTimer.current) clearTimeout(infoAutoSaveTimer.current);
-    infoAutoSaveTimer.current = setTimeout(saveInfo, 1500);
-  }, [infoForm, infoCobs]);
-
-  // Auto-save contacts form after 1.5s of inactivity
-  React.useEffect(() => {
-    if (!ctFormMounted.current) { ctFormMounted.current = true; return; }
-    if (ctAutoSaveTimer.current) clearTimeout(ctAutoSaveTimer.current);
-    ctAutoSaveTimer.current = setTimeout(saveCt, 1500);
-  }, [ctForm]);
+  // Discard helpers — reset each form back to the current deal state
+  const discardInfo = () => { setInfoForm(null); initInfoForm(deal); setInfoJustSaved(false); setInfoEditing(false); };
+  const discardCt   = () => { setCtForm({...deal}); setCtJustSaved(false); setCtEditing(false); };
 
   const [milestones, setMilestones] = useState([]);
   const [notes, setNotes] = useState([]);
@@ -3538,7 +3681,7 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
             </div>
             {/* Row 2: address · file# */}
             <div style={{padding:'3px 24px 0',fontSize:12,color:'#94A3B8',cursor:'pointer'}}
-              onClick={()=>setTab('info_edit')} title="Go to Loan Details">
+              onClick={()=>handleTabClick('info_edit')} title="Go to Loan Details">
               {deal.property_address ? `${deal.property_address}${deal.city?', '+deal.city:''}` : 'Address TBD'}
               {deal.file_number ? ` · #${deal.file_number}` : ''}
             </div>
@@ -3551,7 +3694,7 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
                 { key:'dates',         label:'Dates' },
                 { key:'hlt',           label:'Notes' },
               ].map(t=>(
-                <button key={t.key} onClick={()=>setTab(t.key)}
+                <button key={t.key} onClick={()=>handleTabClick(t.key)}
                   style={{padding:'10px 18px',border:'none',cursor:'pointer',fontSize:13,
                     fontWeight:tab===t.key?700:400,transition:'all 0.15s',
                     background:tab===t.key?'white':'transparent',
@@ -3577,7 +3720,7 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
               { key:'dates',         label:'Dates' },
               { key:'hlt',           label:'Notes' },
             ].map(t=>(
-              <button key={t.key} onClick={()=>setTab(t.key)}
+              <button key={t.key} onClick={()=>handleTabClick(t.key)}
                 style={{padding:'8px 16px',borderRadius:7,border:'none',cursor:'pointer',fontSize:13,
                   fontWeight:tab===t.key?700:500,transition:'all 0.15s',
                   background:tab===t.key?'white':'transparent',
@@ -3674,7 +3817,8 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
 
           {/* ── INFO TAB (inline edit) ── */}
           {tab === 'info_edit' && infoForm && (
-            <div style={{maxWidth:900}}>
+            <div style={{maxWidth:900}} className={infoEditing ? '' : 'lmt-form-readonly'}
+              onDoubleClick={()=>!infoEditing&&setInfoEditing(true)}>
               {/* Status + Loan # */}
               <div className="form-grid" style={{marginBottom:14}}>
                 <div className="form-group">
@@ -3686,43 +3830,6 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
                 <div className="form-group">
                   <label>Loan #</label>
                   <input value={infoForm.file_number||''} onChange={e=>iset('file_number',e.target.value)} />
-                </div>
-              </div>
-
-              {/* Borrowers */}
-              <div className="form-section-title">Borrowers</div>
-              <div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) minmax(0,1fr)',gap:16,marginBottom:16}}>
-                <div style={{background:'#F8FAFC',border:'1px solid #E5E7EB',borderRadius:8,padding:'12px 14px'}}>
-                  <div style={{fontSize:11,fontWeight:700,color:'#6B7280',textTransform:'uppercase',letterSpacing:'0.4px',marginBottom:10}}>Primary Borrower</div>
-                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
-                    <div className="form-group" style={{marginBottom:0}}><label>First</label><input value={infoForm.primary_first_name||''} onChange={e=>{iset('primary_first_name',e.target.value);}} /></div>
-                    <div className="form-group" style={{marginBottom:0}}><label>Last</label><input value={infoForm.primary_last_name||''} onChange={e=>iset('primary_last_name',e.target.value)} /></div>
-                  </div>
-                  <div className="form-group" style={{marginBottom:8}}><label>Nickname</label><input value={infoForm.primary_nickname||''} onChange={e=>iset('primary_nickname',e.target.value)} /></div>
-                  <div className="form-group" style={{marginBottom:8}}><label>Email</label><input type="email" value={infoForm.primary_borrower_email||''} onChange={e=>iset('primary_borrower_email',e.target.value)} /></div>
-                  <div className="form-group"><label>Phone</label><input value={infoForm.primary_borrower_phone||''} onChange={e=>iset('primary_borrower_phone',e.target.value)} /></div>
-                </div>
-                <div style={{background:'#F8FAFC',border:'1px solid #E5E7EB',borderRadius:8,padding:'12px 14px'}}>
-                  <div style={{fontSize:11,fontWeight:700,color:'#6B7280',textTransform:'uppercase',letterSpacing:'0.4px',marginBottom:10,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-                    Co-Borrowers
-                    <button className="btn btn-ghost btn-sm" style={{fontSize:10}} onClick={()=>setInfoCobs(p=>[...p,{name:'',first_name:'',last_name:'',nickname:'',email:'',phone:'',sort_order:p.length+1}])}>+ Add</button>
-                  </div>
-                  {infoCobs.length===0 && <div style={{color:'#9CA3AF',fontSize:12,textAlign:'center',padding:'16px 0'}}>No co-borrowers</div>}
-                  {infoCobs.map((cb,i)=>(
-                    <div key={i} style={{marginBottom:10,paddingBottom:10,borderBottom:i<infoCobs.length-1?'1px solid #E5E7EB':'none'}}>
-                      <div style={{display:'flex',justifyContent:'flex-end',marginBottom:4}}>
-                        {infoCobs.length>1&&<span style={{fontSize:10,color:'#9CA3AF',marginRight:'auto'}}>#{i+1}</span>}
-                        <button onClick={()=>setInfoCobs(p=>p.filter((_,idx)=>idx!==i))} style={{background:'none',border:'none',cursor:'pointer',color:'#FCA5A5',fontSize:14,padding:0}}>✕</button>
-                      </div>
-                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
-                        <div className="form-group" style={{marginBottom:0}}><label>First</label><input value={cb.first_name||''} onChange={e=>{const fn=e.target.value;setInfoCobs(p=>p.map((c,idx)=>idx===i?{...c,first_name:fn,name:[fn,c.last_name||''].filter(Boolean).join(' ')}:c));}} /></div>
-                        <div className="form-group" style={{marginBottom:0}}><label>Last</label><input value={cb.last_name||''} onChange={e=>{const ln=e.target.value;setInfoCobs(p=>p.map((c,idx)=>idx===i?{...c,last_name:ln,name:[(c.first_name||''),ln].filter(Boolean).join(' ')}:c));}} /></div>
-                      </div>
-                      <div className="form-group" style={{marginBottom:8}}><label>Nickname</label><input value={cb.nickname||''} onChange={e=>setInfoCobs(p=>p.map((c,idx)=>idx===i?{...c,nickname:e.target.value}:c))} /></div>
-                      <div className="form-group" style={{marginBottom:8}}><label>Email</label><input type="email" value={cb.email||''} onChange={e=>setInfoCobs(p=>p.map((c,idx)=>idx===i?{...c,email:e.target.value}:c))} /></div>
-                      <div className="form-group" style={{marginBottom:0}}><label>Phone</label><input value={cb.phone||''} onChange={e=>setInfoCobs(p=>p.map((c,idx)=>idx===i?{...c,phone:e.target.value}:c))} /></div>
-                    </div>
-                  ))}
                 </div>
               </div>
 
@@ -3770,24 +3877,39 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
                 </div>
                 <div style={{display:'flex',flexDirection:'column',gap:10}}>
                   <div className="form-group"><label>Closing</label>
-                    <input type="date" className={infoForm.closing_date ? '' : 'date-empty'} value={infoForm.closing_date||''} onChange={e=>{
-                      const cd=e.target.value;
-                      const fd=calcFundingDate(cd,infoForm.trans_type||'purchase',infoForm.occupancy||'primary');
-                      setInfoForm(p=>({...p,closing_date:cd,funding_date:fd}));
-                      // Auto-update ICD due date
-                      const icdMs = milestones.find(m=>m.milestone_type==='icd');
-                      if (icdMs) {
-                        const icdDue = calcIcdDueDate(cd);
-                        setMilestones(prev=>prev.map(m=>m.id===icdMs.id?{...m,due_date:icdDue}:m));
-                        sb.from('lmt_milestones').update({due_date:icdDue||null}).eq('id',icdMs.id).then(()=>{});
-                      }
-                    }} />
+                    <input type="text" placeholder="mm/dd" className={infoForm.closing_date ? '' : 'date-empty'}
+                      defaultValue={lmtFmtDate(infoForm.closing_date)}
+                      key={'cd-'+(infoForm.closing_date||'')}
+                      onFocus={e=>e.target.select()}
+                      onBlur={e=>{
+                        var cd=lmtParseDate(e.target.value);
+                        e.target.value=lmtFmtDate(cd);
+                        if ((cd||'')===(infoForm.closing_date||'')) return;
+                        var fd=calcFundingDate(cd||'',infoForm.trans_type||'purchase',infoForm.occupancy||'primary');
+                        setInfoForm(p=>({...p,closing_date:cd||'',funding_date:fd}));
+                        if (cd) {
+                          var icdMs=milestones.find(m=>m.milestone_type==='icd');
+                          if (icdMs) {
+                            var icdDue=calcIcdDueDate(cd);
+                            setMilestones(prev=>prev.map(m=>m.id===icdMs.id?{...m,due_date:icdDue}:m));
+                            sb.from('lmt_milestones').update({due_date:icdDue||null}).eq('id',icdMs.id).then(()=>{});
+                          }
+                        }
+                      }} />
                   </div>
                   <div className="form-group"><label>Funding</label>
-                    <input type="date" className={infoForm.funding_date ? '' : 'date-empty'} value={infoForm.funding_date||''} onChange={e=>iset('funding_date',e.target.value)} />
+                    <input type="text" placeholder="mm/dd" className={infoForm.funding_date ? '' : 'date-empty'}
+                      defaultValue={lmtFmtDate(infoForm.funding_date)}
+                      key={'fd-'+(infoForm.funding_date||'')}
+                      onFocus={e=>e.target.select()}
+                      onBlur={e=>{var fd=lmtParseDate(e.target.value);e.target.value=lmtFmtDate(fd);iset('funding_date',fd||'');}} />
                   </div>
                   <div className="form-group"><label>Lock Expiration</label>
-                    <input type="date" className={infoForm.lock_expiration_date ? '' : 'date-empty'} value={infoForm.lock_expiration_date||''} onChange={e=>iset('lock_expiration_date',e.target.value)} />
+                    <input type="text" placeholder="mm/dd" className={infoForm.lock_expiration_date ? '' : 'date-empty'}
+                      defaultValue={lmtFmtDate(infoForm.lock_expiration_date)}
+                      key={'le-'+(infoForm.lock_expiration_date||'')}
+                      onFocus={e=>e.target.select()}
+                      onBlur={e=>{var le=lmtParseDate(e.target.value);e.target.value=lmtFmtDate(le);iset('lock_expiration_date',le||'');}} />
                   </div>
                 </div>
               </div>
@@ -3797,9 +3919,66 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
 
           {/* ── CONTACTS TAB (inline edit — combines team + vendors) ── */}
           {tab === 'contacts_edit' && ctForm && (
-            <div style={{maxWidth:900}}>
-              {/* Team + Agents combined */}
-              <div className="form-section-title" style={{marginTop:0}}>Team</div>
+            <div style={{maxWidth:900}} className={ctEditing ? '' : 'lmt-form-readonly'}
+              onDoubleClick={()=>!ctEditing&&setCtEditing(true)}>
+              {!ctEditing && (
+                <div style={{display:'flex',justifyContent:'flex-end',marginBottom:8,pointerEvents:'all'}}>
+                  <button onClick={()=>setCtEditing(true)}
+                    title="Edit Contacts"
+                    style={{display:'flex',alignItems:'center',gap:5,padding:'5px 12px',
+                      borderRadius:6,border:'1px solid #D1D5DB',background:'#F9FAFB',
+                      color:'#374151',fontSize:12,fontWeight:600,cursor:'pointer',pointerEvents:'all'}}>
+                    <span style={{fontSize:14}}>✏️</span> Edit
+                  </button>
+                </div>
+              )}
+              {/* ── Borrowers ── */}
+              <div style={{marginBottom:10,borderRadius:8,border:'1px solid #E2E8F0',overflow:'hidden',marginTop:0}}>
+                <div style={{background:'#1B2A4A',padding:'8px 14px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                  <span style={{fontSize:12,fontWeight:700,color:'white',letterSpacing:'0.04em'}}>Borrowers</span>
+                </div>
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) minmax(0,1fr)',gap:16,marginBottom:16}}>
+                <div style={{background:'#F8FAFC',border:'1px solid #E5E7EB',borderRadius:8,padding:'12px 14px'}}>
+                  <div style={{fontSize:11,fontWeight:700,color:'#6B7280',textTransform:'uppercase',letterSpacing:'0.4px',marginBottom:10}}>Primary Borrower</div>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+                    <div className="form-group" style={{marginBottom:0}}><label>First</label><input autoFocus={ctEditing && !ctForm.primary_first_name} value={ctForm.primary_first_name||''} onChange={e=>cset('primary_first_name',e.target.value)} /></div>
+                    <div className="form-group" style={{marginBottom:0}}><label>Last</label><input value={ctForm.primary_last_name||''} onChange={e=>cset('primary_last_name',e.target.value)} /></div>
+                  </div>
+                  <div className="form-group" style={{marginBottom:8}}><label>Nickname</label><input value={ctForm.primary_nickname||''} onChange={e=>cset('primary_nickname',e.target.value)} /></div>
+                  <div className="form-group" style={{marginBottom:8}}><label>Email</label><input type="email" value={ctForm.primary_borrower_email||''} onChange={e=>cset('primary_borrower_email',e.target.value)} /></div>
+                  <div className="form-group"><label>Phone</label><input value={ctForm.primary_borrower_phone||''} onChange={e=>cset('primary_borrower_phone',e.target.value)} /></div>
+                </div>
+                <div style={{background:'#F8FAFC',border:'1px solid #E5E7EB',borderRadius:8,padding:'12px 14px'}}>
+                  <div style={{fontSize:11,fontWeight:700,color:'#6B7280',textTransform:'uppercase',letterSpacing:'0.4px',marginBottom:10,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                    Co-Borrowers
+                    <button className="btn btn-ghost btn-sm" style={{fontSize:10,pointerEvents:'all'}} onClick={()=>setInfoCobs(p=>[...p,{name:'',first_name:'',last_name:'',nickname:'',email:'',phone:'',sort_order:p.length+1}])}>+ Add</button>
+                  </div>
+                  {infoCobs.length===0 && <div style={{color:'#9CA3AF',fontSize:12,textAlign:'center',padding:'16px 0'}}>No co-borrowers</div>}
+                  {infoCobs.map((cb,i)=>(
+                    <div key={i} style={{marginBottom:10,paddingBottom:10,borderBottom:i<infoCobs.length-1?'1px solid #E5E7EB':'none'}}>
+                      <div style={{display:'flex',justifyContent:'flex-end',marginBottom:4}}>
+                        {infoCobs.length>1&&<span style={{fontSize:10,color:'#9CA3AF',marginRight:'auto'}}>#{i+1}</span>}
+                        <button onClick={()=>setInfoCobs(p=>p.filter((_,idx)=>idx!==i))} style={{background:'none',border:'none',cursor:'pointer',color:'#FCA5A5',fontSize:14,padding:0,pointerEvents:'all'}}>✕</button>
+                      </div>
+                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+                        <div className="form-group" style={{marginBottom:0}}><label>First</label><input value={cb.first_name||''} onChange={e=>{const fn=e.target.value;setInfoCobs(p=>p.map((c,idx)=>idx===i?{...c,first_name:fn,name:[fn,c.last_name||''].filter(Boolean).join(' ')}:c));}} /></div>
+                        <div className="form-group" style={{marginBottom:0}}><label>Last</label><input value={cb.last_name||''} onChange={e=>{const ln=e.target.value;setInfoCobs(p=>p.map((c,idx)=>idx===i?{...c,last_name:ln,name:[(c.first_name||''),ln].filter(Boolean).join(' ')}:c));}} /></div>
+                      </div>
+                      <div className="form-group" style={{marginBottom:8}}><label>Nickname</label><input value={cb.nickname||''} onChange={e=>setInfoCobs(p=>p.map((c,idx)=>idx===i?{...c,nickname:e.target.value}:c))} /></div>
+                      <div className="form-group" style={{marginBottom:8}}><label>Email</label><input type="email" value={cb.email||''} onChange={e=>setInfoCobs(p=>p.map((c,idx)=>idx===i?{...c,email:e.target.value}:c))} /></div>
+                      <div className="form-group" style={{marginBottom:0}}><label>Phone</label><input value={cb.phone||''} onChange={e=>setInfoCobs(p=>p.map((c,idx)=>idx===i?{...c,phone:e.target.value}:c))} /></div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── Team + Agents combined ── */}
+              <div style={{marginBottom:10,borderRadius:8,border:'1px solid #E2E8F0',overflow:'hidden'}}>
+                <div style={{background:'#1B2A4A',padding:'8px 14px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                  <span style={{fontSize:12,fontWeight:700,color:'white',letterSpacing:'0.04em'}}>Team</span>
+                </div>
+              </div>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20,marginBottom:16}}>
                 {/* Left: LO team */}
                 <div style={{display:'flex',flexDirection:'column',gap:10}}>
@@ -3821,14 +4000,24 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
                       const match = allInternal.find(p => p.email && c.email && p.email.toLowerCase() === c.email.toLowerCase());
                       if (match) ctset(key, match.id);
                     };
-                    const isAdmin = currentUser && ['admin','branch_admin'].includes(currentUser.role);
-                    const loOptions = allInternal.filter(p => p.lmt_role === 'lo');
+                    // Actual LOs: explicit lmt_role='lo' OR internal (non-admin) with no lmt_role set (defaults to LO)
+                    const actualLOs = allInternal.filter(p =>
+                      p.lmt_role === 'lo' || (p.lmt_role == null && p.role === 'internal')
+                    );
+                    const isFullAdmin = currentUser && ['admin','branch_admin'].includes(currentUser.role);
+                    const currentIsLO = !isFullAdmin && currentUser &&
+                      (currentUser.lmt_role === 'lo' || (currentUser.lmt_role == null && currentUser.role === 'internal'));
+                    const isEditable = currentUser && ['admin','branch_admin','internal'].includes(currentUser.role);
+                    // LO sees only themselves; admin/LOA/processor sees all LOs
+                    const loOptions = currentIsLO
+                      ? actualLOs.filter(p => p.id === currentUser.id)
+                      : actualLOs;
                     const assignedLoName = allInternal.find(p => p.id === ctForm.assigned_lo_id)?.display_name || ctForm.assigned_lo_id || '—';
                     return (
                       <React.Fragment>
                         <div className="form-group" style={{marginBottom:0}}>
                           <label>Loan Officer</label>
-                          {isAdmin ? (
+                          {isEditable ? (
                             <select value={ctForm.assigned_lo_id||''} onChange={e=>ctset('assigned_lo_id',e.target.value||null)}>
                               <option value="">— None —</option>
                               {loOptions.map(p=><option key={p.id} value={p.id}>{p.display_name||p.email}</option>)}
@@ -3959,7 +4148,12 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
           {tab === 'dates' && (
             <div>
               <DealDatesTab
-                deal={deal}
+                deal={infoForm ? {
+                  ...deal,
+                  closing_date:        infoForm.closing_date        ?? deal.closing_date,
+                  funding_date:        infoForm.funding_date        ?? deal.funding_date,
+                  lock_expiration_date:infoForm.lock_expiration_date?? deal.lock_expiration_date,
+                } : deal}
                 profile={profiles.find(p=>p.id===deal.assigned_lo_id)}
                 onDealChange={onDealChange}
                 milestones={milestones}
@@ -4330,30 +4524,88 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
 
         </div>
 
-        {/* ── AUTO-SAVE INDICATOR ── */}
-        {(infoSaving || ctSaving) && (
-          <div style={{position:'fixed',bottom:28,right:32,zIndex:2000,
-            padding:'9px 20px',borderRadius:50,background:'#1B2A4A',color:'white',
-            fontSize:13,fontWeight:600,boxShadow:'0 4px 16px rgba(0,0,0,0.18)',opacity:0.92}}>
-            Saving…
+        {/* ── EDIT BUTTON BAR (read-only mode) ── */}
+        {((tab === 'info_edit' && !infoEditing) || (tab === 'contacts_edit' && !ctEditing)) && (
+          <div style={{position:'sticky',bottom:0,zIndex:200,background:'#fff',borderTop:'1px solid #E5E7EB',padding:'12px 24px',display:'flex',justifyContent:'center'}}>
+            <button
+              onClick={()=>tab==='info_edit'?setInfoEditing(true):setCtEditing(true)}
+              style={{display:'flex',alignItems:'center',gap:6,padding:'8px 28px',borderRadius:8,
+                border:'1px solid #D1D5DB',background:'#F9FAFB',color:'#374151',
+                fontSize:14,fontWeight:600,cursor:'pointer'}}>
+              <span style={{fontSize:15}}>✏️</span> Edit
+            </button>
+            {(infoJustSaved||ctJustSaved) && (
+              <span style={{position:'absolute',right:24,top:'50%',transform:'translateY(-50%)',color:'#16A34A',fontSize:13,fontWeight:600}}>✓ Saved</span>
+            )}
           </div>
         )}
-        {!infoSaving && !ctSaving && (ctJustSaved || infoJustSaved) && (
-          <div style={{position:'fixed',bottom:28,right:32,zIndex:2000,
-            padding:'9px 20px',borderRadius:50,background:'#16A34A',color:'white',
-            fontSize:13,fontWeight:600,boxShadow:'0 4px 16px rgba(0,0,0,0.18)',opacity:0.95,
-            display:'flex',alignItems:'center',gap:6}}>
-            ✓ Saved
+
+        {/* ── SAVE / DISCARD BAR ── */}
+        {((tab === 'info_edit' && infoEditing) || (tab === 'contacts_edit' && ctEditing)) && (
+          <div style={{
+            position:'sticky', bottom:0, zIndex:200,
+            background:'#fff', borderTop:'1px solid #E5E7EB',
+            padding:'12px 24px',
+            display:'flex', justifyContent:'center', alignItems:'center', gap:12,
+          }}>
+            <button
+              onClick={() => tab === 'info_edit' ? discardInfo() : discardCt()}
+              style={{padding:'8px 28px',borderRadius:8,border:'1px solid #D1D5DB',
+                background:'#F9FAFB',color:'#374151',fontSize:14,fontWeight:600,cursor:'pointer'}}
+            >Discard</button>
+            <button
+              onClick={() => tab === 'info_edit' ? saveInfo() : saveCt()}
+              disabled={infoSaving || ctSaving}
+              style={{padding:'8px 28px',borderRadius:8,border:'none',
+                background:'#1B2A4A',color:'white',fontSize:14,fontWeight:600,cursor:'pointer',
+                opacity:(infoSaving||ctSaving)?0.6:1}}
+            >{(infoSaving||ctSaving) ? 'Saving…' : 'Save'}</button>
+            {(infoJustSaved||ctJustSaved) && !(infoSaving||ctSaving) && (
+              <span style={{color:'#16A34A',fontSize:13,fontWeight:600}}>✓ Saved</span>
+            )}
           </div>
         )}
     </div>
   );
 
+  // ── Unsaved-changes nav guard modal ──
+  const navGuardModal = pendingTab ? (
+    <div style={{position:'fixed',inset:0,zIndex:9000,background:'rgba(0,0,0,0.45)',display:'flex',alignItems:'center',justifyContent:'center'}}
+      onClick={()=>setPendingTab(null)}>
+      <div onClick={e=>e.stopPropagation()}
+        style={{background:'white',borderRadius:12,padding:'28px 32px',maxWidth:380,width:'90%',
+          boxShadow:'0 8px 40px rgba(0,0,0,0.22)',textAlign:'center'}}>
+        <div style={{fontSize:28,marginBottom:8}}>⚠️</div>
+        <div style={{fontSize:16,fontWeight:700,color:'#1B2A4A',marginBottom:8}}>Unsaved Changes</div>
+        <div style={{fontSize:13,color:'#6B7280',marginBottom:24}}>
+          You have unsaved changes on this tab. Would you like to save or discard them before leaving?
+        </div>
+        <div style={{display:'flex',gap:10,justifyContent:'center'}}>
+          <button onClick={()=>setPendingTab(null)}
+            style={{padding:'9px 20px',borderRadius:8,border:'1px solid #E5E7EB',background:'#F9FAFB',
+              color:'#6B7280',fontSize:13,fontWeight:600,cursor:'pointer'}}>
+            Cancel
+          </button>
+          <button onClick={confirmNavDiscard}
+            style={{padding:'9px 20px',borderRadius:8,border:'1px solid #FCA5A5',background:'#FEF2F2',
+              color:'#DC2626',fontSize:13,fontWeight:600,cursor:'pointer'}}>
+            Discard
+          </button>
+          <button onClick={confirmNavSave}
+            style={{padding:'9px 24px',borderRadius:8,border:'none',background:'#1B2A4A',
+              color:'white',fontSize:13,fontWeight:700,cursor:'pointer'}}>
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   const composer = emailModal
     ? <EmailComposer emailModal={emailModal} onClose={()=>setEmailModal(null)} loProfile={profiles.find(p=>p.id===deal.assigned_lo_id)} />
     : null;
 
-  if (pageMode) return <React.Fragment>{inner}{composer}</React.Fragment>;
+  if (pageMode) return <React.Fragment>{inner}{composer}{navGuardModal}</React.Fragment>;
 
   return (
     <React.Fragment>
@@ -4363,6 +4615,7 @@ function DealDetailModal({ deal, profiles, presets, templates, onClose, onEdit, 
       </div>
     </div>
     {composer}
+    {navGuardModal}
     </React.Fragment>
   );
 }
@@ -4653,6 +4906,93 @@ function TeamMemberSearch({ candidates, selected, onAdd, placeholder }) {
   );
 }
 
+function TeamOverviewPanel({ profiles, profile }) {
+  const allInternal = (profiles||[]).filter(p => ['admin','internal','branch_admin'].includes(p.role));
+  const los   = allInternal.filter(p => p.lmt_role === 'lo' || p.role === 'admin' || p.role === 'branch_admin');
+  const loas  = allInternal.filter(p => p.lmt_role === 'loa');
+  const procs = allInternal.filter(p => p.lmt_role === 'processor' || p.lmt_role === 'setup');
+
+  const assignedLoas  = new Set(los.flatMap(lo => Array.isArray(lo.team_loas) ? lo.team_loas : []));
+  const assignedProcs = new Set(los.flatMap(lo => Array.isArray(lo.team_processors) ? lo.team_processors : []));
+  const unassignedLoas  = loas.filter(p => !assignedLoas.has(p.id));
+  const unassignedProcs = procs.filter(p => !assignedProcs.has(p.id));
+
+  const getName = id => { const p = allInternal.find(x=>x.id===id); return p ? (p.display_name||p.email) : null; };
+
+  const Chip = ({label, type}) => (
+    <span style={{display:'inline-flex',alignItems:'center',gap:4,
+      background: type==='loa'?'#EFF6FF': type==='proc'?'#F0FDF4':'#F1F5F9',
+      border:`1px solid ${type==='loa'?'#BFDBFE': type==='proc'?'#86EFAC':'#E2E8F0'}`,
+      borderRadius:99, padding:'3px 11px', fontSize:12, fontWeight:600,
+      color: type==='loa'?'#1D4ED8': type==='proc'?'#16A34A':'#374151'}}>
+      {type==='loa'&&<span style={{fontSize:9,opacity:0.6}}>LOA</span>}
+      {type==='proc'&&<span style={{fontSize:9,opacity:0.6}}>PROC</span>}
+      {label}
+    </span>
+  );
+
+  return (
+    <div className="settings-wrap">
+      <h2 style={{fontSize:18,fontWeight:700,color:'#1B2A4A',marginBottom:6}}>Team Overview</h2>
+      <p style={{fontSize:13,color:'#6B7280',marginBottom:20}}>Shows how LOAs and Processors are connected to each Loan Officer.</p>
+
+      <div style={{display:'flex',flexDirection:'column',gap:12,marginBottom:24}}>
+        {los.map(lo => {
+          const loLoas  = (lo.team_loas||[]).map(id=>getName(id)).filter(Boolean);
+          const loProcs = (lo.team_processors||[]).map(id=>getName(id)).filter(Boolean);
+          const isMe = lo.id === profile?.id;
+          return (
+            <div key={lo.id} style={{borderRadius:10,border:`2px solid ${isMe?'#1B2A4A':'#E2E8F0'}`,overflow:'hidden',boxShadow:isMe?'0 2px 8px rgba(27,42,74,0.10)':'none'}}>
+              <div style={{background: isMe?'#1B2A4A':'#F8FAFC', padding:'10px 16px', display:'flex', alignItems:'center', gap:10}}>
+                <div style={{width:32,height:32,borderRadius:99,background:isMe?'white':'#1B2A4A',
+                  color:isMe?'#1B2A4A':'white',display:'flex',alignItems:'center',justifyContent:'center',
+                  fontWeight:800,fontSize:14,flexShrink:0}}>
+                  {(lo.display_name||lo.email||'?').charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <div style={{fontWeight:700,fontSize:13,color:isMe?'white':'#1B2A4A'}}>
+                    {lo.display_name||lo.email}
+                    {isMe && <span style={{marginLeft:8,fontSize:10,background:'rgba(255,255,255,0.2)',borderRadius:99,padding:'2px 7px'}}>You</span>}
+                  </div>
+                  <div style={{fontSize:10,color:isMe?'rgba(255,255,255,0.6)':'#9CA3AF',textTransform:'uppercase',letterSpacing:'0.05em'}}>
+                    Loan Officer
+                  </div>
+                </div>
+              </div>
+              <div style={{padding:'12px 16px', background:'white'}}>
+                {loLoas.length === 0 && loProcs.length === 0
+                  ? <span style={{fontSize:12,color:'#D1D5DB',fontStyle:'italic'}}>No team members assigned yet</span>
+                  : <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+                      {loLoas.map(n=><Chip key={n} label={n} type="loa" />)}
+                      {loProcs.map(n=><Chip key={n} label={n} type="proc" />)}
+                    </div>
+                }
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {(unassignedLoas.length > 0 || unassignedProcs.length > 0) && (
+        <div style={{borderRadius:10,border:'1px dashed #D1D5DB',padding:'12px 16px',background:'#FAFAFA',marginBottom:24}}>
+          <div style={{fontSize:11,fontWeight:700,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:8}}>
+            ⚠ Unassigned — not available to any LO
+          </div>
+          <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+            {unassignedLoas.map(p=><Chip key={p.id} label={p.display_name||p.email} type="loa" />)}
+            {unassignedProcs.map(p=><Chip key={p.id} label={p.display_name||p.email} type="proc" />)}
+          </div>
+        </div>
+      )}
+
+      <div style={{display:'flex',gap:16,fontSize:12,color:'#9CA3AF'}}>
+        <span><Chip label="Name" type="loa" /> LOA</span>
+        <span><Chip label="Name" type="proc" /> Processor</span>
+      </div>
+    </div>
+  );
+}
+
 function ProfilePanel({ profile, profiles, onProfileSave }) {
   const [form, setForm] = useState({
     display_name: profile?.display_name || '',
@@ -4675,7 +5015,7 @@ function ProfilePanel({ profile, profiles, onProfileSave }) {
     }).filter(Boolean);
   };
 
-  const allInternal = (profiles || []).filter(p => ['admin','internal','branch_admin'].includes(p.role));
+  const allInternal = (profiles || []).filter(p => ['admin','internal','branch_admin'].includes(p.role) && (!profile?.tenant_id || p.tenant_id === profile.tenant_id));
   const [loas, setLoas]         = useState(() => normalizeIds(profile?.team_loas, allInternal));
   const [processors, setProcs]  = useState(() => normalizeIds(profile?.team_processors, allInternal));
   const [saving, setSaving]     = useState(false);
@@ -4685,8 +5025,12 @@ function ProfilePanel({ profile, profiles, onProfileSave }) {
 
   const fset = (k, v) => setForm(p => ({...p, [k]: v}));
 
-  const loaCandidates  = allInternal.filter(p => p.lmt_role === 'loa');
-  const procCandidates = allInternal.filter(p => p.lmt_role === 'processor' || p.lmt_role === 'setup');
+  // IDs claimed by other LOs (not the current user)
+  const claimedLoas  = new Set((profiles||[]).filter(p=>p.id!==profile?.id&&Array.isArray(p.team_loas)).flatMap(p=>p.team_loas));
+  const claimedProcs = new Set((profiles||[]).filter(p=>p.id!==profile?.id&&Array.isArray(p.team_processors)).flatMap(p=>p.team_processors));
+
+  const loaCandidates  = allInternal.filter(p => p.lmt_role === 'loa'  && (!claimedLoas.has(p.id)  || loas.includes(p.id)));
+  const procCandidates = allInternal.filter(p => (p.lmt_role === 'processor' || p.lmt_role === 'setup') && (!claimedProcs.has(p.id) || processors.includes(p.id)));
 
   const save = async (payload) => {
     setSaving(true);
@@ -4776,7 +5120,7 @@ function ProfilePanel({ profile, profiles, onProfileSave }) {
         </div>
       </div>
 
-      <div style={{padding:'0 0 32px',display:'flex',alignItems:'center',gap:12}}>
+      <div style={{padding:'0 0 20px',display:'flex',alignItems:'center',gap:12}}>
         <button className="btn btn-navy" onClick={()=>save({...form,team_loas:loas,team_processors:processors})} disabled={saving}>
           {saving ? 'Saving…' : 'Save Profile'}
         </button>
@@ -4784,6 +5128,73 @@ function ProfilePanel({ profile, profiles, onProfileSave }) {
           <span style={{fontSize:13,color:'#16A34A',fontWeight:600,display:'flex',alignItems:'center',gap:4}}>✓ Saved</span>
         )}
       </div>
+
+      {/* ── TEAM OVERVIEW moved to its own screen ── */}
+      {false && (() => {
+        const los = allInternal.filter(p => p.lmt_role === 'lo' || p.role === 'admin' || p.role === 'branch_admin');
+        const allLoas  = allInternal.filter(p => p.lmt_role === 'loa');
+        const allProcs = allInternal.filter(p => p.lmt_role === 'processor' || p.lmt_role === 'setup');
+        const assignedLoas  = new Set(los.flatMap(lo => Array.isArray(lo.team_loas) ? lo.team_loas : []));
+        const assignedProcs = new Set(los.flatMap(lo => Array.isArray(lo.team_processors) ? lo.team_processors : []));
+        const unassignedLoas  = allLoas.filter(p => !assignedLoas.has(p.id));
+        const unassignedProcs = allProcs.filter(p => !assignedProcs.has(p.id));
+        const getName = (id) => { const p = allInternal.find(x=>x.id===id); return p ? (p.display_name||p.email) : id; };
+
+        const chip = (label, color='#1B2A4A') => (
+          <span style={{display:'inline-flex',alignItems:'center',background:color==='loa'?'#EFF6FF':color==='proc'?'#F0FDF4':'#F1F5F9',
+            border:`1px solid ${color==='loa'?'#BFDBFE':color==='proc'?'#86EFAC':'#E2E8F0'}`,
+            borderRadius:99,padding:'2px 10px',fontSize:11,fontWeight:600,
+            color:color==='loa'?'#1D4ED8':color==='proc'?'#16A34A':'#374151'}}>
+            {label}
+          </span>
+        );
+
+        return (
+          <div className="settings-section" style={{marginBottom:32}}>
+            <div className="settings-section-header">Team Overview</div>
+            <div className="settings-section-body" style={{padding:'14px 18px'}}>
+              <p style={{fontSize:12,color:'#6B7280',marginBottom:14}}>Shows how LOAs and Processors are connected to each LO. Only LOAs/Processors not yet assigned will appear in search.</p>
+              <div style={{display:'flex',flexDirection:'column',gap:10}}>
+                {los.map(lo => {
+                  const loLoas  = (lo.team_loas||[]).map(id=>getName(id)).filter(Boolean);
+                  const loProcs = (lo.team_processors||[]).map(id=>getName(id)).filter(Boolean);
+                  return (
+                    <div key={lo.id} style={{borderRadius:8,border:'1px solid #E2E8F0',overflow:'hidden'}}>
+                      <div style={{background:'#1B2A4A',padding:'7px 14px'}}>
+                        <span style={{fontSize:12,fontWeight:700,color:'white'}}>{lo.display_name||lo.email}</span>
+                        <span style={{fontSize:10,color:'rgba(255,255,255,0.5)',marginLeft:8}}>{lo.lmt_role||lo.role}</span>
+                      </div>
+                      <div style={{padding:'10px 14px',background:'white',display:'flex',flexWrap:'wrap',gap:6,alignItems:'center'}}>
+                        {loLoas.length === 0 && loProcs.length === 0
+                          ? <span style={{fontSize:12,color:'#D1D5DB',fontStyle:'italic'}}>No team members assigned</span>
+                          : <>
+                              {loLoas.map(n=><React.Fragment key={n}>{chip(n,'loa')}</React.Fragment>)}
+                              {loProcs.map(n=><React.Fragment key={n}>{chip(n,'proc')}</React.Fragment>)}
+                            </>
+                        }
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {(unassignedLoas.length > 0 || unassignedProcs.length > 0) && (
+                <div style={{marginTop:12,borderRadius:8,border:'1px dashed #E2E8F0',padding:'10px 14px',background:'#FAFAFA'}}>
+                  <div style={{fontSize:11,fontWeight:700,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:6}}>Unassigned</div>
+                  <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+                    {unassignedLoas.map(p=><React.Fragment key={p.id}>{chip(p.display_name||p.email,'loa')}</React.Fragment>)}
+                    {unassignedProcs.map(p=><React.Fragment key={p.id}>{chip(p.display_name||p.email,'proc')}</React.Fragment>)}
+                  </div>
+                </div>
+              )}
+              <div style={{marginTop:10,display:'flex',gap:16,fontSize:11,color:'#9CA3AF'}}>
+                <span style={{display:'flex',alignItems:'center',gap:4}}>{chip('LOA','loa')} LOA</span>
+                <span style={{display:'flex',alignItems:'center',gap:4}}>{chip('Processor','proc')} Processor</span>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
     </div>
   );
 }
@@ -6740,11 +7151,15 @@ function App() {
   };
   const createNewDeal = () => {
     const firstStatus = (customStatuses && customStatuses.length > 0) ? customStatuses[0].label : '01. Contract / Go';
-    sb.from('lmt_deals').insert({ status: firstStatus, primary_borrower_name: '', trans_type: 'purchase', occupancy: 'primary' }).select().single()
+    // Auto-assign current user as LO so filterDealsByProfile shows the deal immediately
+    const loId = (profile && ['admin','internal','branch_admin'].includes(profile.role)) ? profile.id : null;
+    const newRow = { status: firstStatus, primary_borrower_name: '', trans_type: 'purchase', occupancy: 'primary',
+      ...(loId ? { assigned_lo_id: loId } : {}) };
+    sb.from('lmt_deals').insert(newRow).select().single()
       .then(function(res) {
         if (res.data) {
           setDeals(function(prev) { return [res.data, ...prev]; });
-          openDeal(res.data, 'info_edit');
+          openDeal(res.data, 'contacts_edit');
         }
       });
   };
@@ -6873,7 +7288,7 @@ function App() {
 
     Promise.all([
       safe(sb.from('lmt_deals').select('*').order('created_at', { ascending: false })),
-      safe(sb.from('profiles').select('id,display_name,email,role,lmt_role,branch,team_loas,team_processors').in('role', ['admin','internal','branch_admin'])),
+      safe(sb.from('profiles').select('id,display_name,email,role,lmt_role,branch,team_loas,team_processors,tenant_id').in('role', ['admin','internal','branch_admin'])),
       safe(sb.from('lmt_milestone_presets').select('*').eq('user_id', user.id)),
       safe(sb.from('lmt_email_templates').select('*').eq('user_id', user.id)),
       safe(sb.from('lmt_milestones').select('deal_id,milestone_type,due_date,followup_date,icd_signed_date,is_done,is_na')),
@@ -6939,9 +7354,25 @@ function App() {
     });
   }, [user]);
 
+  // ── Deep-link: ?deal=<id> auto-opens that deal ──
+  const _deepLinkHandled = React.useRef(false);
+  useEffect(() => {
+    if (_deepLinkHandled.current || !deals.length) return;
+    const params = new URLSearchParams(window.location.search);
+    const dealId = params.get('deal');
+    if (!dealId) { _deepLinkHandled.current = true; return; }
+    const deal = deals.find(d => d.id === dealId);
+    if (deal) {
+      _deepLinkHandled.current = true;
+      openDeal(deal, 'milestones');
+      // Clean up the URL so refresh doesn't re-open it
+      history.replaceState({}, '', window.location.pathname + '#deal/' + dealId);
+    }
+  }, [deals]);
+
   // ── Alert counts ──
   const alertCounts = useMemo(() => {
-    const active = deals.filter(d => !d.archived);
+    const active = filterDealsByProfile(deals, profile).filter(d => !d.archived);
     const overdue = active.filter(d => {
       const ld = daysDiff(d.lock_expiration_date);
       const cd = daysDiff(d.closing_date);
@@ -6953,7 +7384,7 @@ function App() {
       return (ld !== null && ld >= 0 && ld <= 3) || (cd !== null && cd >= 0 && cd <= 3);
     });
     return { overdue: overdue.length, dueSoon: dueSoon.length };
-  }, [deals]);
+  }, [deals, profile]);
 
   // ── Metrics ──
   const metrics = useMemo(() => {
@@ -7254,6 +7685,9 @@ function App() {
                 <button className="profile-dropdown-item" onClick={()=>{ setScreen('turntimes_ops'); setProfileMenuOpen(false); }}>
                   Turntimes
                 </button>
+                <button className="profile-dropdown-item" onClick={()=>{ setScreen('team_overview'); setProfileMenuOpen(false); }}>
+                  Team
+                </button>
                 {profile?.role === 'admin' && <>
                   <button className="profile-dropdown-item" onClick={()=>{ setScreen('settings'); setProfileMenuOpen(false); }}>
                     Settings
@@ -7322,6 +7756,8 @@ function App() {
             profile={profile}
             onProfileSave={(p) => setProfile(prev => ({...prev, ...p}))}
           />
+        ) : screen === 'team_overview' ? (
+          <TeamOverviewPanel profiles={profiles} profile={profile} />
         ) : screen === 'email_templates' ? (
           <EmailTemplatesPanel
             templates={templates}
@@ -7334,7 +7770,7 @@ function App() {
             profiles={profiles}
             presets={presets}
             templates={templates}
-            currentUser={user}
+            currentUser={profile || user}
             initialTab={dealInitialTab}
             onBack={closeDeal}
             onEdit={()=>openDeal(detailDeal,'info_edit')}
